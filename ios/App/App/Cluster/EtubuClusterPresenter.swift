@@ -7,7 +7,7 @@ import Capacitor
 ///
 /// A second `UIWindow` caused half-blank landscape on Simulator (frame lagged
 /// behind rotation). Hosting as a child of Cap’s root VC rotates correctly.
-/// Cap WebView stays alive underneath (alpha low, NOT isHidden) for RouteGuard / Audio JS.
+/// Cap WebView stays alive underneath (NOT isHidden) for RouteGuard / Audio JS.
 final class EtubuClusterPresenter: NSObject {
     static let shared = EtubuClusterPresenter()
 
@@ -72,6 +72,7 @@ final class EtubuClusterPresenter: NSObject {
             container.bringSubviewToFront(hc.view)
 
             self.hideCapacitorChrome()
+            EtubuDashboardPresenter.installFloatingButton(on: root)
             self.startWebKeepAlive()
             self.installAttempts = 0
             NotificationCenter.default.post(name: .etubuClusterGeometryDidChange, object: nil)
