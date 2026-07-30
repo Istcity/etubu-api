@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-9FQ0VVHGYC"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-9FQ0VVHGYC');
+  </script>
+  <title>ETUBU — EV Driving Sounds | GPS-Synced Electric Car Sound</title>
+  <meta name="description" content="ETUBU: free GPS-synced EV driving sounds and soft visual themes. All voices and themes unlocked — supported by ads on etubu.com." />
+  <meta name="keywords" content="EV sound, electric car sound, ASD, GPS driving sounds, EV driving experience, synthetic engine sound, etubu" />
+  <meta name="author" content="ETUBU" />
+  <meta name="robots" content="index, follow, max-image-preview:large" />
+  <meta name="theme-color" content="#02040a" />
+  <meta name="application-name" content="ETUBU" />
+  <meta name="apple-mobile-web-app-title" content="ETUBU" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+
+  <link rel="canonical" href="https://etubu.com/" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <link rel="apple-touch-icon" href="/assets/brand/AppIcon-1024.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/assets/brand/app-icon.png" />
+  <link rel="icon" type="image/png" href="/assets/brand/logo-dark.png" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="ETUBU" />
+  <meta property="og:locale" content="en_US" />
+  <meta property="og:locale:alternate" content="tr_TR" />
+  <meta property="og:title" content="ETUBU — EV Driving Sounds" />
+  <meta property="og:description" content="Free GPS-synced EV driving sounds. All voices and themes unlocked — supported by ads." />
+  <meta property="og:url" content="https://etubu.com/" />
+  <meta property="og:image" content="https://etubu.com/assets/brand/logo-horizontal.png" />
+  <meta property="og:image:alt" content="ETUBU EV Driving Sounds" />
+
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="ETUBU — EV Driving Sounds" />
+  <meta name="twitter:description" content="Free GPS-synced EV driving sounds. All features unlocked — ad-supported." />
+  <meta name="twitter:image" content="https://etubu.com/assets/brand/logo-horizontal.png" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://etubu.com/#organization",
+        "name": "ETUBU",
+        "url": "https://etubu.com/",
+        "logo": "https://etubu.com/assets/brand/logo-dark.png",
+        "description": "GPS-synced electric vehicle driving sounds."
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://etubu.com/#website",
+        "url": "https://etubu.com/",
+        "name": "ETUBU — EV Driving Sounds",
+        "publisher": { "@id": "https://etubu.com/#organization" },
+        "inLanguage": ["en", "tr", "de", "fr", "es", "ja", "ru"]
+      },
+      {
+        "@type": "WebApplication",
+        "@id": "https://etubu.com/#app",
+        "name": "ETUBU",
+        "url": "https://etubu.com/",
+        "applicationCategory": "EntertainmentApplication",
+        "operatingSystem": "Web, iOS",
+        "description": "Add synthetic driving sounds to your EV, synced to GPS speed in real time. Free and ad-supported.",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD",
+          "description": "All sounds and visual themes — free, ad-supported"
+        }
+      }
+    ]
+  }
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Orbitron:wght@600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css?v=20260730a" />
+  <script src="js/etubu-native-shim.js?v=20260728a"></script>
+  <script src="js/config.js?v=20260727e"></script>
+  <!-- Yandex.RTB -->
+  <script>window.yaContextCb = window.yaContextCb || [];</script>
+  <script src="https://yandex.ru/ads/system/context.js" async></script>
+</head>
+<body>
+  <aside class="ad-rail ad-rail--top" aria-label="Ad">
+    <div class="ad-slot ad-slot--leader" id="adTop">
+      <span class="ad-label" data-i18n="adLabel">Ad</span>
+      <div id="adTopInner" class="ad-inner"></div>
+    </div>
+  </aside>
+
+  <aside class="ad-rail ad-rail--right" aria-label="Ad">
+    <div class="ad-slot ad-slot--skyscraper" id="adRight">
+      <span class="ad-label" data-i18n="adLabel">Ad</span>
+      <div id="adRightInner" class="ad-inner"></div>
+    </div>
+  </aside>
+
+  <div class="vignette" aria-hidden="true"></div>
+
+  <div id="paywallOverlay" class="paywall" hidden>
+    <div class="glass-card paywall-card">
+      <button type="button" class="paywall-close" id="paywallCloseBtn" data-i18n-aria="paywallClose" aria-label="Kapat">×</button>
+      <img class="brand-logo brand-logo--lg" src="assets/brand/logo-dark.png" alt="ETUBU" width="280" height="auto" />
+      <p class="wordmark-sub" data-i18n="appSubtitle">EV Driving Sounds</p>
+      <h2 data-i18n="paywallTitle">ETUBU is free</h2>
+      <p data-i18n="paywallBody" data-i18n-html>
+        All sounds and themes are free. Support ETUBU by tapping an ad.
+      </p>
+      <div class="km-used" id="paywallKm" hidden>0 km used</div>
+      <button type="button" class="btn-google" id="googleSignBtn" hidden>
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82z"/><path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96H1.29v3.09C3.26 21.3 7.31 24 12 24z"/><path fill="#FBBC05" d="M5.27 14.29c-.25-.72-.38-1.49-.38-2.29s.14-1.57.38-2.29V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.98-3.09z"/><path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.98 3.09C6.22 6.86 8.87 4.75 12 4.75z"/></svg>
+        <span data-i18n="googleSignIn">Sign in with Google</span>
+      </button>
+      <p class="adfree-hint" id="premiumSignInHint" hidden></p>
+      <button type="button" class="btn-primary" id="payBtn" hidden></button>
+      <button type="button" class="btn-secondary" id="adFreeBtn" hidden></button>
+      <p class="adfree-hint" id="adFreeHintEl" hidden></p>
+      <button type="button" class="btn-ghost" id="continueFreeBtn" hidden></button>
+      <div class="invite-box" hidden>
+        <p class="invite-title" data-i18n="inviteTitle">Invite code</p>
+        <div class="invite-row">
+          <input type="text" id="inviteCodeInput" class="invite-input" autocomplete="off" spellcheck="false" />
+          <button type="button" class="btn-ghost" id="inviteSubmitBtn" data-i18n="inviteApply">Apply</button>
+        </div>
+      </div>
+      <p class="paywall-note" id="paywallStatus"></p>
+      <button type="button" class="link-btn" id="restoreBtn" hidden data-i18n="restore">Already paid — restore access</button>
+      <p class="legal-links">
+        <a href="about.html" data-i18n="about">Hakkımızda</a> ·
+        <a href="contact.html" data-i18n="contact">İletişim</a> ·
+        <a href="privacy.html" data-i18n="privacy">Privacy</a> ·
+        <a href="terms.html" data-i18n="terms">Terms</a>
+      </p>
+    </div>
+  </div>
+
+  <header class="top-bar glass-bar">
+    <img class="brand-logo brand-logo--sm" src="assets/brand/logo-dark.png" alt="ETUBU" height="28" />
+    <div class="trial-pill" id="trialPill" data-i18n="trialFree">Sitemize destek olmak için reklamlara tıklayabilirsiniz</div>
+    <label class="lang-wrap" data-i18n-aria="langLabel">
+      <span class="sr-only" data-i18n="langLabel">Language</span>
+      <select id="langSelect" class="lang-select" aria-label="Language"></select>
+    </label>
+    <button type="button" class="icon-btn orient-btn" id="lockPortraitBtn" data-i18n-title="lockPortrait" title="Portrait lock" aria-label="Portrait lock">▯</button>
+    <button type="button" class="icon-btn orient-btn" id="lockLandscapeBtn" data-i18n-title="lockLandscape" title="Landscape lock" aria-label="Landscape lock">▭</button>
+  </header>
+
+  <div class="mode-chip" id="modeChip" data-i18n="modeCalm">SAKİN SÜRÜŞ</div>
+  <div class="gesture-toast" id="gestureToast" hidden aria-live="polite"></div>
+
+  <section class="speed-stage" aria-label="Speed">
+    <div class="speed-hud glass-panel" id="speedHud">
+      <!-- Theme canvas lives inside the HUD so it slides with the speed dial -->
+      <canvas id="sceneCanvas" aria-hidden="true"></canvas>
+      <div class="hud-map" id="hudMap" aria-hidden="true">
+        <div class="hud-map-dim" aria-hidden="true"></div>
+        <div class="hud-map-tiles"></div>
+        <svg class="hud-map-overlay" aria-hidden="true">
+          <path class="hud-map-route-glow" d=""></path>
+          <path class="hud-map-route" d=""></path>
+          <path class="hud-map-route-progress" d=""></path>
+          <circle class="hud-map-route-dot" r="6" cx="-99" cy="-99"></circle>
+          <g class="hud-map-hazards"></g>
+        </svg>
+        <div class="hud-map-shade"></div>
+        <div class="hud-map-pin">
+          <span class="hud-map-dot"></span>
+        </div>
+        <span class="hud-map-empty" data-i18n="mapWaiting">Konum bekleniyor…</span>
+      </div>
+
+      <div class="speed-hud-content">
+        <div class="hud-side hud-side--warn" id="hudWarnSide">
+          <span class="hud-label" id="hudWarnLabel" data-i18n="hudRoadWarn">Yol uyarısı</span>
+          <div class="warn-reel" id="warnReel" data-stage="idle" hidden>
+            <div class="warn-reel-viewport">
+              <div class="warn-reel-track" id="warnReelTrack"></div>
+            </div>
+            <div class="warn-reel-silk" aria-hidden="true"></div>
+          </div>
+          <span class="hud-value" id="hudWarn">—</span>
+          <span class="hud-warn-meta" id="hudWarnMeta" hidden></span>
+        </div>
+
+        <div class="speed-gauge-stack">
+          <div class="speed-gauge-wrap" id="speedGaugeWrap" data-visual="glow" data-gauge="digital" role="button" tabindex="0" aria-label="Gauge screen">
+            <!-- Ekran 1: Dijital halka -->
+            <div class="gauge-screen gauge-screen--digital" data-screen="digital">
+              <svg class="speed-ring" viewBox="0 0 320 320" aria-hidden="true">
+                <defs>
+                  <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#00f0ff" />
+                    <stop offset="50%" stop-color="#7b5cff" />
+                    <stop offset="100%" stop-color="#ff3d8a" />
+                  </linearGradient>
+                  <filter id="glow">
+                    <feGaussianBlur stdDeviation="5" result="blur" />
+                    <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+                  </filter>
+                </defs>
+                <circle class="ring-track" cx="160" cy="160" r="138" />
+                <circle class="ring-fill" id="ringFill" cx="160" cy="160" r="138" filter="url(#glow)" />
+                <circle class="ring-ticks" cx="160" cy="160" r="118" />
+              </svg>
+              <div class="speed-readout">
+                <span class="speed-number" id="speedValue">0</span>
+                <span class="speed-unit">km/h</span>
+              </div>
+            </div>
+
+            <!-- Ekran 2: Klasik analog iğne -->
+            <div class="gauge-screen gauge-screen--analog" data-screen="analog" hidden>
+              <div class="analog-face" aria-hidden="true">
+                <div class="analog-ticks"></div>
+                <div class="analog-arc"></div>
+                <div class="analog-scale">
+                  <span style="--i:0">0</span>
+                  <span style="--i:1">50</span>
+                  <span style="--i:2">100</span>
+                  <span style="--i:3">150</span>
+                  <span style="--i:4">200</span>
+                  <span style="--i:5">250</span>
+                </div>
+                <div class="analog-needle" id="analogNeedle">
+                  <span class="needle-arm"></span>
+                  <span class="needle-hub"></span>
+                </div>
+              </div>
+              <div class="analog-readout">
+                <span class="analog-number" id="analogSpeedValue">0</span>
+                <span class="analog-unit">km/h</span>
+              </div>
+            </div>
+
+            <!-- Ekran 3: Minimal büyük rakam -->
+            <div class="gauge-screen gauge-screen--minimal" data-screen="minimal" hidden>
+              <div class="minimal-readout">
+                <span class="minimal-number" id="minimalSpeedValue">0</span>
+                <span class="minimal-unit">km/h</span>
+              </div>
+            </div>
+
+            <!-- Ekran 4: Dijital + yan equalizer sütunlar (yeşil→kırmızı) -->
+            <div class="gauge-screen gauge-screen--bars" data-screen="bars" hidden>
+              <div class="bars-gauge">
+                <div class="speed-bar" aria-hidden="true">
+                  <div class="speed-bar-track speed-bar-eq" id="speedBarEqL"></div>
+                </div>
+                <div class="bars-readout">
+                  <span class="bars-number" id="barsSpeedValue">0</span>
+                  <span class="bars-unit">km/h</span>
+                </div>
+                <div class="speed-bar" aria-hidden="true">
+                  <div class="speed-bar-track speed-bar-eq" id="speedBarEqR"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="gauge-dots" id="gaugeDots" role="tablist" aria-label="Gauge screens">
+            <button type="button" class="gauge-dot active" data-gauge-goto="digital" aria-label="Digital" title="Digital"></button>
+            <button type="button" class="gauge-dot" data-gauge-goto="analog" aria-label="Analog" title="Analog"></button>
+            <button type="button" class="gauge-dot" data-gauge-goto="minimal" aria-label="Minimal" title="Minimal"></button>
+            <button type="button" class="gauge-dot" data-gauge-goto="bars" aria-label="Bars" title="Bars"></button>
+          </div>
+        </div>
+
+        <div class="hud-side hud-side--avg" id="avgSpeedSide">
+          <div class="avg-speed-panel" id="avgSpeedPanel">
+            <span class="avg-speed-badge" id="avgSpeedBadge" hidden data-i18n="radarCorridor">Hız koridoru</span>
+            <div class="avg-speed-main">
+              <span class="avg-speed-label" id="avgSpeedLabel" data-i18n="avgSpeedLabel">Ortalama hız</span>
+              <span class="avg-speed-value"><span id="avgSpeedValue">0</span> <small>km/h</small></span>
+            </div>
+            <div class="avg-speed-meta" id="avgSpeedMeta" hidden></div>
+            <button type="button" class="avg-speed-reset" id="avgSpeedReset" data-i18n="avgSpeedReset">Sıfırla</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="radar-alert" id="radarAlert" hidden aria-hidden="true"></div>
+  </section>
+
+  <section class="route-guard" id="routeGuard" hidden aria-label="Rota koruması">
+    <div class="route-form" id="routeForm">
+      <div class="route-auto">
+        <label class="route-guard-field">
+          <span data-i18n="routeFromBlock">Nereden</span>
+          <input type="text" id="routeFromInput" autocomplete="off" spellcheck="false" data-i18n-placeholder="routeFromPh" placeholder="Konumum veya ilçe" value="Konumum" />
+        </label>
+        <div class="route-suggest" id="routeFromSuggest" hidden></div>
+      </div>
+      <div class="route-auto">
+        <label class="route-guard-field">
+          <span data-i18n="routeToBlock">Nereye</span>
+          <input type="text" id="routeToInput" autocomplete="off" spellcheck="false" data-i18n-placeholder="routeToPh" placeholder="Örn. Giresun" />
+        </label>
+        <div class="route-suggest" id="routeToSuggest" hidden></div>
+      </div>
+      <div class="route-guard-actions">
+        <button type="button" class="route-guard-go" id="routeGoBtn" disabled data-i18n="routeGo">Rotayı kur</button>
+        <button type="button" class="route-guard-clear" id="routeClearBtn" data-i18n="routeClear">Temizle</button>
+      </div>
+      <p class="route-guard-status" id="routeStatus" aria-live="polite"></p>
+    </div>
+  </section>
+
+  <aside class="route-brief-top" id="routeBriefTop" hidden aria-live="polite"></aside>
+  <button type="button" class="route-peek route-peek--top" id="routeBriefPeek" hidden data-i18n="routeBriefPeek">Özet</button>
+  <button type="button" class="route-peek route-peek--bottom" id="routeFormPeek" hidden data-i18n="routeFormPeek">Rota</button>
+
+  <div class="focus-lock" id="focusLock" hidden role="alertdialog" aria-modal="true" aria-labelledby="focusLockTitle">
+    <div class="focus-lock-card">
+      <strong id="focusLockTitle" data-i18n="focusRoadTitle">YOLA ODAKLANIN</strong>
+      <p data-i18n="focusRoadBody">Sürüş sırasında telefona bakmayın. 3 saniye sonra devam edebilirsiniz.</p>
+      <div class="focus-lock-bar" aria-hidden="true"><i></i></div>
+    </div>
+  </div>
+
+  <div id="audioUnlockOverlay" class="audio-unlock" hidden>
+    <div class="audio-unlock-card">
+      <img class="brand-logo brand-logo--sm" src="assets/brand/logo-dark.png" alt="ETUBU" height="28" />
+      <strong data-i18n="audioUnlockTitle">Ses için dokunun</strong>
+      <p data-i18n="audioUnlockBody">Tarayıcı kuralları gereği sürüş sesi ilk dokunuşta açılır. Tesla ekranında bir kez dokunun.</p>
+      <button type="button" class="btn-primary audio-unlock-btn" id="audioUnlockBtn" data-i18n="audioUnlockBtn">Başlat</button>
+    </div>
+  </div>
+
+  <button type="button" class="panel-toggle" id="panelToggle" aria-label="Hide panel" title="Hide panel">‹</button>
+
+  <aside class="control-dock glass-panel" id="controlDock">
+    <label class="field" id="voiceField">
+      <span data-i18n="voiceTheme">Sound</span>
+      <select id="voiceSelect"></select>
+      <span class="field-hint lock-hint" id="voiceLockHint" hidden data-i18n="catalogLocked">Unlock with purchase or invite</span>
+    </label>
+
+    <label class="field" id="visualField">
+      <span data-i18n="visualTheme">Visual</span>
+      <select id="visualSelect"></select>
+    </label>
+
+    <button type="button" class="start-circle" id="startBtn" data-i18n="start">START</button>
+    <button type="button" class="btn-ghost btn-ghost--sm demo-btn" id="demoBtn" data-i18n="demoMode">Deneme Sürüşü</button>
+    <span class="field-hint start-hint" data-i18n="sensitivityStartHint">İpucu: Başlamadan önce hassasiyet ayarını yap — gösterge ve ses GPS hızına buna göre tepki verir.</span>
+    <p class="tesla-bookmark-hint" id="teslaBookmarkHint" hidden></p>
+
+    <button type="button" class="btn-ghost btn-ghost--sm obd-btn" id="obdConnectBtn" data-i18n="obdConnect">Connect OBD</button>
+    <span class="field-hint" id="obdStatusNote" data-i18n="obdHint">BLE ELM327 — vehicle speed overrides GPS when linked.</span>
+
+    <label class="field field--toggle">
+      <span class="field-row">
+        <span data-i18n="mixUnderMusic">Play under car / Bluetooth music</span>
+        <input type="checkbox" id="mixUnderMusic" />
+      </span>
+      <span class="field-hint" data-i18n="mixUnderHint">Keeps phone or car music playing; ETUBU EV sounds sit underneath via Bluetooth or speaker.</span>
+    </label>
+
+    <div class="field" id="mixIntensityField">
+      <div class="field-row">
+        <span data-i18n="mixIntensity">Müziğin altında EV ses gücü</span>
+        <output class="range-pct" id="mixIntensityLabel" for="mixIntensitySlider">55%</output>
+      </div>
+      <input
+        type="range"
+        id="mixIntensitySlider"
+        class="range-pct-input"
+        min="0"
+        max="100"
+        step="1"
+        value="55"
+      />
+    </div>
+
+    <div class="field">
+      <div class="field-row">
+        <span data-i18n="volume">Volume</span>
+        <output class="range-pct" id="volumeLabel" for="volumeSlider">40%</output>
+      </div>
+      <input type="range" id="volumeSlider" class="range-pct-input" min="0" max="100" step="1" value="40" />
+    </div>
+
+    <div class="field">
+      <div class="field-row">
+        <span data-i18n="maxSpeed">Max speed</span>
+        <output class="range-pct" id="maxSpeedPctLabel" for="maxSpeedSlider">56%</output>
+      </div>
+      <input type="range" id="maxSpeedSlider" class="range-pct-input" min="0" max="100" step="1" value="56" />
+      <span class="field-hint" id="maxSpeedLabel">130 km/h</span>
+    </div>
+
+    <div class="field">
+      <div class="field-row">
+        <span data-i18n="sensitivity">Speed sensitivity</span>
+        <output class="range-pct" id="sensitivityLabel" for="sensitivitySlider">20%</output>
+      </div>
+      <input type="range" id="sensitivitySlider" class="range-pct-input" min="0" max="100" step="1" value="20" />
+      <span class="field-hint" data-i18n="sensitivityHint">GPS response — higher = closer tracking</span>
+    </div>
+
+    <div class="field">
+      <div class="field-row">
+        <span data-i18n="mapOpacity">Harita netliği</span>
+        <output class="range-pct" id="mapOpacityLabel" for="mapOpacitySlider">96%</output>
+      </div>
+      <input type="range" id="mapOpacitySlider" class="range-pct-input" min="0" max="100" step="1" value="96" />
+      <span class="field-hint" data-i18n="mapOpacityHint">Hız göstergesinin arkasındaki haritanın görünürlüğü.</span>
+    </div>
+
+    <details class="membership-dock" id="membershipDock" open>
+      <summary data-i18n="accountTitle">Hesap</summary>
+      <div class="account-dock account-dock--nested">
+        <span class="field-label" data-i18n="accountWho">Oturum</span>
+        <span id="accountIdLabel" class="account-id">—</span>
+        <span id="accountKmLabel" class="account-km">—</span>
+        <button type="button" class="link-btn auth-signout-link" id="googleSignOutBtn" data-i18n="googleSignOut" hidden>Çıkış yap</button>
+      </div>
+      <button type="button" class="btn-google btn-google--dock" id="dockGoogleSignBtn">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82z"/><path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96H1.29v3.09C3.26 21.3 7.31 24 12 24z"/><path fill="#FBBC05" d="M5.27 14.29c-.25-.72-.38-1.49-.38-2.29s.14-1.57.38-2.29V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.98-3.09z"/><path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.98 3.09C6.22 6.86 8.87 4.75 12 4.75z"/></svg>
+        <span data-i18n="googleSignIn">Google ile giriş yap</span>
+      </button>
+      <p class="field-hint" id="dockPremiumSignInHint" data-i18n="googleSettingsHint">
+        Google girişi yalnızca ayarlarınızın hatırlanması içindir.
+      </p>
+      <div class="premium-dock" id="premiumDock" hidden>
+        <button type="button" class="btn-premium" id="premiumBtn" hidden></button>
+        <div class="premium-plan-row" id="premiumPlanRow" hidden>
+          <button type="button" class="btn-premium-plan" id="dockMonthlyBtn" hidden></button>
+          <button type="button" class="btn-premium-plan" id="dockLifetimeBtn" hidden></button>
+        </div>
+      </div>
+    </details>
+
+    <details class="invite-dock" id="inviteDock" hidden>
+      <summary data-i18n="inviteTitle">Invite code</summary>
+      <div class="invite-row">
+        <input type="text" id="dockInviteInput" class="invite-input" autocomplete="off" spellcheck="false" />
+        <button type="button" class="btn-ghost btn-ghost--sm" id="dockInviteBtn" data-i18n="inviteApply">Apply</button>
+      </div>
+      <span class="field-hint" id="dockInviteNote"></span>
+      <span class="field-hint invite-status" id="dockInviteStatus" aria-live="polite"></span>
+    </details>
+    <p class="dock-legal">
+      <a href="blog/">Rehber</a> ·
+      <a href="about.html">Hakkımızda</a> ·
+      <a href="contact.html">İletişim</a> ·
+      <a href="privacy.html">Gizlilik</a> ·
+      <a href="disclaimer.html">Sorumluluk</a>
+    </p>
+
+    <div class="dock-guide" id="dockGuide">
+      <p class="dock-guide-title">Sürüş rehberi</p>
+      <ul>
+        <li><a href="blog/avas-nedir.html">AVAS nedir?</a></li>
+        <li><a href="blog/etubu-nasil-kullanilir.html">ETUBU nasıl kullanılır?</a></li>
+        <li><a href="blog/guvenli-telefon-kullanimi.html">Güvenli telefon kullanımı</a></li>
+        <li><a href="blog/turkiyede-hiz-koridoru.html">Hız koridoru farkındalığı</a></li>
+      </ul>
+    </div>
+  </aside>
+
+  <aside class="ad-rail ad-rail--middle" aria-label="Ad">
+    <div class="ad-slot ad-slot--middle" id="adMiddle">
+      <span class="ad-label" data-i18n="adLabel">Ad</span>
+      <div id="adMiddleInner" class="ad-inner"></div>
+    </div>
+  </aside>
+
+  <div class="sr-only" aria-hidden="true">
+    <span id="gpsState">—</span>
+    <span id="motionState">—</span>
+  </div>
+
+  <!-- Alt şerit: eski reklam bandının yerinde; hız kartının altına sabitlenir -->
+  <section class="site-editorial" id="siteEditorial" aria-label="ETUBU hakkında">
+    <div class="site-editorial-inner">
+      <h1>ETUBU — Araç sürüş sesleri</h1>
+      <p>
+        GPS hızına senkron sürüş sesleri ve yumuşak görsel temalar.
+        Eğlence amaçlıdır; resmi uyarı sistemi veya navigasyon değildir.
+        <a href="/blog/">Rehber</a> ·
+        <a href="/about.html">Hakkımızda</a> ·
+        <a href="/contact.html">İletişim</a> ·
+        <a href="/privacy.html">Gizlilik</a> ·
+        <a href="/disclaimer.html">Sorumluluk</a>
+      </p>
+      <p class="site-credit">Sinan Nergiz tarafından yapılmıştır</p>
+    </div>
+  </section>
+
+  <script src="js/car-browser.js?v=20260724av"></script>
+  <script src="js/i18n.js?v=20260728i"></script>
+  <script src="js/gps-tracker.js?v=20260729r"></script>
+  <script src="js/identity.js?v=20260724w"></script>
+  <script src="js/audio-engine.js?v=20260729c"></script>
+  <script src="js/obd.js?v=20260728a"></script>
+  <script src="js/music-hub.js?v=20260724av"></script>
+  <script src="js/scene.js?v=20260727o"></script>
+  <script src="js/mini-map.js?v=20260729r"></script>
+  <script src="js/radar-alert.js?v=20260729r"></script>
+  <script src="js/route-guard.js?v=20260729r"></script>
+  <script src="js/ads.js?v=20260727e"></script>
+  <script src="js/paddle-checkout.js?v=20260717s"></script>
+  <script src="js/paywall.js?v=20260724w"></script>
+  <script src="js/picker.js?v=20260727g"></script>
+  <script src="js/app.js?v=20260728i"></script>
+</body>
+</html>

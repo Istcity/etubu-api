@@ -1,0 +1,23 @@
+{
+  "name": "etubu",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ETUBU — EV/Tesla driving cluster, dashboard and drive-sound companion app.",
+  "scripts": {
+    "sync": "cap sync ios",
+    "open:ios": "cap open ios",
+    "build:ios": "xcodebuild -workspace ios/App/App.xcworkspace -scheme Etubu -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' build"
+  },
+  "dependencies": {
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/core": "^8.4.2",
+    "@capacitor/geolocation": "^8.2.0",
+    "@capacitor/haptics": "^8.0.2",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.4.2",
+    "@capacitor/ios": "^8.4.2"
+  }
+}

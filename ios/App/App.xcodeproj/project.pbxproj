@@ -1,0 +1,821 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 54;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		008E63FE607E62C933A5B49C /* EtubuDriveAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14A4E32586D75971FEFDE157 /* EtubuDriveAttributes.swift */; };
+		0A503F7D2005DA0F00D3C937 /* EtubuClusterL10n.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3C0A0A5E70E7F945B3BE33A /* EtubuClusterL10n.swift */; };
+		0B4CA45A9AD60BFA24D03341 /* EtubuWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D7E8E9A50DD4D8C3EBE1C78E /* EtubuWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeaderOnCopy, ); }; };
+		0C5CBD55AAE06F7BC2B1A3DC /* EtubuClusterPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD1FEDB9D02A1C787A41D4D /* EtubuClusterPresenter.swift */; };
+		12C3BE89B36CCB83DCE07087 /* EtubuDriveWarnings.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA92EF270AF486BADBF59F74 /* EtubuDriveWarnings.swift */; };
+		14F5D310989E7490549C7562 /* EtubuDriveAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = A26E8DFAD008A380B6D2208A /* EtubuDriveAttributes.swift */; };
+		1CAE0DA0AD531B02378F8EF2 /* EtubuVehicleTelemetry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FD1243C4DAFB08855FADECF /* EtubuVehicleTelemetry.swift */; };
+		202905760920C9BF32321F10 /* EtubuDashboardPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = D66681DBAD3733A1F5CA3D81 /* EtubuDashboardPresenter.swift */; };
+		2885E5BB2F560C13FF43DD09 /* EtubuCutoutFX.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F2C919C429E14B2D036FD26 /* EtubuCutoutFX.swift */; };
+		2EA4BBC27E63F294BDCE2B08 /* EtubuRoutePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3955F2D29BAD338D48999866 /* EtubuRoutePickerView.swift */; };
+		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
+		31798E4D5DEDCEB8DE424CDC /* ActivityKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3C0F64A6AECB4896D7141F16 /* ActivityKit.framework */; };
+		35DE0D9E69E4C66BE923B3E5 /* EtubuRouteBriefChipsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47705A4793E0FA886AAF9058 /* EtubuRouteBriefChipsView.swift */; };
+		39E8C00F54B1FE165F631085 /* EtubuAppLanguage.swift in Sources */ = {isa = PBXBuildFile; fileRef = C551AB7D23ABA4483D1A333F /* EtubuAppLanguage.swift */; };
+		3B44D95B25567CC3A4AB34D5 /* ClusterTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4B6FDAD8C8638F913C05149 /* ClusterTheme.swift */; };
+		3C1CAEA5F91E698FB131D00D /* EtubuObdTelemetry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38DA3F603D47CFA1DB3CD5E1 /* EtubuObdTelemetry.swift */; };
+		40DF6C464F21BA45B10E0277 /* EtubuCameraCutout.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC02A2736F949FCA6F5F5FF2 /* EtubuCameraCutout.swift */; };
+		4944BA90CEE16F85BB590086 /* Orbitron.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E09E1A9FF9C178786B22D455 /* Orbitron.ttf */; };
+		50379B232058CBB4000EE86E /* capacitor.config.json in Resources */ = {isa = PBXBuildFile; fileRef = 50379B222058CBB4000EE86E /* capacitor.config.json */; };
+		504EC3081FED79650016851F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504EC3071FED79650016851F /* AppDelegate.swift */; };
+		504EC30D1FED79650016851F /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30B1FED79650016851F /* Main.storyboard */; };
+		504EC30F1FED79650016851F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30E1FED79650016851F /* Assets.xcassets */; };
+		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
+		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
+		517A054E14B6E9E538826845 /* EtubuPremiumManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F74DF54CE9DD570E3A668F3D /* EtubuPremiumManager.swift */; };
+		546E8129C6286160342984F8 /* EtubuNotchAuraView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAACC9BE1260B703CD04294B /* EtubuNotchAuraView.swift */; };
+		554E58A5F617ADC3DB6B0197 /* EtubuRouteBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBB9C3437D8163BE66776B69 /* EtubuRouteBridge.swift */; };
+		685B9805251CFB3BBFD309C0 /* EtubuClusterFonts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 626F3BFA180A5A546CC8690F /* EtubuClusterFonts.swift */; };
+		7D8400D2FB9586B2968E4EF7 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 30F441A88DDAD87DC7DBF200 /* WidgetKit.framework */; };
+		88F3FDB85E4B90DA77DA0833 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1DA438ED0FB570B278DCC3DB /* SwiftUI.framework */; };
+		8E23AD2A3CA26DAAB0D4645E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = FF696C3DDC15AECBA11DEA27 /* Assets.xcassets */; };
+		915430CD0F83AB8F1FE70AF7 /* EtubuConnectionBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B632126526ADE93B5EE71E5 /* EtubuConnectionBar.swift */; };
+		92FE540BC1DF29272E54660A /* EtubuNativePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDE8357A341E4E88BBE79332 /* EtubuNativePlugin.swift */; };
+		A5EB1E45A4DEFE55931C39AD /* TeslaBLE in Frameworks */ = {isa = PBXBuildFile; productRef = 3CEA99BB36FC8843A6397BAC /* TeslaBLE */; };
+		AA267C628CDA70B2A92E7474 /* EtubuClusterVehiclePanels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64C086E2E1A8BD7F426D5574 /* EtubuClusterVehiclePanels.swift */; };
+		AEA977E26739B6C327748C26 /* EtubuDashboardRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B129060542C4330801538A8 /* EtubuDashboardRootView.swift */; };
+		B656FE0267A236C301F8AE0C /* EtubuMapLocationHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CBAA090886F11786F8B8B2F /* EtubuMapLocationHelper.swift */; };
+		B81AC2AC690A7AF835E62910 /* EtubuBluetoothGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09957FDD6325E3C5A1C15646 /* EtubuBluetoothGate.swift */; };
+		BB154D9E5FF5E9908B67C78C /* EtubuGaugeClusterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C443B8E3778DF080402CB890 /* EtubuGaugeClusterView.swift */; };
+		C38DAE28AFB608FF4CB785A5 /* EtubuClusterSimView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C8611F7BBE0F155EFEDD298 /* EtubuClusterSimView.swift */; };
+		C52403B05251C8A6F439B2DD /* EtubuClusterAudioBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE46C929135374CA2FCB40FF /* EtubuClusterAudioBridge.swift */; };
+		C6711EBC19D2A50570FB0626 /* EtubuLiveActivityWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7E3AE63A5590BD596E6216 /* EtubuLiveActivityWidget.swift */; };
+		C7A97F0DD3FF27D34309D423 /* EtubuClusterRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D58E4D55285BB8872631C73D /* EtubuClusterRootView.swift */; };
+		C7D046828A0E2DE02CC6F2C8 /* EtubuObdBleManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09AEE6E92B641D664DC31580 /* EtubuObdBleManager.swift */; };
+		CF84502BB78FE79F868CB017 /* EtubuObdDevicePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C020269A74606388FF70F6F /* EtubuObdDevicePickerView.swift */; };
+		D391C31389F8921FE348BF4F /* EtubuLiveActivityController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B7C2C02F0DF77C1292535E /* EtubuLiveActivityController.swift */; };
+		D47D1C526A18E0461D6C8E56 /* DMSans.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 032E0F793399BBE326062E0D /* DMSans.ttf */; };
+		DA57DD1033582E1CF1C5F37C /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 806E6FECE89AB3EE749FB51F /* PrivacyInfo.xcprivacy */; };
+		DA664393663A4E3A01FB7480 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A1772AC86451D4E8DD882434 /* Foundation.framework */; };
+		DE768F04AC1AC9EBFC570E96 /* EtubuTeslaBleSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16A07412B62521DBA5D8496B /* EtubuTeslaBleSession.swift */; };
+		EA7657B53A20D6BB8C1B7861 /* EtubuObdDeviceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAA1D28A00C365CD166D77E0 /* EtubuObdDeviceStore.swift */; };
+		F5BBE4EAF804E9EA36CE24FD /* Pods_Etubu.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1F56AE98655AC7C378EDF215 /* Pods_Etubu.framework */; };
+		F7B9E498C41B1DAD786CC501 /* EtubuClusterComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF992E9F8FF9FD1410C7C698 /* EtubuClusterComponents.swift */; };
+		FD8738279E416DE25E228862 /* EtubuTeslaVinStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F90DB12D21940C953B91600B /* EtubuTeslaVinStore.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		D4B905377ADFB701AFCCB901 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 504EC2FC1FED79650016851F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = EC590B4883762B99CD6DD975;
+			remoteInfo = EtubuWidgets;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		49FE96527EB6E5B7187126A7 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				0B4CA45A9AD60BFA24D03341 /* EtubuWidgets.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		032E0F793399BBE326062E0D /* DMSans.ttf */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = file; path = DMSans.ttf; sourceTree = "<group>"; };
+		09957FDD6325E3C5A1C15646 /* EtubuBluetoothGate.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuBluetoothGate.swift; sourceTree = "<group>"; };
+		09AEE6E92B641D664DC31580 /* EtubuObdBleManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuObdBleManager.swift; sourceTree = "<group>"; };
+		0A7E3AE63A5590BD596E6216 /* EtubuLiveActivityWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuLiveActivityWidget.swift; sourceTree = "<group>"; };
+		0B129060542C4330801538A8 /* EtubuDashboardRootView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuDashboardRootView.swift; sourceTree = "<group>"; };
+		0C8611F7BBE0F155EFEDD298 /* EtubuClusterSimView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuClusterSimView.swift; sourceTree = "<group>"; };
+		0CBAA090886F11786F8B8B2F /* EtubuMapLocationHelper.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuMapLocationHelper.swift; sourceTree = "<group>"; };
+		14A4E32586D75971FEFDE157 /* EtubuDriveAttributes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuDriveAttributes.swift; sourceTree = "<group>"; };
+		16A07412B62521DBA5D8496B /* EtubuTeslaBleSession.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuTeslaBleSession.swift; sourceTree = "<group>"; };
+		1DA438ED0FB570B278DCC3DB /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		1F56AE98655AC7C378EDF215 /* Pods_Etubu.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Etubu.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		2B632126526ADE93B5EE71E5 /* EtubuConnectionBar.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuConnectionBar.swift; sourceTree = "<group>"; };
+		2CD1FEDB9D02A1C787A41D4D /* EtubuClusterPresenter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuClusterPresenter.swift; sourceTree = "<group>"; };
+		2FAD9762203C412B000D30F8 /* config.xml */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = config.xml; sourceTree = "<group>"; };
+		30F441A88DDAD87DC7DBF200 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		38DA3F603D47CFA1DB3CD5E1 /* EtubuObdTelemetry.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuObdTelemetry.swift; sourceTree = "<group>"; };
+		3955F2D29BAD338D48999866 /* EtubuRoutePickerView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuRoutePickerView.swift; sourceTree = "<group>"; };
+		3C0F64A6AECB4896D7141F16 /* ActivityKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ActivityKit.framework; path = System/Library/Frameworks/ActivityKit.framework; sourceTree = SDKROOT; };
+		3FD1243C4DAFB08855FADECF /* EtubuVehicleTelemetry.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuVehicleTelemetry.swift; sourceTree = "<group>"; };
+		47705A4793E0FA886AAF9058 /* EtubuRouteBriefChipsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuRouteBriefChipsView.swift; sourceTree = "<group>"; };
+		4A0983ECD63D87CFE04478C1 /* Pods-Etubu.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Etubu.release.xcconfig"; path = "Pods/Target Support Files/Pods-Etubu/Pods-Etubu.release.xcconfig"; sourceTree = "<group>"; };
+		4AEC2FA37CE9FDA9C610DF0B /* App.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = App.entitlements; sourceTree = "<group>"; };
+		50379B222058CBB4000EE86E /* capacitor.config.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = capacitor.config.json; sourceTree = "<group>"; };
+		504EC3041FED79650016851F /* Etubu.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Etubu.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		504EC3071FED79650016851F /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		504EC30C1FED79650016851F /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
+		504EC30E1FED79650016851F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		504EC3111FED79650016851F /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
+		504EC3131FED79650016851F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		50B271D01FEDC1A000F3C39B /* public */ = {isa = PBXFileReference; lastKnownFileType = folder; path = public; sourceTree = "<group>"; };
+		626F3BFA180A5A546CC8690F /* EtubuClusterFonts.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuClusterFonts.swift; sourceTree = "<group>"; };
+		64C086E2E1A8BD7F426D5574 /* EtubuClusterVehiclePanels.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuClusterVehiclePanels.swift; sourceTree = "<group>"; };
+		806E6FECE89AB3EE749FB51F /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		8C020269A74606388FF70F6F /* EtubuObdDevicePickerView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuObdDevicePickerView.swift; sourceTree = "<group>"; };
+		8F2C919C429E14B2D036FD26 /* EtubuCutoutFX.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuCutoutFX.swift; sourceTree = "<group>"; };
+		9D726A99DF94760C63DEEFC7 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A1772AC86451D4E8DD882434 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		A26E8DFAD008A380B6D2208A /* EtubuDriveAttributes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuDriveAttributes.swift; sourceTree = "<group>"; };
+		A4B7C2C02F0DF77C1292535E /* EtubuLiveActivityController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuLiveActivityController.swift; sourceTree = "<group>"; };
+		AAACC9BE1260B703CD04294B /* EtubuNotchAuraView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuNotchAuraView.swift; sourceTree = "<group>"; };
+		AF51FD2D460BCFE21FA515B2 /* Pods-App.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-App.release.xcconfig"; path = "Pods/Target Support Files/Pods-App/Pods-App.release.xcconfig"; sourceTree = "<group>"; };
+		BA92EF270AF486BADBF59F74 /* EtubuDriveWarnings.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuDriveWarnings.swift; sourceTree = "<group>"; };
+		BC02A2736F949FCA6F5F5FF2 /* EtubuCameraCutout.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuCameraCutout.swift; sourceTree = "<group>"; };
+		C443B8E3778DF080402CB890 /* EtubuGaugeClusterView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuGaugeClusterView.swift; sourceTree = "<group>"; };
+		C4B6FDAD8C8638F913C05149 /* ClusterTheme.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ClusterTheme.swift; sourceTree = "<group>"; };
+		C551AB7D23ABA4483D1A333F /* EtubuAppLanguage.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuAppLanguage.swift; sourceTree = "<group>"; };
+		D58E4D55285BB8872631C73D /* EtubuClusterRootView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuClusterRootView.swift; sourceTree = "<group>"; };
+		D66681DBAD3733A1F5CA3D81 /* EtubuDashboardPresenter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuDashboardPresenter.swift; sourceTree = "<group>"; };
+		D7E8E9A50DD4D8C3EBE1C78E /* EtubuWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = EtubuWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		DBB9C3437D8163BE66776B69 /* EtubuRouteBridge.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuRouteBridge.swift; sourceTree = "<group>"; };
+		DDE8357A341E4E88BBE79332 /* EtubuNativePlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuNativePlugin.swift; sourceTree = "<group>"; };
+		E09E1A9FF9C178786B22D455 /* Orbitron.ttf */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = file; path = Orbitron.ttf; sourceTree = "<group>"; };
+		E73420E8D0B1A9FD9C420929 /* Pods-Etubu.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Etubu.debug.xcconfig"; path = "Pods/Target Support Files/Pods-Etubu/Pods-Etubu.debug.xcconfig"; sourceTree = "<group>"; };
+		F3C0A0A5E70E7F945B3BE33A /* EtubuClusterL10n.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuClusterL10n.swift; sourceTree = "<group>"; };
+		F74DF54CE9DD570E3A668F3D /* EtubuPremiumManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuPremiumManager.swift; sourceTree = "<group>"; };
+		F90DB12D21940C953B91600B /* EtubuTeslaVinStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuTeslaVinStore.swift; sourceTree = "<group>"; };
+		FAA1D28A00C365CD166D77E0 /* EtubuObdDeviceStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuObdDeviceStore.swift; sourceTree = "<group>"; };
+		FC68EB0AF532CFC21C3344DD /* Pods-App.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-App.debug.xcconfig"; path = "Pods/Target Support Files/Pods-App/Pods-App.debug.xcconfig"; sourceTree = "<group>"; };
+		FE46C929135374CA2FCB40FF /* EtubuClusterAudioBridge.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuClusterAudioBridge.swift; sourceTree = "<group>"; };
+		FF696C3DDC15AECBA11DEA27 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		FF992E9F8FF9FD1410C7C698 /* EtubuClusterComponents.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuClusterComponents.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		504EC3011FED79650016851F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A5EB1E45A4DEFE55931C39AD /* TeslaBLE in Frameworks */,
+				F5BBE4EAF804E9EA36CE24FD /* Pods_Etubu.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		80D8AF9A58EE3F76A30499BB /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DA664393663A4E3A01FB7480 /* Foundation.framework in Frameworks */,
+				7D8400D2FB9586B2968E4EF7 /* WidgetKit.framework in Frameworks */,
+				88F3FDB85E4B90DA77DA0833 /* SwiftUI.framework in Frameworks */,
+				31798E4D5DEDCEB8DE424CDC /* ActivityKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		116A50EDA7742103601C05AF /* Cluster */ = {
+			isa = PBXGroup;
+			children = (
+				C4B6FDAD8C8638F913C05149 /* ClusterTheme.swift */,
+				C551AB7D23ABA4483D1A333F /* EtubuAppLanguage.swift */,
+				BC02A2736F949FCA6F5F5FF2 /* EtubuCameraCutout.swift */,
+				FE46C929135374CA2FCB40FF /* EtubuClusterAudioBridge.swift */,
+				FF992E9F8FF9FD1410C7C698 /* EtubuClusterComponents.swift */,
+				626F3BFA180A5A546CC8690F /* EtubuClusterFonts.swift */,
+				F3C0A0A5E70E7F945B3BE33A /* EtubuClusterL10n.swift */,
+				2CD1FEDB9D02A1C787A41D4D /* EtubuClusterPresenter.swift */,
+				D58E4D55285BB8872631C73D /* EtubuClusterRootView.swift */,
+				0C8611F7BBE0F155EFEDD298 /* EtubuClusterSimView.swift */,
+				64C086E2E1A8BD7F426D5574 /* EtubuClusterVehiclePanels.swift */,
+				8F2C919C429E14B2D036FD26 /* EtubuCutoutFX.swift */,
+				BA92EF270AF486BADBF59F74 /* EtubuDriveWarnings.swift */,
+				0CBAA090886F11786F8B8B2F /* EtubuMapLocationHelper.swift */,
+				AAACC9BE1260B703CD04294B /* EtubuNotchAuraView.swift */,
+				F74DF54CE9DD570E3A668F3D /* EtubuPremiumManager.swift */,
+				DBB9C3437D8163BE66776B69 /* EtubuRouteBridge.swift */,
+				3955F2D29BAD338D48999866 /* EtubuRoutePickerView.swift */,
+				47705A4793E0FA886AAF9058 /* EtubuRouteBriefChipsView.swift */,
+			);
+			path = Cluster;
+			sourceTree = "<group>";
+		};
+		27E2DDA53C4D2A4D1A88CE4A /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				C8326DC5D9D56A2BDBE8376E /* iOS */,
+				30F441A88DDAD87DC7DBF200 /* WidgetKit.framework */,
+				1DA438ED0FB570B278DCC3DB /* SwiftUI.framework */,
+				3C0F64A6AECB4896D7141F16 /* ActivityKit.framework */,
+				1F56AE98655AC7C378EDF215 /* Pods_Etubu.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		504EC2FB1FED79650016851F = {
+			isa = PBXGroup;
+			children = (
+				504EC3061FED79650016851F /* App */,
+				504EC3051FED79650016851F /* Products */,
+				7F8756D8B27F46E3366F6CEA /* Pods */,
+				27E2DDA53C4D2A4D1A88CE4A /* Frameworks */,
+				5B4EB13FBE4A9085CA4426D1 /* EtubuWidgets */,
+			);
+			sourceTree = "<group>";
+		};
+		504EC3051FED79650016851F /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				504EC3041FED79650016851F /* Etubu.app */,
+				D7E8E9A50DD4D8C3EBE1C78E /* EtubuWidgets.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		504EC3061FED79650016851F /* App */ = {
+			isa = PBXGroup;
+			children = (
+				50379B222058CBB4000EE86E /* capacitor.config.json */,
+				504EC3071FED79650016851F /* AppDelegate.swift */,
+				504EC30B1FED79650016851F /* Main.storyboard */,
+				504EC30E1FED79650016851F /* Assets.xcassets */,
+				504EC3101FED79650016851F /* LaunchScreen.storyboard */,
+				504EC3131FED79650016851F /* Info.plist */,
+				2FAD9762203C412B000D30F8 /* config.xml */,
+				50B271D01FEDC1A000F3C39B /* public */,
+				116A50EDA7742103601C05AF /* Cluster */,
+				653CA9A9638DCD6970E4E476 /* Dashboard */,
+				5CC8B56B12BC1C1BD3533236 /* OBD */,
+				CB04C58F6D7AE482C29BBA8F /* Tesla */,
+				14A4E32586D75971FEFDE157 /* EtubuDriveAttributes.swift */,
+				A4B7C2C02F0DF77C1292535E /* EtubuLiveActivityController.swift */,
+				DDE8357A341E4E88BBE79332 /* EtubuNativePlugin.swift */,
+				4AEC2FA37CE9FDA9C610DF0B /* App.entitlements */,
+				DA4F92DDB4CB991EC93FDE79 /* Fonts */,
+				806E6FECE89AB3EE749FB51F /* PrivacyInfo.xcprivacy */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		5B4EB13FBE4A9085CA4426D1 /* EtubuWidgets */ = {
+			isa = PBXGroup;
+			children = (
+				A26E8DFAD008A380B6D2208A /* EtubuDriveAttributes.swift */,
+				0A7E3AE63A5590BD596E6216 /* EtubuLiveActivityWidget.swift */,
+				9D726A99DF94760C63DEEFC7 /* Info.plist */,
+				FF696C3DDC15AECBA11DEA27 /* Assets.xcassets */,
+			);
+			path = EtubuWidgets;
+			sourceTree = "<group>";
+		};
+		5CC8B56B12BC1C1BD3533236 /* OBD */ = {
+			isa = PBXGroup;
+			children = (
+				09AEE6E92B641D664DC31580 /* EtubuObdBleManager.swift */,
+				FAA1D28A00C365CD166D77E0 /* EtubuObdDeviceStore.swift */,
+				38DA3F603D47CFA1DB3CD5E1 /* EtubuObdTelemetry.swift */,
+			);
+			path = OBD;
+			sourceTree = "<group>";
+		};
+		653CA9A9638DCD6970E4E476 /* Dashboard */ = {
+			isa = PBXGroup;
+			children = (
+				2B632126526ADE93B5EE71E5 /* EtubuConnectionBar.swift */,
+				D66681DBAD3733A1F5CA3D81 /* EtubuDashboardPresenter.swift */,
+				0B129060542C4330801538A8 /* EtubuDashboardRootView.swift */,
+				C443B8E3778DF080402CB890 /* EtubuGaugeClusterView.swift */,
+				8C020269A74606388FF70F6F /* EtubuObdDevicePickerView.swift */,
+			);
+			path = Dashboard;
+			sourceTree = "<group>";
+		};
+		7F8756D8B27F46E3366F6CEA /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				FC68EB0AF532CFC21C3344DD /* Pods-App.debug.xcconfig */,
+				AF51FD2D460BCFE21FA515B2 /* Pods-App.release.xcconfig */,
+				E73420E8D0B1A9FD9C420929 /* Pods-Etubu.debug.xcconfig */,
+				4A0983ECD63D87CFE04478C1 /* Pods-Etubu.release.xcconfig */,
+			);
+			name = Pods;
+			sourceTree = "<group>";
+		};
+		C8326DC5D9D56A2BDBE8376E /* iOS */ = {
+			isa = PBXGroup;
+			children = (
+				A1772AC86451D4E8DD882434 /* Foundation.framework */,
+			);
+			name = iOS;
+			sourceTree = "<group>";
+		};
+		CB04C58F6D7AE482C29BBA8F /* Tesla */ = {
+			isa = PBXGroup;
+			children = (
+				09957FDD6325E3C5A1C15646 /* EtubuBluetoothGate.swift */,
+				16A07412B62521DBA5D8496B /* EtubuTeslaBleSession.swift */,
+				F90DB12D21940C953B91600B /* EtubuTeslaVinStore.swift */,
+				3FD1243C4DAFB08855FADECF /* EtubuVehicleTelemetry.swift */,
+			);
+			path = Tesla;
+			sourceTree = "<group>";
+		};
+		DA4F92DDB4CB991EC93FDE79 /* Fonts */ = {
+			isa = PBXGroup;
+			children = (
+				032E0F793399BBE326062E0D /* DMSans.ttf */,
+				E09E1A9FF9C178786B22D455 /* Orbitron.ttf */,
+			);
+			path = Fonts;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		504EC3031FED79650016851F /* Etubu */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 504EC3161FED79650016851F /* Build configuration list for PBXNativeTarget "Etubu" */;
+			buildPhases = (
+				6634F4EFEBD30273BCE97C65 /* [CP] Check Pods Manifest.lock */,
+				504EC3001FED79650016851F /* Sources */,
+				504EC3011FED79650016851F /* Frameworks */,
+				504EC3021FED79650016851F /* Resources */,
+				9592DBEFFC6D2A0C8D5DEB22 /* [CP] Embed Pods Frameworks */,
+				49FE96527EB6E5B7187126A7 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				12525BFCB34740D011146C27 /* PBXTargetDependency */,
+			);
+			name = Etubu;
+			packageProductDependencies = (
+				3CEA99BB36FC8843A6397BAC /* TeslaBLE */,
+			);
+			productName = Etubu;
+			productReference = 504EC3041FED79650016851F /* Etubu.app */;
+			productType = "com.apple.product-type.application";
+		};
+		EC590B4883762B99CD6DD975 /* EtubuWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5177FAEDBD9A5EDF830D7051 /* Build configuration list for PBXNativeTarget "EtubuWidgets" */;
+			buildPhases = (
+				6E4BC5B01EFC1308E211B074 /* Sources */,
+				80D8AF9A58EE3F76A30499BB /* Frameworks */,
+				E2EEAE42EFA3F1F74767A577 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = EtubuWidgets;
+			productName = EtubuWidgets;
+			productReference = D7E8E9A50DD4D8C3EBE1C78E /* EtubuWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		504EC2FC1FED79650016851F /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastSwiftUpdateCheck = 0920;
+				LastUpgradeCheck = 0920;
+				TargetAttributes = {
+					504EC3031FED79650016851F = {
+						CreatedOnToolsVersion = 9.2;
+						LastSwiftMigration = 1100;
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 504EC2FF1FED79650016851F /* Build configuration list for PBXProject "App" */;
+			compatibilityVersion = "Xcode 8.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 504EC2FB1FED79650016851F;
+			packageReferences = (
+				79A33E40C9F7ACCB9C60A494 /* XCRemoteSwiftPackageReference "swift-tesla-ble" */,
+			);
+			productRefGroup = 504EC3051FED79650016851F /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				504EC3031FED79650016851F /* Etubu */,
+				EC590B4883762B99CD6DD975 /* EtubuWidgets */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		504EC3021FED79650016851F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */,
+				50B271D11FEDC1A000F3C39B /* public in Resources */,
+				504EC30F1FED79650016851F /* Assets.xcassets in Resources */,
+				50379B232058CBB4000EE86E /* capacitor.config.json in Resources */,
+				504EC30D1FED79650016851F /* Main.storyboard in Resources */,
+				2FAD9763203C412B000D30F8 /* config.xml in Resources */,
+				D47D1C526A18E0461D6C8E56 /* DMSans.ttf in Resources */,
+				4944BA90CEE16F85BB590086 /* Orbitron.ttf in Resources */,
+				DA57DD1033582E1CF1C5F37C /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E2EEAE42EFA3F1F74767A577 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8E23AD2A3CA26DAAB0D4645E /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		6634F4EFEBD30273BCE97C65 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-Etubu-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		9592DBEFFC6D2A0C8D5DEB22 /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Etubu/Pods-Etubu-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		504EC3001FED79650016851F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
+				3B44D95B25567CC3A4AB34D5 /* ClusterTheme.swift in Sources */,
+				39E8C00F54B1FE165F631085 /* EtubuAppLanguage.swift in Sources */,
+				40DF6C464F21BA45B10E0277 /* EtubuCameraCutout.swift in Sources */,
+				C52403B05251C8A6F439B2DD /* EtubuClusterAudioBridge.swift in Sources */,
+				F7B9E498C41B1DAD786CC501 /* EtubuClusterComponents.swift in Sources */,
+				685B9805251CFB3BBFD309C0 /* EtubuClusterFonts.swift in Sources */,
+				0A503F7D2005DA0F00D3C937 /* EtubuClusterL10n.swift in Sources */,
+				0C5CBD55AAE06F7BC2B1A3DC /* EtubuClusterPresenter.swift in Sources */,
+				C7A97F0DD3FF27D34309D423 /* EtubuClusterRootView.swift in Sources */,
+				C38DAE28AFB608FF4CB785A5 /* EtubuClusterSimView.swift in Sources */,
+				AA267C628CDA70B2A92E7474 /* EtubuClusterVehiclePanels.swift in Sources */,
+				2885E5BB2F560C13FF43DD09 /* EtubuCutoutFX.swift in Sources */,
+				12C3BE89B36CCB83DCE07087 /* EtubuDriveWarnings.swift in Sources */,
+				B656FE0267A236C301F8AE0C /* EtubuMapLocationHelper.swift in Sources */,
+				546E8129C6286160342984F8 /* EtubuNotchAuraView.swift in Sources */,
+				517A054E14B6E9E538826845 /* EtubuPremiumManager.swift in Sources */,
+				554E58A5F617ADC3DB6B0197 /* EtubuRouteBridge.swift in Sources */,
+				2EA4BBC27E63F294BDCE2B08 /* EtubuRoutePickerView.swift in Sources */,
+				915430CD0F83AB8F1FE70AF7 /* EtubuConnectionBar.swift in Sources */,
+				202905760920C9BF32321F10 /* EtubuDashboardPresenter.swift in Sources */,
+				AEA977E26739B6C327748C26 /* EtubuDashboardRootView.swift in Sources */,
+				BB154D9E5FF5E9908B67C78C /* EtubuGaugeClusterView.swift in Sources */,
+				CF84502BB78FE79F868CB017 /* EtubuObdDevicePickerView.swift in Sources */,
+				C7D046828A0E2DE02CC6F2C8 /* EtubuObdBleManager.swift in Sources */,
+				EA7657B53A20D6BB8C1B7861 /* EtubuObdDeviceStore.swift in Sources */,
+				3C1CAEA5F91E698FB131D00D /* EtubuObdTelemetry.swift in Sources */,
+				B81AC2AC690A7AF835E62910 /* EtubuBluetoothGate.swift in Sources */,
+				DE768F04AC1AC9EBFC570E96 /* EtubuTeslaBleSession.swift in Sources */,
+				FD8738279E416DE25E228862 /* EtubuTeslaVinStore.swift in Sources */,
+				1CAE0DA0AD531B02378F8EF2 /* EtubuVehicleTelemetry.swift in Sources */,
+				008E63FE607E62C933A5B49C /* EtubuDriveAttributes.swift in Sources */,
+				D391C31389F8921FE348BF4F /* EtubuLiveActivityController.swift in Sources */,
+				92FE540BC1DF29272E54660A /* EtubuNativePlugin.swift in Sources */,
+				35DE0D9E69E4C66BE923B3E5 /* EtubuRouteBriefChipsView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		6E4BC5B01EFC1308E211B074 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				14F5D310989E7490549C7562 /* EtubuDriveAttributes.swift in Sources */,
+				C6711EBC19D2A50570FB0626 /* EtubuLiveActivityWidget.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		12525BFCB34740D011146C27 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = EtubuWidgets;
+			target = EC590B4883762B99CD6DD975 /* EtubuWidgets */;
+			targetProxy = D4B905377ADFB701AFCCB901 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin PBXVariantGroup section */
+		504EC30B1FED79650016851F /* Main.storyboard */ = {
+			isa = PBXVariantGroup;
+			children = (
+				504EC30C1FED79650016851F /* Base */,
+			);
+			name = Main.storyboard;
+			sourceTree = "<group>";
+		};
+		504EC3101FED79650016851F /* LaunchScreen.storyboard */ = {
+			isa = PBXVariantGroup;
+			children = (
+				504EC3111FED79650016851F /* Base */,
+			);
+			name = LaunchScreen.storyboard;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
+
+/* Begin XCBuildConfiguration section */
+		40C0C300579FB703149385FE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 10;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = EtubuWidgets/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.etubu.app.EtubuWidgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		504EC3141FED79650016851F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		504EC3151FED79650016851F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		504EC3171FED79650016851F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = E73420E8D0B1A9FD9C420929 /* Pods-Etubu.debug.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 10;
+				DEVELOPMENT_TEAM = R9VURFRPRC;
+				INFOPLIST_FILE = App/Info.plist;
+				INFOPLIST_KEY_UILaunchStoryboardName = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" \"-DDEBUG\"";
+				PRODUCT_BUNDLE_IDENTIFIER = com.etubu.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		504EC3181FED79650016851F /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 4A0983ECD63D87CFE04478C1 /* Pods-Etubu.release.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 10;
+				DEVELOPMENT_TEAM = R9VURFRPRC;
+				INFOPLIST_FILE = App/Info.plist;
+				INFOPLIST_KEY_UILaunchStoryboardName = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.etubu.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		F4F377351D14E91BAC50D9D4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 10;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = EtubuWidgets/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.etubu.app.EtubuWidgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		504EC2FF1FED79650016851F /* Build configuration list for PBXProject "App" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				504EC3141FED79650016851F /* Debug */,
+				504EC3151FED79650016851F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		504EC3161FED79650016851F /* Build configuration list for PBXNativeTarget "Etubu" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				504EC3171FED79650016851F /* Debug */,
+				504EC3181FED79650016851F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		5177FAEDBD9A5EDF830D7051 /* Build configuration list for PBXNativeTarget "EtubuWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				40C0C300579FB703149385FE /* Release */,
+				F4F377351D14E91BAC50D9D4 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		79A33E40C9F7ACCB9C60A494 /* XCRemoteSwiftPackageReference "swift-tesla-ble" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/shoujiaxin/swift-tesla-ble";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		3CEA99BB36FC8843A6397BAC /* TeslaBLE */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 79A33E40C9F7ACCB9C60A494 /* XCRemoteSwiftPackageReference "swift-tesla-ble" */;
+			productName = TeslaBLE;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 504EC2FC1FED79650016851F /* Project object */;
+}

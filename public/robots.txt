@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /archive/
+
+Sitemap: https://etubu.com/sitemap.xml

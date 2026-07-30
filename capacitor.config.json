@@ -1,0 +1,25 @@
+{
+	"appId": "com.etubu.app",
+	"appName": "ETUBU",
+	"webDir": "www",
+	"server": {
+		"iosScheme": "https"
+	},
+	"ios": {
+		"contentInset": "automatic",
+		"backgroundColor": "#02040a",
+		"preferredContentMode": "mobile"
+	},
+	"plugins": {
+		"SplashScreen": {
+			"launchAutoHide": true,
+			"backgroundColor": "#02040a"
+		}
+	},
+	"packageClassList": [
+		"AppPlugin",
+		"GeolocationPlugin",
+		"HapticsPlugin",
+		"StatusBarPlugin"
+	]
+}

@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" role="img" aria-label="ETUBU">
+  <defs>
+    <linearGradient id="etubuRing" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5CE1FF"/>
+      <stop offset="0.55" stop-color="#3B8CFF"/>
+      <stop offset="1" stop-color="#A855F7"/>
+    </linearGradient>
+    <linearGradient id="etubuWave" x1="10" y1="36" x2="54" y2="28" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7AF0FF" stop-opacity="0.35"/>
+      <stop offset="0.45" stop-color="#5CE1FF"/>
+      <stop offset="1" stop-color="#FF6BCB"/>
+    </linearGradient>
+    <linearGradient id="etubuSpark" x1="40" y1="18" x2="52" y2="30" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF8AD8"/>
+      <stop offset="0.5" stop-color="#FFE08A"/>
+      <stop offset="1" stop-color="#5CE1FF"/>
+    </linearGradient>
+    <filter id="etubuSoft" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="0.6" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <!-- Soft outer glow disc -->
+  <circle cx="32" cy="32" r="26" fill="#0A1628" opacity="0.9"/>
+  <!-- Gauge-style open ring -->
+  <path
+    d="M48.5 16.2A18.5 18.5 0 1 1 18.2 48.8"
+    stroke="url(#etubuRing)"
+    stroke-width="4.2"
+    stroke-linecap="round"
+    opacity="0.95"
+    filter="url(#etubuSoft)"
+  />
+  <path
+    d="M46.8 18.4A16.2 16.2 0 1 1 20.5 46.2"
+    stroke="#5CE1FF"
+    stroke-width="1.2"
+    stroke-linecap="round"
+    opacity="0.35"
+  />
+  <!-- Motion wave -->
+  <path
+    d="M14 38c6.5-2.5 11-7.5 16.5-8.2 5.2-.7 9.2 2.8 14.8 1.6 3.2-.7 6.2-2.6 8.7-4.8"
+    stroke="url(#etubuWave)"
+    stroke-width="3.4"
+    stroke-linecap="round"
+    fill="none"
+    opacity="0.95"
+  />
+  <path
+    d="M16 40.5c5.8-2 10.2-6.2 15.2-6.8 4.8-.6 8.5 2.2 13.5 1.2"
+    stroke="#fff"
+    stroke-width="1.1"
+    stroke-linecap="round"
+    opacity="0.28"
+  />
+  <!-- Soft spark -->
+  <path
+    d="M46 22.5l1.35 3.55L51 27.4l-3.55 1.35L46 32.3l-1.35-3.55L41 27.4l3.55-1.35L46 22.5z"
+    fill="url(#etubuSpark)"
+    opacity="0.95"
+  />
+</svg>
