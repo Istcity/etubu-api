@@ -2,6 +2,7 @@ import SwiftUI
 import UIKit
 
 /// Tek kutucuk — kalkış sabit “Konumum”, varış araması web RouteGuard ile aynı.
+/// Yazım sırasında alan + öneriler klavye altında kalmaz.
 struct EtubuRoutePickerView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var telemetry = EtubuVehicleTelemetry.shared
@@ -21,6 +22,7 @@ struct EtubuRoutePickerView: View {
     @State private var suppressFieldChange = false
     @State private var showPlanSummary = false
     @State private var keyboardInset: CGFloat = 0
+    @State private var sheetDetent: PresentationDetent = .large
     @FocusState private var toFocused: Bool
 
     var body: some View {
@@ -39,40 +41,69 @@ struct EtubuRoutePickerView: View {
                 .opacity(0.85)
 
                 VStack(spacing: 0) {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 16) {
-                            destinationCard
-                            if !suggestions.isEmpty {
-                                suggestionsCard
-                            }
-                            actionsRow
-                            if routeStatus.active || !routeStatus.briefText.isEmpty {
-                                activeRouteCard
-                            }
-                            if !statusMessage.isEmpty {
-                                Text(statusMessage)
-                                    .font(.caption)
-                                    .foregroundStyle(.white.opacity(0.55))
-                                    .padding(.horizontal, 4)
-                            }
-                            if !indexReady {
-                                HStack(spacing: 8) {
-                                    ProgressView().tint(.cyan).scaleEffect(0.8)
-                                    Text("TR yer dizini hazırlanıyor…")
-                                        .font(.caption)
-                                        .foregroundStyle(.cyan.opacity(0.8))
+                    // TextField üstte sabit — klavye açılınca yazılan yer görünür kalır
+                    destinationCard
+                        .padding(.horizontal, 20)
+                        .padding(.top, 12)
+                        .padding(.bottom, 10)
+
+                    if !statusMessage.isEmpty {
+                        Text(statusMessage)
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.55))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 24)
+                            .padding(.bottom, 6)
+                    }
+
+                    if !indexReady {
+                        HStack(spacing: 8) {
+                            ProgressView().tint(.cyan).scaleEffect(0.8)
+                            Text("TR yer dizini hazırlanıyor…")
+                                .font(.caption)
+                                .foregroundStyle(.cyan.opacity(0.8))
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 6)
+                    }
+
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 16) {
+                                if !suggestions.isEmpty {
+                                    suggestionsCard
+                                        .id("suggestions")
                                 }
-                                .padding(.horizontal, 4)
+                                actionsRow
+                                    .id("actions")
+                                if routeStatus.active || !routeStatus.briefText.isEmpty {
+                                    activeRouteCard
+                                }
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 24)
+                        }
+                        .scrollDismissesKeyboard(.interactively)
+                        .onChange(of: suggestions.count) { _, count in
+                            guard count > 0 else { return }
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                proxy.scrollTo("suggestions", anchor: .top)
                             }
                         }
-                        .padding(20)
-                        .padding(.bottom, (showPlanSummary && keyboardInset <= 0 ? 120 : 0) + max(0, keyboardInset - 8))
+                        .onChange(of: keyboardInset) { _, inset in
+                            guard inset > 0, !suggestions.isEmpty else { return }
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                proxy.scrollTo("suggestions", anchor: .top)
+                            }
+                        }
                     }
 
                     if showPlanSummary && keyboardInset <= 0 {
                         routeSummaryBar
                     }
                 }
+                .padding(.bottom, max(0, keyboardInset > 0 ? max(8, keyboardInset - 12) : 0))
             }
             .navigationTitle(EtubuClusterL10n.route)
             .navigationBarTitleDisplayMode(.inline)
@@ -81,17 +112,28 @@ struct EtubuRoutePickerView: View {
                     Button(EtubuClusterL10n.close) { dismiss() }
                         .foregroundStyle(.cyan)
                 }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Tamam") {
+                        toFocused = false
+                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                    }
+                    .foregroundStyle(.cyan)
+                }
             }
             .toolbarBackground(.hidden, for: .navigationBar)
             .preferredColorScheme(.dark)
         }
-        .presentationDetents([.large, .medium])
+        .presentationDetents([.medium, .large], selection: $sheetDetent)
         .presentationDragIndicator(.visible)
+        .interactiveDismissDisabled(toFocused && keyboardInset > 0)
         .onAppear {
             EtubuClusterPresenter.shared.hideCapacitorChrome()
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
             EtubuRouteBridge.primeWarningAudio()
             EtubuMapLocationHelper.shared.startIfNeeded()
             statusMessage = ""
+            sheetDetent = .large
             EtubuRouteBridge.ensureIndex { ready in
                 indexReady = ready
                 if !ready {
@@ -107,24 +149,52 @@ struct EtubuRoutePickerView: View {
                         }
                     }
                 }
-                toFocused = true
+                toFocused = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    sheetDetent = .large
+                    toFocused = true
+                }
                 if toText.count >= 2 {
                     refreshSuggestions(for: toText)
                 }
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
-            guard let frame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
-            let screenH = UIScreen.main.bounds.height
-            let overlap = max(0, screenH - frame.minY)
-            withAnimation(.easeOut(duration: 0.2)) {
-                keyboardInset = overlap
+        .onChange(of: toFocused) { _, focused in
+            if focused {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    sheetDetent = .large
+                }
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
+            applyKeyboardFrame(note)
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
             withAnimation(.easeOut(duration: 0.2)) {
                 keyboardInset = 0
             }
+        }
+    }
+
+    /// Sheet / landscape’te ekran yüksekliği yerine pencere overlap kullan.
+    private func applyKeyboardFrame(_ note: Notification) {
+        guard let frame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        let window = scenes.flatMap(\.windows).first(where: \.isKeyWindow)
+            ?? scenes.flatMap(\.windows).first
+        let overlap: CGFloat
+        if let window {
+            let kb = window.convert(frame, from: nil)
+            overlap = max(0, window.bounds.maxY - kb.minY)
+        } else {
+            let screenH = UIScreen.main.bounds.height
+            overlap = max(0, screenH - frame.minY)
+        }
+        // Sheet zaten kısmen yukarıda; aşırı padding’i kırp
+        let capped = min(overlap, UIScreen.main.bounds.height * 0.55)
+        withAnimation(.easeOut(duration: 0.2)) {
+            keyboardInset = capped
+            if capped > 40 { sheetDetent = .large }
         }
     }
 
@@ -187,6 +257,8 @@ struct EtubuRoutePickerView: View {
             TextField("yazınız", text: $toText)
                 .textInputAutocapitalization(.words)
                 .autocorrectionDisabled()
+                .keyboardType(.default)
+                .textContentType(.none)
                 .font(.body.weight(.semibold))
                 .foregroundStyle(.white)
                 .submitLabel(.search)
@@ -221,54 +293,56 @@ struct EtubuRoutePickerView: View {
                         .scaleEffect(0.7)
                         .tint(.cyan)
                 }
+                Spacer()
+                Text("\(suggestions.count)")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.white.opacity(0.35))
             }
             .padding(.horizontal, 14)
             .padding(.top, 12)
             .padding(.bottom, 6)
 
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(suggestions) { place in
-                        Button {
-                            select(place)
-                        } label: {
-                            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                                Circle()
-                                    .fill(Color.white.opacity(0.25))
-                                    .frame(width: 6, height: 6)
-                                    .padding(.top, 6)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(place.label)
-                                        .font(.subheadline.weight(.semibold))
-                                        .foregroundStyle(.white)
-                                        .multilineTextAlignment(.leading)
-                                    if !place.cityName.isEmpty || !place.districtName.isEmpty {
-                                        Text([
-                                            place.cityName.isEmpty ? nil : place.cityName.uppercased(),
-                                            place.districtName.isEmpty ? nil : place.districtName
-                                        ]
-                                        .compactMap { $0 }
-                                        .joined(separator: " / "))
-                                            .font(.caption2.weight(.bold))
-                                            .foregroundStyle(.white.opacity(0.62))
-                                            .lineLimit(1)
-                                            .minimumScaleFactor(0.75)
-                                    }
+            // Nested ScrollView yok — ana ScrollView içinde düz liste (ekran dışına taşmaz)
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(suggestions) { place in
+                    Button {
+                        select(place)
+                    } label: {
+                        HStack(alignment: .firstTextBaseline, spacing: 10) {
+                            Circle()
+                                .fill(Color.white.opacity(0.25))
+                                .frame(width: 6, height: 6)
+                                .padding(.top, 6)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(place.label)
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.white)
+                                    .multilineTextAlignment(.leading)
+                                if !place.cityName.isEmpty || !place.districtName.isEmpty {
+                                    Text([
+                                        place.cityName.isEmpty ? nil : place.cityName.uppercased(),
+                                        place.districtName.isEmpty ? nil : place.districtName
+                                    ]
+                                    .compactMap { $0 }
+                                    .joined(separator: " / "))
+                                        .font(.caption2.weight(.bold))
+                                        .foregroundStyle(.white.opacity(0.62))
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.75)
                                 }
-                                Spacer(minLength: 0)
                             }
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 11)
-                            .contentShape(Rectangle())
+                            Spacer(minLength: 0)
                         }
-                        .buttonStyle(.plain)
-                        if place.id != suggestions.last?.id {
-                            Divider().overlay(Color.white.opacity(0.06)).padding(.leading, 30)
-                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 11)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    if place.id != suggestions.last?.id {
+                        Divider().overlay(Color.white.opacity(0.06)).padding(.leading, 30)
                     }
                 }
             }
-            .frame(maxHeight: suggestions.count > 8 ? 320 : .infinity)
         }
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -311,7 +385,9 @@ struct EtubuRoutePickerView: View {
                 statusMessage = ""
                 telemetry.routeActive = false
                 EtubuDriveWarnings.shared.brief = EtubuRouteBriefSummary()
+                EtubuDriveWarnings.shared.remainingBrief = EtubuRouteBriefSummary()
                 EtubuDriveWarnings.shared.hazards = []
+                EtubuDriveWarnings.shared.remainingHazards = []
                 EtubuDriveWarnings.shared.routeCoords = []
                 EtubuDriveWarnings.shared.queue = []
                 EtubuDriveWarnings.shared.primary = nil
@@ -349,7 +425,48 @@ struct EtubuRoutePickerView: View {
                     .font(.caption)
                     .foregroundStyle(.cyan.opacity(0.75))
             } else {
+                // Kısa özet
+                Text("Kısa özet")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.white.opacity(0.45))
                 EtubuRouteBriefChipsView(brief: routeStatus.brief, compact: false)
+
+                // Detaylı liste — şarj / radar / koridor / hava + konum
+                if !routeStatus.hazardDetails.isEmpty {
+                    Text("Kritik noktalar (detay)")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.white.opacity(0.45))
+                        .padding(.top, 4)
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(routeStatus.hazardDetails.enumerated()), id: \.element.id) { idx, h in
+                            HStack(alignment: .top, spacing: 10) {
+                                Image(systemName: EtubuHazardChrome.icon(h.kind))
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundStyle(EtubuHazardChrome.tint(h.kind, urgent: false, theme: .aurora))
+                                    .frame(width: 18)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(h.kindTitleTR)
+                                        .font(.caption.weight(.bold))
+                                        .foregroundStyle(.white.opacity(0.9))
+                                    Text(detailLine(for: h, index: idx + 1))
+                                        .font(.caption2)
+                                        .foregroundStyle(.white.opacity(0.55))
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                Spacer(minLength: 0)
+                            }
+                            .padding(.vertical, 8)
+                            if idx < routeStatus.hazardDetails.count - 1 {
+                                Divider().overlay(Color.white.opacity(0.06))
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Color.white.opacity(0.04))
+                    )
+                }
             }
             if !routeStatus.brief.hasAny, !routeStatus.briefText.isEmpty, !routeStatus.navOnly {
                 Text(routeStatus.briefText)
@@ -368,6 +485,30 @@ struct EtubuRoutePickerView: View {
                         .strokeBorder((routeStatus.navOnly ? Color.cyan : Color.green).opacity(0.35), lineWidth: 1)
                 )
         )
+    }
+
+    private func detailLine(for h: EtubuRouteHazard, index: Int) -> String {
+        var parts: [String] = []
+        if let along = h.alongKm, along > 0 {
+            parts.append(String(format: "rota km %.1f", along))
+        } else if let idx = h.routeIdx {
+            parts.append("nokta #\(idx)")
+        } else {
+            parts.append("sıra \(index)")
+        }
+        if !h.label.isEmpty {
+            parts.append(h.label)
+        }
+        if let lim = h.maxspeed, lim > 0 {
+            parts.append("lim \(lim) km/h")
+        }
+        if let kw = h.kw, kw > 0 {
+            parts.append("\(kw) kW")
+        }
+        if !h.distanceLabel.isEmpty {
+            parts.append(h.distanceLabel)
+        }
+        return parts.joined(separator: " · ")
     }
 
     private var canPlanRoute: Bool {
@@ -511,8 +652,17 @@ struct EtubuRoutePickerView: View {
                         if ok || st.active {
                             showPlanSummary = true
                         }
+                        if !st.hazardDetails.isEmpty {
+                            EtubuDriveWarnings.shared.hazards = st.hazardDetails
+                            EtubuDriveWarnings.shared.remainingHazards = st.hazardDetails
+                            EtubuDriveWarnings.shared.brief = st.brief
+                            EtubuDriveWarnings.shared.remainingBrief = st.brief
+                        }
                     }
                     EtubuDriveWarnings.shared.startPolling()
+                    if #available(iOS 16.2, *) {
+                        Task { await EtubuLiveActivityController.publishCurrent() }
+                    }
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                         EtubuDriveWarnings.shared.startPolling()
                     }

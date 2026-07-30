@@ -8,20 +8,7 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 
     var title: String {
-        switch self {
-        case .aurora: return "Aurora"
-        case .plasma: return "Plasma"
-        case .redline: return "Redline"
-        case .cyberLime: return "Cyber Lime"
-        case .electricIce: return "Electric Ice"
-        case .solarFlare: return "Solar Flare"
-        case .neon: return "Neon"
-        case .violetStorm: return "Violet Storm"
-        case .deepOcean: return "Deep Ocean"
-        case .midnight: return "Midnight"
-        case .tunnel: return "Tunnel"
-        case .warp: return "Warp"
-        }
+        EtubuClusterL10n.t("themeName.\(rawValue)")
     }
 
     /// Scene hue degrees from ETUBU web themes.
@@ -117,17 +104,127 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
     var background: [Color] { canvasGradient }
 
     /// Letter-spacing for gauge labels — slightly tighter on “hot” themes.
+    /// Font family for speed gauge / numbers — PostScript names that resolve on iOS.
+    var gaugeFont: String {
+        switch self {
+        case .aurora: return "Orbitron-Bold"
+        case .plasma: return "Menlo-Bold"
+        case .redline: return "DINCondensed-Bold"
+        case .cyberLime: return "CourierNewPS-BoldMT"
+        case .electricIce: return "AvenirNext-Bold"
+        case .solarFlare: return "DINAlternate-Bold"
+        case .neon: return "AvenirNextCondensed-Bold"
+        case .violetStorm: return "Futura-Bold"
+        case .deepOcean: return "GillSans-Bold"
+        case .midnight: return "HelveticaNeue-Bold"
+        case .tunnel: return "CourierNewPS-BoldMT"
+        case .warp: return "Menlo-Bold"
+        }
+    }
+
+    /// Font family for UI labels, nav column, cards.
+    var uiFont: String {
+        switch self {
+        case .aurora: return "DMSans-Regular"
+        case .plasma: return "Menlo-Regular"
+        case .redline: return "AvenirNext-Medium"
+        case .cyberLime: return "CourierNewPSMT"
+        case .electricIce: return "AvenirNext-Regular"
+        case .solarFlare: return "AvenirNext-DemiBold"
+        case .neon: return "AvenirNextCondensed-Medium"
+        case .violetStorm: return "Futura-Medium"
+        case .deepOcean: return "GillSans"
+        case .midnight: return "DMSans-Regular"
+        case .tunnel: return "CourierNewPSMT"
+        case .warp: return "Menlo-Regular"
+        }
+    }
+
+    /// System design fallback when family missing — shapes typography character.
+    var gaugeDesign: Font.Design {
+        switch self {
+        case .aurora, .electricIce, .deepOcean: return .rounded
+        case .plasma, .warp, .cyberLime, .tunnel: return .monospaced
+        case .redline, .solarFlare, .neon: return .default
+        case .violetStorm, .midnight: return .serif
+        }
+    }
+
+    var uiDesign: Font.Design {
+        switch self {
+        case .aurora, .midnight, .electricIce: return .default
+        case .plasma, .warp, .cyberLime, .tunnel: return .monospaced
+        case .redline, .solarFlare, .neon: return .rounded
+        case .violetStorm, .deepOcean: return .serif
+        }
+    }
+
+    var gaugeWeight: Font.Weight {
+        switch self {
+        case .redline, .neon, .solarFlare: return .black
+        case .cyberLime, .tunnel, .warp: return .bold
+        case .plasma, .violetStorm: return .heavy
+        default: return .bold
+        }
+    }
+
     var gaugeTracking: CGFloat {
         switch self {
-        case .redline, .solarFlare, .neon: return 0.6
-        case .cyberLime, .tunnel: return 1.4
+        case .redline, .solarFlare: return 0.4
+        case .neon: return 0.2
+        case .cyberLime, .tunnel: return 1.6
+        case .plasma, .violetStorm, .warp: return 0.9
+        case .midnight, .deepOcean: return 1.2
         default: return 1.0
         }
     }
 
-    /// Gauge / UI font families — currently uniform across themes.
-    var gaugeFont: String { "Orbitron" }
-    var uiFont: String { "DM Sans" }
+    /// Relative gauge digit scale vs baseline (shape feel: condensed vs expansive).
+    var gaugeScale: CGFloat {
+        switch self {
+        case .neon, .redline: return 1.08          // condensed tall
+        case .cyberLime, .tunnel: return 0.94      // mono compact
+        case .plasma, .warp: return 0.97
+        case .solarFlare: return 1.05
+        default: return 1.0
+        }
+    }
+
+    /// Landscape dial ring personality.
+    enum DialRingStyle: Equatable {
+        case thin
+        case neonSweep      // progressing neon bar
+        case dualGlow
+        case dashed
+        case plasmaRibbon
+    }
+
+    var dialRingStyle: DialRingStyle {
+        switch self {
+        case .neon, .cyberLime, .warp: return .neonSweep
+        case .redline, .solarFlare: return .dualGlow
+        case .plasma, .violetStorm: return .plasmaRibbon
+        case .tunnel: return .dashed
+        case .aurora, .electricIce, .deepOcean, .midnight: return .thin
+        }
+    }
+
+    /// Outer ring stroke thickness — some themes run thicker for presence.
+    func ringLineWidth(for dialSize: CGFloat) -> CGFloat {
+        let base = max(2.4, dialSize * 0.020)
+        switch dialRingStyle {
+        case .neonSweep, .plasmaRibbon: return base * 1.45
+        case .dualGlow: return base * 1.55
+        case .dashed: return base * 1.25
+        case .thin: return base * 1.15
+        }
+    }
+
+    /// Power arc on landscape dial for every theme (portrait uses the bar instead).
+    var dialShowsPowerArc: Bool { true }
+
+    /// Landscape omits the separate power bar — kW lives on the dial.
+    var prefersRingPower: Bool { true }
 
     /// Key expected by web `Scene.setMode`.
     var webKey: String {

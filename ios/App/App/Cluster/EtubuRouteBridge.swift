@@ -23,6 +23,8 @@ struct EtubuRouteStatus: Equatable {
     var hazardCount: Int = 0
     /// Outside TR / OSRM-only polyline (no EGM radars)
     var navOnly: Bool = false
+    /// Full hazard list for route plan detail UI.
+    var hazardDetails: [EtubuRouteHazard] = []
 }
 
 /// Drives Cap-side RouteGuard + RadarAlert with the same place resolve logic as web.
@@ -37,7 +39,14 @@ enum EtubuRouteBridge {
     }
     function __etubuPlaceItems(){
       try {
-        var raw = JSON.parse(localStorage.getItem('etubu_place_index_v2') || '{}');
+        // Web RouteGuard INDEX_KEY = etubu_place_index_v3 (v2 fallback)
+        var raw = JSON.parse(
+          localStorage.getItem('etubu_place_index_v3')
+          || sessionStorage.getItem('etubu_place_index_v3')
+          || localStorage.getItem('etubu_place_index_v2')
+          || sessionStorage.getItem('etubu_place_index_v2')
+          || '{}'
+        );
         return raw.items || [];
       } catch(e) { return []; }
     }
@@ -46,6 +55,54 @@ enum EtubuRouteBridge {
       if (!query || query.length < 2) return [];
       var tokens = query.split(' ').filter(Boolean);
       var items = __etubuPlaceItems();
+      var maxN = limit || 8;
+
+      // İlçe adı tek başına (Çankaya) → il + ilçe birlikte listelenir
+      var districtExact = items.filter(function(p){ return __etubuFold(p.districtName) === query; });
+      if (districtExact.length) {
+        districtExact.sort(function(a,b){
+          return String(a.label||'').localeCompare(String(b.label||''), 'tr');
+        });
+        return districtExact.slice(0, Math.max(maxN, 12));
+      }
+
+      // Tek il adı → tüm ilçeler, Merkez başta
+      var cityExact = items.filter(function(p){ return __etubuFold(p.cityName) === query; });
+      if (cityExact.length >= 2 && tokens.length === 1) {
+        cityExact.sort(function(a,b){
+          if (!!b.isMerkez !== !!a.isMerkez) return a.isMerkez ? -1 : 1;
+          return String(a.districtName||'').localeCompare(String(b.districtName||''), 'tr');
+        });
+        return cityExact;
+      }
+
+      // "Ankara Çankaya" / "ankara cankaya"
+      if (tokens.length >= 2) {
+        var cityTok = tokens[0];
+        var distTok = tokens.slice(1).join(' ');
+        var compound = [];
+        for (var c = 0; c < items.length; c++) {
+          var cp = items[c];
+          var cCity = __etubuFold(cp.cityName);
+          var cDist = __etubuFold(cp.districtName);
+          if (cCity !== cityTok && cCity.indexOf(cityTok) !== 0) continue;
+          var distScore = 0;
+          if (cDist === distTok) distScore = 100;
+          else if (cDist.indexOf(distTok) === 0) distScore = 85;
+          else if (distTok.indexOf(cDist) === 0 && cDist.length >= 3) distScore = 70;
+          else if ((cp.search || '').indexOf(distTok) >= 0) distScore = 50;
+          else continue;
+          compound.push({ p: cp, score: distScore + (cp.isMerkez ? 2 : 0) });
+        }
+        if (compound.length) {
+          compound.sort(function(a,b){
+            if (b.score !== a.score) return b.score - a.score;
+            return String(a.p.label||'').localeCompare(String(b.p.label||''), 'tr');
+          });
+          return compound.slice(0, Math.max(maxN, 12)).map(function(x){ return x.p; });
+        }
+      }
+
       var scored = [];
       for (var i = 0; i < items.length; i++) {
         var p = items[i];
@@ -66,16 +123,7 @@ enum EtubuRouteBridge {
         if (b.score !== a.score) return b.score - a.score;
         return String(a.p.label||'').localeCompare(String(b.p.label||''), 'tr');
       });
-      // İl adı yazıldıysa (İstanbul): o ile bağlı ilçeleri öne çıkar / daralt
-      var cityExact = items.filter(function(p){ return __etubuFold(p.cityName) === query; });
-      if (cityExact.length >= 2) {
-        cityExact.sort(function(a,b){
-          if (!!b.isMerkez !== !!a.isMerkez) return a.isMerkez ? -1 : 1;
-          return String(a.districtName||'').localeCompare(String(b.districtName||''), 'tr');
-        });
-        return cityExact.slice(0, Math.max(limit, 12));
-      }
-      return scored.slice(0, limit || 8).map(function(x){ return x.p; });
+      return scored.slice(0, maxN).map(function(x){ return x.p; });
     }
     function __etubuInTurkey(lat, lng){
       return lat >= 35.8 && lat <= 42.35 && lng >= 25.6 && lng <= 45.0;
@@ -128,8 +176,15 @@ enum EtubuRouteBridge {
       if (q === 'konumum' || q === 'konum' || q === 'my location' || q === 'location') {
         return __etubuMyLocation();
       }
+      var tokens = q.split(' ').filter(Boolean);
+      // "Ankara Çankaya" → doğrudan il+ilçe
+      if (tokens.length >= 2) {
+        var hitsCompound = __etubuSearchPlaces(text, 8);
+        if (hitsCompound.length) return hitsCompound[0];
+      }
       var hits = __etubuSearchPlaces(text, 5);
       if (!hits.length) return null;
+      // Tek il adı → Merkez (Ankara → Ankara (Merkez))
       var cityOnly = hits.find(function(h){ return __etubuFold(h.cityName) === q && h.isMerkez; });
       if (cityOnly) return cityOnly;
       var distExact = hits.find(function(h){ return __etubuFold(h.districtName) === q; });
@@ -168,13 +223,17 @@ enum EtubuRouteBridge {
     /// Builds TR place index (web RouteGuard) and enables route UI even when Cap UI lang ≠ tr.
     static func ensureIndex(completion: ((Bool) -> Void)? = nil) {
         EtubuClusterAudioBridge.evalJS("""
-        (function(){
+        (async function(){
           try {
             localStorage.setItem('etubu_force_tr_route', '1');
+            sessionStorage.setItem('etubu_force_tr_route', '1');
             var rg = document.getElementById('routeGuard');
             if (rg) { rg.hidden = false; rg.classList.remove('is-collapsed','is-drive-hidden'); }
             var form = document.getElementById('routeForm');
             if (form) form.hidden = false;
+            if (window.RouteGuard && window.RouteGuard.buildPlaceIndex) {
+              await window.RouteGuard.buildPlaceIndex();
+            }
             var from = document.getElementById('routeFromInput');
             if (from) {
               if (!from.value || !String(from.value).trim()) from.value = 'Konumum';
@@ -194,14 +253,22 @@ enum EtubuRouteBridge {
         })();
         """)
         // Poll until index ready (web builds async)
-        pollIndexReady(attemptsLeft: 40, completion: completion)
+        pollIndexReady(attemptsLeft: 60, completion: completion)
     }
 
     private static func pollIndexReady(attemptsLeft: Int, completion: ((Bool) -> Void)?) {
         EtubuClusterAudioBridge.evalJSReturning("""
-        (function(){
+        (async function(){
           try {
-            var raw = JSON.parse(localStorage.getItem('etubu_place_index_v2') || '{}');
+            if (window.RouteGuard && window.RouteGuard.buildPlaceIndex) {
+              await window.RouteGuard.buildPlaceIndex();
+            }
+            var raw = JSON.parse(
+              localStorage.getItem('etubu_place_index_v3')
+              || sessionStorage.getItem('etubu_place_index_v3')
+              || localStorage.getItem('etubu_place_index_v2')
+              || '{}'
+            );
             var n = (raw.items || []).length;
             return JSON.stringify({ ready: n > 100, count: n });
           } catch(e) { return JSON.stringify({ ready: false, count: 0 }); }
@@ -216,50 +283,47 @@ enum EtubuRouteBridge {
                 DispatchQueue.main.async { completion?(ready) }
                 return
             }
-            // Nudge web build again
-            EtubuClusterAudioBridge.evalJS("""
-            (function(){
-              try {
-                document.getElementById('routeFromInput')?.dispatchEvent(new Event('focus',{bubbles:true}));
-                document.getElementById('routeFromInput')?.dispatchEvent(new Event('input',{bubbles:true}));
-              } catch(e) {}
-            })();
-            """)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                 pollIndexReady(attemptsLeft: attemptsLeft - 1, completion: completion)
             }
         }
     }
 
-    /// Autocomplete — same scoring as web searchPlaces / fromSuggestList.
+    /// Autocomplete — prefers live `RouteGuard.suggest` (builds index, Jul-29 city/district UX).
     static func search(query: String, forFrom: Bool, completion: @escaping ([EtubuRoutePlace]) -> Void) {
         let q = escape(query)
+        let forFromJS = forFrom ? "true" : "false"
         EtubuClusterAudioBridge.evalJSReturning("""
-        (function(){
+        (async function(){
           try {
+            if (window.RouteGuard && window.RouteGuard.suggest) {
+              var hits = await window.RouteGuard.suggest('\(q)', \(forFromJS));
+              // İl adı → tam ilçe listesi; diğerleri de makul üst sınır
+              return JSON.stringify((hits || []).slice(0, 48));
+            }
             \(placeHelpersJS)
             var qRaw = '\(q)';
-            var q = __etubuFold(qRaw);
+            var qf = __etubuFold(qRaw);
             var out = [];
             var mine = __etubuMyLocation();
-            if (forFromFlag) {
-              var wantMine = !q || q.length < 2 ||
-                'konumum'.indexOf(q) === 0 || q.indexOf('konum') >= 0 ||
-                'mylocation'.indexOf(q.replace(/\\s/g,'')) === 0;
-              var hits = q.length >= 2 ? __etubuSearchPlaces(qRaw, 8) : [];
+            if (\(forFromJS)) {
+              var wantMine = !qf || qf.length < 2 ||
+                'konumum'.indexOf(qf) === 0 || qf.indexOf('konum') >= 0 ||
+                'mylocation'.indexOf(qf.replace(/\\s/g,'')) === 0;
+              var hits = qf.length >= 2 ? __etubuSearchPlaces(qRaw, 40) : [];
               hits = hits.filter(function(p){ return !p.isMyLocation; });
               if (wantMine && mine) out.push(__etubuMapPlace(mine));
               hits.forEach(function(p){ out.push(__etubuMapPlace(p)); });
-              return JSON.stringify(out.slice(0, 12));
+              return JSON.stringify(out.slice(0, 48));
             }
-            if (q.length < 2) return '[]';
-            __etubuSearchPlaces(qRaw, 12).forEach(function(p){ out.push(__etubuMapPlace(p)); });
-            return JSON.stringify(out);
+            if (qf.length < 2) return '[]';
+            __etubuSearchPlaces(qRaw, 40).forEach(function(p){ out.push(__etubuMapPlace(p)); });
+            return JSON.stringify(out.slice(0, 48));
           } catch (e) {
             return '[]';
           }
         })();
-        """.replacingOccurrences(of: "forFromFlag", with: forFrom ? "true" : "false")) { raw in
+        """) { raw in
             DispatchQueue.main.async {
                 completion(Self.parsePlaces(raw))
             }
@@ -271,19 +335,29 @@ enum EtubuRouteBridge {
     static func needsDistrictPick(text: String, completion: @escaping (Bool) -> Void) {
         let t = escape(text)
         EtubuClusterAudioBridge.evalJSReturning("""
-        (function(){
+        (async function(){
           try {
+            if (window.RouteGuard && window.RouteGuard.buildPlaceIndex) {
+              await window.RouteGuard.buildPlaceIndex();
+            }
+            // Web: yalnızca büyükşehir adı tek başına → ilçe şart
+            if (window.RouteGuard && window.RouteGuard.needsDistrictPick) {
+              return window.RouteGuard.needsDistrictPick('\(t)') ? '1' : '0';
+            }
             \(placeHelpersJS)
             var q = __etubuFold('\(t)');
             if (!q || q === 'konumum' || q === 'konum') return '0';
+            var tokens = q.split(' ').filter(Boolean);
+            if (tokens.length !== 1) return '0';
             var items = __etubuPlaceItems();
             var distExact = items.some(function(p){ return __etubuFold(p.districtName) === q; });
             if (distExact) return '0';
             var cityRows = items.filter(function(p){ return __etubuFold(p.cityName) === q; });
-            if (cityRows.length === 0) return '0';
-            var cityOnly = cityRows.some(function(p){ return p.isMerkez; });
-            if (cityOnly) return '0';
-            return cityRows.length > 1 ? '1' : '0';
+            if (cityRows.length <= 1) return '0';
+            // Merkez varsa tek başına il kabul (normal iller)
+            if (cityRows.some(function(p){ return p.isMerkez; })) return '0';
+            // Büyükşehir (Merkez yok) → ilçe seç
+            return '1';
           } catch(e) { return '0'; }
         })();
         """) { raw in
@@ -309,14 +383,19 @@ enum EtubuRouteBridge {
                     completion(nil)
                     return
                 }
-                completion(parsePlaces("[\(raw!)]").first)
+                let trimmed = raw!.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmed.hasPrefix("{") {
+                    completion(parsePlaces("[\(trimmed)]").first)
+                } else {
+                    completion(parsePlaces(trimmed).first)
+                }
             }
         }
     }
 
     static func plan(from: String, to: String, completion: ((Bool, String) -> Void)? = nil) {
         primeWarningAudio()
-        Task { @MainActor in EtubuDriveWarnings.armRouteHazardHook() }
+        EtubuDriveWarnings.armRouteHazardHook()
         let fromEsc = escape(from.isEmpty ? "Konumum" : from)
         let toEsc = escape(to)
         EtubuClusterAudioBridge.evalJS("""
@@ -334,7 +413,16 @@ enum EtubuRouteBridge {
             if (!from || !to) return;
 
             function applyResolved(input, text) {
-              var p = __etubuResolvePlace(text);
+              var p = null;
+              if (window.RouteGuard && window.RouteGuard.resolvePlace) {
+                if (window.RouteGuard.needsDistrictPick && window.RouteGuard.needsDistrictPick(text)) {
+                  input.value = text;
+                  return null;
+                }
+                p = window.RouteGuard.resolvePlace(text);
+              } else {
+                p = __etubuResolvePlace(text);
+              }
               if (p && p.label) {
                 input.value = p.label;
                 return p;
@@ -470,6 +558,21 @@ enum EtubuRouteBridge {
               brief.weatherLabels = wxBlock.textContent.split('·').map(function(s){ return s.trim(); }).filter(Boolean).slice(0, 4);
             }
             var hazards = (window.__etubuRouteState && window.__etubuRouteState.hazards) || [];
+            var coords = (window.__etubuRouteState && window.__etubuRouteState.coords) || [];
+            function alongKmForIdx(idx) {
+              if (!coords.length || idx <= 0) return 0;
+              var sum = 0;
+              var n = Math.min(idx, coords.length - 1);
+              for (var i = 1; i <= n; i++) {
+                var a = coords[i-1], b = coords[i];
+                var dLat = (b.lat - a.lat) * Math.PI/180;
+                var dLon = (b.lng - a.lng) * Math.PI/180;
+                var aa = Math.sin(dLat/2)*Math.sin(dLat/2) +
+                  Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLon/2)*Math.sin(dLon/2);
+                sum += 2*6371000*Math.asin(Math.sqrt(aa));
+              }
+              return Math.round(sum / 100) / 10;
+            }
             if ((!brief.radar && !brief.corridor && !brief.charge && !brief.weather) && hazards.length) {
               hazards.forEach(function(h){
                 if (h.kind === 'corridor') brief.corridor++;
@@ -479,23 +582,36 @@ enum EtubuRouteBridge {
                 else brief.radar++;
               });
             }
+            var details = hazards.slice().sort(function(a,b){
+              var ia = a.routeIdx != null ? +a.routeIdx : 1e9;
+              var ib = b.routeIdx != null ? +b.routeIdx : 1e9;
+              return ia - ib;
+            }).slice(0, 80).map(function(h, i){
+              var idx = h.routeIdx != null ? +h.routeIdx : null;
+              var along = h.alongKm != null ? +h.alongKm : (idx != null ? alongKmForIdx(idx) : null);
+              return {
+                id: h.id || ((h.kind||'radar') + '-' + h.lat + ',' + h.lng + '-' + i),
+                kind: h.kind || 'radar',
+                label: h.label || h.name || '',
+                lat: +h.lat, lng: +h.lng,
+                maxspeed: h.maxspeed != null ? +h.maxspeed : null,
+                kw: h.kw != null ? +h.kw : null,
+                routeIdx: idx,
+                alongKm: along
+              };
+            });
             var navOnly = false;
             try {
               if (window.__etubuLastPlanMeta && window.__etubuLastPlanMeta.navOnly) navOnly = true;
               var pos = __etubuLiveCoords();
-              if (active && pos && !__etubuInTurkey(pos.lat, pos.lng) && !brief.radar && !brief.corridor) navOnly = true;
-              if (active && hazards.length === 0 && brief.radar === 0 && brief.corridor === 0) {
-                // OSRM fallback often has empty official hazards
-                var st = (window.__etubuRouteState && window.__etubuRouteState.coords) || [];
-                if (st.length > 2) navOnly = navOnly || (!brief.charge && !brief.weather);
-              }
+              if (active && pos && !__etubuInTurkey(pos.lat, pos.lng)) navOnly = true;
             } catch(e3) {}
             return JSON.stringify({
               active: active, from: from, to: to, status: status, brief: briefText,
-              counts: brief, hazardCount: hazards.length, navOnly: navOnly
+              counts: brief, hazardCount: hazards.length, navOnly: navOnly, details: details
             });
           } catch (e) {
-            return JSON.stringify({ active: false, from: '', to: '', status: '', brief: '', counts: {}, hazardCount: 0, navOnly: false });
+            return JSON.stringify({ active: false, from: '', to: '', status: '', brief: '', counts: {}, hazardCount: 0, navOnly: false, details: [] });
           }
         })();
         """) { raw in
@@ -515,6 +631,19 @@ enum EtubuRouteBridge {
                 if let s = counts[key] as? String { return Int(s) ?? 0 }
                 return 0
             }
+            func dbl(_ any: Any?) -> Double? {
+                if let d = any as? Double { return d }
+                if let n = any as? NSNumber { return n.doubleValue }
+                if let s = any as? String { return Double(s) }
+                return nil
+            }
+            func intv(_ any: Any?) -> Int? {
+                if let i = any as? Int { return i }
+                if let d = any as? Double { return Int(d) }
+                if let n = any as? NSNumber { return n.intValue }
+                if let s = any as? String { return Int(s) }
+                return nil
+            }
             let summary = EtubuRouteBriefSummary(
                 radarCount: count("radar"),
                 controlCount: count("control"),
@@ -530,6 +659,21 @@ enum EtubuRouteBridge {
                 if let n = json["hazardCount"] as? NSNumber { return n.intValue }
                 return 0
             }()
+            let details: [EtubuRouteHazard] = ((json["details"] as? [[String: Any]]) ?? []).compactMap { row in
+                guard let lat = dbl(row["lat"]), let lng = dbl(row["lng"]) else { return nil }
+                let kind = (row["kind"] as? String) ?? "radar"
+                return EtubuRouteHazard(
+                    id: (row["id"] as? String) ?? "\(kind)-\(lat),\(lng)",
+                    kind: kind,
+                    label: (row["label"] as? String) ?? "",
+                    lat: lat,
+                    lng: lng,
+                    maxspeed: intv(row["maxspeed"]),
+                    kw: intv(row["kw"]),
+                    routeIdx: intv(row["routeIdx"]),
+                    alongKm: dbl(row["alongKm"])
+                )
+            }
             DispatchQueue.main.async {
                 completion(EtubuRouteStatus(
                     active: json["active"] as? Bool ?? false,
@@ -539,7 +683,8 @@ enum EtubuRouteBridge {
                     briefText: json["brief"] as? String ?? "",
                     brief: summary,
                     hazardCount: hazardCount,
-                    navOnly: json["navOnly"] as? Bool ?? false
+                    navOnly: json["navOnly"] as? Bool ?? false,
+                    hazardDetails: details
                 ))
             }
         }

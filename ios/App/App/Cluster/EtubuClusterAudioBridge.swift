@@ -25,36 +25,91 @@ enum EtubuClusterAudioBridge {
         """)
     }
 
-    static func startDrive(kmh: Int, gear: String, source: String) {
+    static func startDrive(kmh: Int, gear: String, source: String, powerKw: Int? = nil) {
         if #available(iOS 16.2, *) {
             EtubuLiveActivityController.ensureAudioSession(mixWithOthers: true)
             EtubuLiveActivityController.startSilentKeepalive()
             Task {
+                let t = EtubuVehicleTelemetry.shared
                 _ = await EtubuLiveActivityController.start(
-                    voice: "ETUBU", kmh: kmh, gear: gear, rpm: 0, source: source
+                    voice: "ETUBU", kmh: kmh, gear: gear, rpm: 0, source: source,
+                    tpmsFL: t.tpmsFL.psi.map { Int($0.rounded()) },
+                    tpmsFR: t.tpmsFR.psi.map { Int($0.rounded()) },
+                    tpmsRL: t.tpmsRL.psi.map { Int($0.rounded()) },
+                    tpmsRR: t.tpmsRR.psi.map { Int($0.rounded()) }
                 )
             }
         }
+        armPowerRegenHook()
+        pushDrive(kmh: kmh, powerKw: powerKw, source: source)
         evalJS("""
         (function(){
           try {
-            if (window.AudioEngine && window.AudioEngine.resume) window.AudioEngine.resume();
-            if (window.AudioEngine && window.AudioEngine.start) window.AudioEngine.start();
+            if (window.RadarAlert && window.RadarAlert.primeAudio) window.RadarAlert.primeAudio();
+            if (window.AudioEngine) {
+              if (window.AudioEngine.setQuality) window.AudioEngine.setQuality('high');
+              if (window.AudioEngine.resume) window.AudioEngine.resume();
+              if (window.AudioEngine.start) window.AudioEngine.start();
+            }
             document.getElementById('startBtn')?.click?.();
           } catch (e) {}
         })();
         """)
     }
 
-    /// Push a live telemetry tick (kmh/power) into the web audio engine without restarting the drive session.
+    /// Feed live speed + Tesla power (negative = regen) into Cap AudioEngine.
+    /// Coalesced ~120ms to avoid audible flutter from BLE poll.
+    private static var pendingDrive: (kmh: Int, powerKw: Int?, source: String)?
+    private static var driveFlushWork: DispatchWorkItem?
+    private static let driveThrottleSec: Double = 0.12
+
     static func pushDrive(kmh: Int, powerKw: Int?, source: String) {
-        let powerStr = powerKw.map { String($0) } ?? "null"
+        pendingDrive = (kmh, powerKw, source)
+        if driveFlushWork != nil { return }
+        let work = DispatchWorkItem {
+            driveFlushWork = nil
+            flushDrive()
+        }
+        driveFlushWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + driveThrottleSec, execute: work)
+    }
+
+    private static func flushDrive() {
+        guard let d = pendingDrive else { return }
+        pendingDrive = nil
+        let p = d.powerKw.map(String.init) ?? "null"
+        let src = d.source
+            .replacingOccurrences(of: "'", with: "")
+            .replacingOccurrences(of: "\n", with: "")
         evalJS("""
         (function(){
           try {
-            if (window.AudioEngine && window.AudioEngine.update) {
-              window.AudioEngine.update({ kmh: \(kmh), powerKw: \(powerStr), source: '\(source)' });
+            window.__etubuDrivePowerKw = \(p);
+            window.__etubuDriveKmh = \(d.kmh);
+            if (window.AudioEngine && window.AudioEngine.setQuality) {
+              try { window.AudioEngine.setQuality('high'); } catch (e0) {}
             }
+            if (window.AudioEngine && window.AudioEngine.setSpeed) {
+              window.AudioEngine.setSpeed(\(d.kmh), {
+                source: '\(src)',
+                powerKw: \(p),
+                trend: (typeof window.__etubuPrevKmh === 'number')
+                  ? (\(d.kmh) - window.__etubuPrevKmh)
+                  : 0
+              });
+            }
+            window.__etubuPrevKmh = \(d.kmh);
+          } catch (e) {}
+        })();
+        """)
+    }
+
+    /// Kept for older Cap sessions — AudioEngine.setSpeed now handles powerKw natively.
+    static func armPowerRegenHook() {
+        evalJS("""
+        (function(){
+          try {
+            if (window.AudioEngine) window.AudioEngine.__etubuRegenHook = true;
           } catch (e) {}
         })();
         """)
@@ -67,6 +122,43 @@ enum EtubuClusterAudioBridge {
           try {
             window.__etubuPremium = \(unlocked ? "true" : "false");
             if (window.EtubuNative) { window.EtubuNative.premium = \(unlocked ? "true" : "false"); }
+          } catch (e) {}
+        })();
+        """)
+    }
+
+    /// Web `I18n.setLang` — TR dışı dillerde kritik nokta / RouteGuard kapalı.
+    static func setLanguage(_ code: String) {
+        let safe = code.replacingOccurrences(of: "'", with: "")
+        let forceTr = (safe == "tr")
+        evalJS("""
+        (function(){
+          try {
+            if (window.I18n && window.I18n.setLang) window.I18n.setLang('\(safe)');
+            window.__etubuLang = '\(safe)';
+            if (window.sessionStorage) {
+              sessionStorage.setItem('etubu_lang', '\(safe)');
+              if (\(forceTr ? "true" : "false")) {
+                sessionStorage.setItem('etubu_force_tr_route', '1');
+                window.__etubuForceTrRoute = 1;
+              } else {
+                sessionStorage.removeItem('etubu_force_tr_route');
+                window.__etubuForceTrRoute = 0;
+                try { localStorage.removeItem('etubu_force_tr_route'); } catch(e0) {}
+              }
+            }
+            if (window.RouteGuard && window.RouteGuard.syncVisibility) {
+              window.RouteGuard.syncVisibility();
+            }
+            if (window.RouteGuard && window.RouteGuard.refreshLocale) {
+              window.RouteGuard.refreshLocale();
+            }
+            if (!\(forceTr ? "true" : "false")) {
+              if (window.RadarAlert && window.RadarAlert.clear) window.RadarAlert.clear();
+              if (window.__etubuRouteState) {
+                window.__etubuRouteState.hazards = [];
+              }
+            }
           } catch (e) {}
         })();
         """)
@@ -113,10 +205,54 @@ enum EtubuClusterAudioBridge {
                 completion(nil)
                 return
             }
-            webView.evaluateJavaScript(js) { result, _ in
-                completion(result as? String)
+            // Keep Cap engine warm under the opaque cluster overlay.
+            EtubuClusterPresenter.shared.hideCapacitorChrome()
+            // Async IIFEs return a Promise — evaluateJavaScript often yields nil.
+            // callAsyncJavaScript awaits the promise and returns the resolved value.
+            let wrapped = """
+            var __etubuEval = (function(){ return \(js); })();
+            if (__etubuEval && typeof __etubuEval.then === 'function') {
+              return __etubuEval.then(function(v){
+                if (v == null) return null;
+                if (typeof v === 'string') return v;
+                try { return JSON.stringify(v); } catch (e) { return String(v); }
+              });
+            }
+            if (typeof __etubuEval === 'string') return __etubuEval;
+            try { return JSON.stringify(__etubuEval); } catch (e2) { return String(__etubuEval); }
+            """
+            if #available(iOS 14.0, *) {
+                webView.callAsyncJavaScript(wrapped, arguments: [:], in: nil, in: .page) { result in
+                    switch result {
+                    case .success(let value):
+                        completion(stringifyEvalResult(value))
+                    case .failure:
+                        // Fallback for older WebKit edge cases
+                        webView.evaluateJavaScript(js) { value, _ in
+                            completion(stringifyEvalResult(value))
+                        }
+                    }
+                }
+            } else {
+                webView.evaluateJavaScript(js) { result, _ in
+                    completion(stringifyEvalResult(result))
+                }
             }
         }
+    }
+
+    private static func stringifyEvalResult(_ result: Any?) -> String? {
+        if result == nil || result is NSNull { return nil }
+        if let s = result as? String { return s }
+        if let s = result as? NSString { return s as String }
+        if let n = result as? NSNumber { return n.stringValue }
+        if JSONSerialization.isValidJSONObject(result!) {
+            if let data = try? JSONSerialization.data(withJSONObject: result!),
+               let s = String(data: data, encoding: .utf8) {
+                return s
+            }
+        }
+        return nil
     }
 
     private static func findBridge() -> CAPBridgeProtocol? {

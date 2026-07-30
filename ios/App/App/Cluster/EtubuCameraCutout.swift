@@ -13,8 +13,8 @@ enum EtubuCameraCutout {
         var landscapeEdge: HorizontalAlignment?
     }
 
-    /// ~0.5 cm on-device ≈ 16 pt — FX must not bloom farther than this.
-    static let maxSpillPoints: CGFloat = 16
+    /// Spill for FX — larger soft field, biased away from screen hard edges.
+    static let maxSpillPoints: CGFloat = 40
 
     // MARK: - Device model → Dynamic Island pill size (points)
 
@@ -41,7 +41,31 @@ enum EtubuCameraCutout {
     // MARK: - Public
 
     static func resolve(size: CGSize, insets: EdgeInsets, landscape: Bool) -> Geometry? {
-        landscape ? resolveLandscape(size: size, insets: insets) : resolvePortrait(size: size, insets: insets)
+        if landscape {
+            return resolveLandscape(size: size, insets: insets) ?? fallback(size: size, landscape: true)
+        }
+        return resolvePortrait(size: size, insets: insets) ?? fallback(size: size, landscape: false)
+    }
+
+    /// Simulator / no-cutout devices still get a theme FX pill so settings remain meaningful.
+    private static func fallback(size: CGSize, landscape: Bool) -> Geometry {
+        let known = knownIslandSize() ?? (126, 37)
+        if landscape {
+            let shortAxis = known.h
+            let longAxis = known.w
+            let edge: HorizontalAlignment = .leading
+            let pill = CGRect(
+                x: max(6, (44 - shortAxis) / 2),
+                y: (size.height - longAxis) / 2,
+                width: shortAxis,
+                height: longAxis
+            )
+            return makeGeometry(pill: pill, style: .dynamicIsland, size: size, landscapeEdge: edge)
+        }
+        let w = known.w
+        let h = known.h
+        let pill = CGRect(x: (size.width - w) / 2, y: max(11, 14), width: w, height: h)
+        return makeGeometry(pill: pill, style: .dynamicIsland, size: size, landscapeEdge: nil)
     }
 
     // MARK: - Portrait
@@ -57,12 +81,12 @@ enum EtubuCameraCutout {
             let known = knownIslandSize()
             let w = known?.w ?? min(size.width * 0.33, max(120, top * 2))
             let h = known?.h ?? min(37, max(32, top * 0.58))
-            let y = max(11, (top - h) * 0.42)
+            let y = max(11, (top - h) / 2)
             pill = CGRect(x: (size.width - w) / 2, y: y, width: w, height: h)
         case .notch:
             let h = min(34, max(28, top * 0.55))
             let w = min(size.width * 0.52, max(180, size.width * 0.45))
-            let y = max(0, (top - h) * 0.15)
+            let y = max(0, (top - h) / 2)
             pill = CGRect(x: (size.width - w) / 2, y: y, width: w, height: h)
         case .none:
             return nil
@@ -87,21 +111,21 @@ enum EtubuCameraCutout {
         switch style {
         case .dynamicIsland:
             let known = knownIslandSize()
-            // In landscape the Island rotates: short axis becomes width, long axis height.
             let shortAxis = known?.h ?? min(38, max(32, gutter * 0.52))
             let longAxis = known?.w ?? min(size.height * 0.22, max(118, shortAxis * 3.4))
             let y = (size.height - longAxis) / 2
+            // Center the pill horizontally within the gutter
             let x: CGFloat = edge == .leading
-                ? max(6, (gutter - shortAxis) * 0.38)
-                : size.width - max(6, (gutter - shortAxis) * 0.38) - shortAxis
+                ? max(4, (gutter - shortAxis) / 2)
+                : size.width - max(4, (gutter - shortAxis) / 2) - shortAxis
             pill = CGRect(x: x, y: y, width: shortAxis, height: longAxis)
         case .notch:
             let shortAxis = min(34, max(26, gutter * 0.42))
             let longAxis = min(size.height * 0.36, max(160, gutter * 2.4))
             let y = (size.height - longAxis) / 2
             let x: CGFloat = edge == .leading
-                ? max(2, (gutter - shortAxis) * 0.28)
-                : size.width - max(2, (gutter - shortAxis) * 0.28) - shortAxis
+                ? max(2, (gutter - shortAxis) / 2)
+                : size.width - max(2, (gutter - shortAxis) / 2) - shortAxis
             pill = CGRect(x: x, y: y, width: shortAxis, height: longAxis)
         case .none:
             return nil
@@ -113,10 +137,25 @@ enum EtubuCameraCutout {
     private static func makeGeometry(
         pill: CGRect, style: Style, size: CGSize, landscapeEdge: HorizontalAlignment?
     ) -> Geometry {
-        let spill = maxSpillPoints
+        // Spill scales with screen so FX fits SE … Pro Max without spilling past bezel
+        let spill = min(maxSpillPoints, max(22, min(size.width, size.height) * 0.055))
         let screen = CGRect(origin: .zero, size: size)
-        var aura = pill.insetBy(dx: -spill, dy: -spill).intersection(screen)
-        if aura.isNull { aura = pill.insetBy(dx: -spill, dy: -spill) }
+        let softScreen = screen.insetBy(dx: 2, dy: 2)
+        var aura = pill.insetBy(dx: -spill, dy: -spill).intersection(softScreen)
+        if aura.isNull || aura.width < 8 || aura.height < 8 {
+            aura = pill.insetBy(dx: -min(spill, 24), dy: -min(spill, 24)).intersection(softScreen)
+            if aura.isNull { aura = pill }
+        }
+        if let edge = landscapeEdge {
+            let bias: CGFloat = min(18, spill * 0.45)
+            if edge == .leading {
+                let maxW = softScreen.maxX - aura.minX
+                aura.size.width = min(maxW, aura.width + bias)
+            } else {
+                let newMinX = max(softScreen.minX, aura.minX - bias)
+                aura = CGRect(x: newMinX, y: aura.minY, width: aura.maxX - newMinX, height: aura.height)
+            }
+        }
         return Geometry(style: style, pill: pill, aura: aura, landscapeEdge: landscapeEdge)
     }
 

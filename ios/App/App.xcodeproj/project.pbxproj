@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		D4BCDAD7890A45CEAB9D3E08 /* EtubuClusterHotspots.swift in Sources */ = {isa = PBXBuildFile; fileRef = B67E1884622C423EA48A68EA /* EtubuClusterHotspots.swift */; };
 		008E63FE607E62C933A5B49C /* EtubuDriveAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14A4E32586D75971FEFDE157 /* EtubuDriveAttributes.swift */; };
 		0A503F7D2005DA0F00D3C937 /* EtubuClusterL10n.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3C0A0A5E70E7F945B3BE33A /* EtubuClusterL10n.swift */; };
 		0B4CA45A9AD60BFA24D03341 /* EtubuWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D7E8E9A50DD4D8C3EBE1C78E /* EtubuWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeaderOnCopy, ); }; };
@@ -88,6 +89,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		B67E1884622C423EA48A68EA /* EtubuClusterHotspots.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuClusterHotspots.swift; sourceTree = "<group>"; };
 		032E0F793399BBE326062E0D /* DMSans.ttf */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = file; path = DMSans.ttf; sourceTree = "<group>"; };
 		09957FDD6325E3C5A1C15646 /* EtubuBluetoothGate.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuBluetoothGate.swift; sourceTree = "<group>"; };
 		09AEE6E92B641D664DC31580 /* EtubuObdBleManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuObdBleManager.swift; sourceTree = "<group>"; };
@@ -188,6 +190,7 @@
 				2CD1FEDB9D02A1C787A41D4D /* EtubuClusterPresenter.swift */,
 				D58E4D55285BB8872631C73D /* EtubuClusterRootView.swift */,
 				0C8611F7BBE0F155EFEDD298 /* EtubuClusterSimView.swift */,
+				B67E1884622C423EA48A68EA /* EtubuClusterHotspots.swift */,
 				64C086E2E1A8BD7F426D5574 /* EtubuClusterVehiclePanels.swift */,
 				8F2C919C429E14B2D036FD26 /* EtubuCutoutFX.swift */,
 				BA92EF270AF486BADBF59F74 /* EtubuDriveWarnings.swift */,
@@ -491,6 +494,7 @@
 				0C5CBD55AAE06F7BC2B1A3DC /* EtubuClusterPresenter.swift in Sources */,
 				C7A97F0DD3FF27D34309D423 /* EtubuClusterRootView.swift in Sources */,
 				C38DAE28AFB608FF4CB785A5 /* EtubuClusterSimView.swift in Sources */,
+				D4BCDAD7890A45CEAB9D3E08 /* EtubuClusterHotspots.swift in Sources */,
 				AA267C628CDA70B2A92E7474 /* EtubuClusterVehiclePanels.swift in Sources */,
 				2885E5BB2F560C13FF43DD09 /* EtubuCutoutFX.swift in Sources */,
 				12C3BE89B36CCB83DCE07087 /* EtubuDriveWarnings.swift in Sources */,
@@ -564,6 +568,7 @@
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 10;
+				DEVELOPMENT_TEAM = R9VURFRPRC;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = EtubuWidgets/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -748,6 +753,7 @@
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 10;
+				DEVELOPMENT_TEAM = R9VURFRPRC;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = EtubuWidgets/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;

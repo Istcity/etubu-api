@@ -7,7 +7,7 @@ import Capacitor
 ///
 /// A second `UIWindow` caused half-blank landscape on Simulator (frame lagged
 /// behind rotation). Hosting as a child of Cap’s root VC rotates correctly.
-/// Cap WebView stays alive underneath (NOT isHidden) for RouteGuard / Audio JS.
+/// Cap WebView stays alive underneath (alpha low, NOT isHidden) for RouteGuard / Audio JS.
 final class EtubuClusterPresenter: NSObject {
     static let shared = EtubuClusterPresenter()
 
@@ -72,7 +72,6 @@ final class EtubuClusterPresenter: NSObject {
             container.bringSubviewToFront(hc.view)
 
             self.hideCapacitorChrome()
-            EtubuDashboardPresenter.installFloatingButton(on: root)
             self.startWebKeepAlive()
             self.installAttempts = 0
             NotificationCenter.default.post(name: .etubuClusterGeometryDidChange, object: nil)
@@ -93,7 +92,9 @@ final class EtubuClusterPresenter: NSObject {
                 return
             }
             self.pinHosting(hv, to: container)
-            container.bringSubviewToFront(hv)
+            if !self.isModalOrKeyboardActive() {
+                container.bringSubviewToFront(hv)
+            }
             hv.setNeedsLayout()
             hv.layoutIfNeeded()
             self.hideCapacitorChrome()
@@ -111,25 +112,6 @@ final class EtubuClusterPresenter: NSObject {
             view.trailingAnchor.constraint(equalTo: container.trailingAnchor),
         ]
         NSLayoutConstraint.activate(edgeConstraints)
-        // Fallback if Auto Layout has not laid out yet.
-        if container.bounds.width > 40, container.bounds.height > 40,
-           view.bounds.width < 2 || view.bounds.height < 2 {
-            view.translatesAutoresizingMaskIntoConstraints = true
-            view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-            view.frame = container.bounds
-            // Re-apply constraints next pass.
-            DispatchQueue.main.async {
-                view.translatesAutoresizingMaskIntoConstraints = false
-                NSLayoutConstraint.deactivate(self.edgeConstraints)
-                self.edgeConstraints = [
-                    view.topAnchor.constraint(equalTo: container.topAnchor),
-                    view.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-                    view.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-                    view.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-                ]
-                NSLayoutConstraint.activate(self.edgeConstraints)
-            }
-        }
     }
 
     private func tearDownLegacyOverlayWindow() {
@@ -144,6 +126,8 @@ final class EtubuClusterPresenter: NSObject {
         DispatchQueue.main.async {
             if let cap = Self.findCapVC() {
                 cap.view.backgroundColor = self.canvasColor
+                // Always keep Cap's root interactive so child cluster hosting receives touches.
+                cap.view.isUserInteractionEnabled = true
                 if let wv = cap.webView {
                     // CRITICAL: do not set isHidden = true — that stalls WKWebView JS.
                     wv.isHidden = false
@@ -151,7 +135,14 @@ final class EtubuClusterPresenter: NSObject {
                     wv.isOpaque = false
                     wv.backgroundColor = .clear
                     wv.scrollView.backgroundColor = .clear
-                    wv.isUserInteractionEnabled = false
+                    // If Cap.view === WKWebView, disabling interaction kills ALL subviews
+                    // (including the SwiftUI cluster) — Simulator mouse clicks go nowhere.
+                    if wv === cap.view {
+                        wv.isUserInteractionEnabled = true
+                    } else {
+                        wv.isUserInteractionEnabled = false
+                        wv.scrollView.isUserInteractionEnabled = false
+                    }
                     if wv.bounds.width < 2 || wv.bounds.height < 2 {
                         let host = cap.view.bounds
                         wv.frame = CGRect(
@@ -165,7 +156,11 @@ final class EtubuClusterPresenter: NSObject {
             if let root = Self.capWindow()?.rootViewController,
                let hv = self.hosting?.view,
                hv.superview === root.view {
-                root.view.bringSubviewToFront(hv)
+                hv.isUserInteractionEnabled = true
+                hv.isMultipleTouchEnabled = true
+                if !self.isModalOrKeyboardActive() {
+                    root.view.bringSubviewToFront(hv)
+                }
             }
         }
     }
@@ -174,6 +169,8 @@ final class EtubuClusterPresenter: NSObject {
         guard keepAliveTimer == nil else { return }
         keepAliveTimer = Timer.scheduledTimer(withTimeInterval: 2.5, repeats: true) { [weak self] _ in
             guard let self else { return }
+            // Never fight sheets / keyboard — bringing cluster front covers route/settings.
+            if self.isModalOrKeyboardActive() { return }
             guard let wv = Self.findCapVC()?.webView else { return }
             wv.evaluateJavaScript("1", completionHandler: nil)
             if let root = Self.capWindow()?.rootViewController,
@@ -191,6 +188,27 @@ final class EtubuClusterPresenter: NSObject {
         if let t = keepAliveTimer {
             RunLoop.main.add(t, forMode: .common)
         }
+    }
+
+    /// True while a sheet/alert is up or the software keyboard is visible.
+    private func isModalOrKeyboardActive() -> Bool {
+        if let root = Self.capWindow()?.rootViewController, root.presentedViewController != nil {
+            return true
+        }
+        if let host = hosting, host.presentedViewController != nil { return true }
+        // Walk children — SwiftUI sheets often attach to the hosting controller.
+        var stack: [UIViewController] = []
+        if let root = Self.capWindow()?.rootViewController { stack.append(root) }
+        while let current = stack.popLast() {
+            if current.presentedViewController != nil { return true }
+            stack.append(contentsOf: current.children)
+        }
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        for window in scenes.flatMap(\.windows) where !window.isHidden {
+            let name = NSStringFromClass(type(of: window))
+            if name.contains("Keyboard") || name.contains("UIRemoteKeyboard") { return true }
+        }
+        return false
     }
 
     private func scheduleRetry() {

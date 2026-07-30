@@ -716,10 +716,11 @@ const RouteGuard = (() => {
   async function suggestForBridge(query, forFrom) {
     await buildPlaceIndex().catch(() => {});
     const q = fold(query);
+    // Cap / native: higher limit so city → full districts, district → city+district
     const hits = forFrom
       ? fromSuggestList(query || "")
       : q.length >= 2
-        ? searchPlaces(query, 8)
+        ? searchPlaces(query, 40)
         : [];
     return hits.map(mapPlaceForBridge);
   }

@@ -11,19 +11,22 @@ Keep this file updated when adding or replacing loops under `assets/audio/`.
 
 ## Band pack (`loops/bands/`) — Jul 2026
 
+Prefer `*_v2.wav` at runtime (`SAMPLE_VER` ≥ `20260730a`): Freesound CC0 / CC-BY idle·mid·high
+crossfade packs (rate clamped 0.85–1.3). Legacy non-`v2` files remain as fallbacks / sources.
+
 | File | Role | Source | License |
 |------|------|--------|---------|
-| `ev_idle.wav` | EV idle | Freesound [348857](https://freesound.org/s/348857/) mickboere — hover vehicle idle | **CC0** |
+| `ev_idle.wav` / `ev_idle_v2.wav` | EV idle | Freesound [348857](https://freesound.org/s/348857/) mickboere — hover vehicle idle | **CC0** |
 | `ev_idle_alt.wav` | EV idle alt | Freesound [843123](https://freesound.org/s/843123/) fnakez — engine idle cut | **CC0** |
-| `ev_mid.wav` | EV mid | Chalmers-derived `ev_id3_body_loop` (ETUBU EQ) | Research example / processed |
-| `ev_high.wav` | EV high | Chalmers-derived `ev_modely_rev_body_loop` (ETUBU EQ) | Research example / processed |
-| `ice_idle.wav` | ICE idle | Freesound [349170](https://freesound.org/s/349170/) iridiuss — car engine idle | **CC0** |
-| `ice_idle_v8.wav` | V8 idle | Freesound [636066](https://freesound.org/s/636066/) lumamorph — eight-cylinder idling | **CC-BY 4.0** — credit lumamorph / Freesound |
-| `ice_mid.wav` | ICE mid | Freesound [325809](https://freesound.org/s/325809/) soundjoao — motor loop 3 | **CC0** |
+| `ev_mid.wav` / `ev_mid_v2.wav` | EV mid | Chalmers-derived / Freesound EQ pack | Research / CC0 |
+| `ev_high.wav` / `ev_high_v2.wav` | EV high | Chalmers-derived / Freesound EQ pack | Research / CC0 |
+| `ice_idle.wav` / `ice_idle_v2.wav` | ICE idle | Freesound [349170](https://freesound.org/s/349170/) iridiuss — car engine idle | **CC0** |
+| `ice_idle_v8.wav` / `ice_idle_v8_v2.wav` | V8 idle | Freesound [636066](https://freesound.org/s/636066/) lumamorph — eight-cylinder idling | **CC-BY 4.0** — credit lumamorph / Freesound |
+| `ice_mid.wav` / `ice_mid_v2.wav` | ICE mid | Freesound [325809](https://freesound.org/s/325809/) soundjoao — motor loop 3 | **CC0** |
 | `ice_mid_alt.wav` | ICE mid alt | Freesound [481719](https://freesound.org/s/481719/) craigsmith — old car engine | **CC0** |
-| `ice_high.wav` | ICE high | Pitch-shifted from `ice_idle_v8` (no cabin/wind bed) | **CC-BY 4.0** via lumamorph source |
-| `diesel_idle.wav` | Diesel idle | Freesound [152908](https://freesound.org/s/152908/) mlteenie — London bus idling | **CC-BY 4.0** — credit mlteenie / Freesound |
-| `diesel_mid.wav` / `diesel_high.wav` | Diesel mid/high | Mid: EQ’d `diesel_thump`; high: pitch from `diesel_idle` | CC-BY / ETUBU |
+| `ice_high.wav` / `ice_high_v2.wav` | ICE high | Pitch-shifted / EQ pack from idle sources | **CC-BY 4.0** via lumamorph where applicable |
+| `diesel_*` / `diesel_*_v2` | Diesel bands | Freesound [152908](https://freesound.org/s/152908/) mlteenie + EQ derivatives | **CC-BY 4.0** — credit mlteenie / Freesound |
+| `turbo_*_v2` / `formula_*_v2` / `sportbike_*_v2` | Race / turbo packs | ETUBU EQ from licensed loops | See older loops below |
 
 > Note: interior cabin accel ([766323](https://freesound.org/s/766323/)) and `combustion_rich_loop` were removed from the live mix — they carried a shared wind/road bed under every voice.
 

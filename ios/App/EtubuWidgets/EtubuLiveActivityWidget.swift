@@ -41,15 +41,22 @@ struct EtubuLiveActivityWidget: Widget {
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                 }
-                if context.state.hasRouteBrief {
+                if context.state.routeActive, context.state.hasRouteBrief {
                     routeBriefRow(context.state)
                 }
-                if !context.state.primaryWarn.isEmpty {
+                if context.state.routeActive, !context.state.primaryWarn.isEmpty {
                     Text(context.state.primaryWarn)
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(.orange)
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
+                }
+                if context.state.routeActive, !context.state.aheadWarn2.isEmpty {
+                    Text(context.state.aheadWarn2)
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(.orange.opacity(0.75))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                 }
                 tpmsRow(context.state)
             }
@@ -92,13 +99,24 @@ struct EtubuLiveActivityWidget: Widget {
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     VStack(alignment: .leading, spacing: 4) {
-                        if context.state.hasRouteBrief {
+                        if context.state.routeActive, context.state.hasRouteBrief {
                             routeBriefRow(context.state)
                         }
-                        if !context.state.primaryWarn.isEmpty {
+                        if context.state.routeActive, context.state.remainingPoints > 0 {
+                            Text("Kalan \(context.state.remainingPoints) kritik nokta")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                        if context.state.routeActive, !context.state.primaryWarn.isEmpty {
                             Text(context.state.primaryWarn)
                                 .font(.system(size: 10, weight: .semibold))
                                 .foregroundStyle(.orange)
+                                .lineLimit(1)
+                        }
+                        if context.state.routeActive, !context.state.aheadWarn2.isEmpty {
+                            Text(context.state.aheadWarn2)
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundStyle(.orange.opacity(0.75))
                                 .lineLimit(1)
                         }
                         tpmsRow(context.state)
@@ -112,7 +130,14 @@ struct EtubuLiveActivityWidget: Widget {
                     .frame(width: 18, height: 18)
                     .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
             } compactTrailing: {
-                if context.state.routeActive, !context.state.routeTo.isEmpty {
+                if context.state.routeActive, !context.state.primaryWarn.isEmpty {
+                    Text(shortWarn(context.state.primaryWarn))
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.orange)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.45)
+                        .frame(maxWidth: 56, alignment: .trailing)
+                } else if context.state.routeActive, !context.state.routeTo.isEmpty {
                     Text(shortDest(context.state.routeTo))
                         .font(.system(size: 10, weight: .bold))
                         .foregroundStyle(.cyan)
@@ -143,6 +168,14 @@ struct EtubuLiveActivityWidget: Widget {
             return String(slash).trimmingCharacters(in: .whitespaces).prefix(10).description
         }
         return String(t.prefix(10))
+    }
+
+    private func shortWarn(_ raw: String) -> String {
+        let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let dist = t.split(separator: "·").last {
+            return String(dist).trimmingCharacters(in: .whitespaces).prefix(8).description
+        }
+        return String(t.prefix(8))
     }
 
     @ViewBuilder

@@ -484,12 +484,18 @@ final class EtubuObdBleManager: NSObject, CBCentralManagerDelegate, CBPeripheral
         }
         if let hex = capture(clean, pattern: "4105([0-9A-F]{2})"), let raw = Int(hex, radix: 16) {
             let c = raw - 40
-            DispatchQueue.main.async { self.telemetry.coolantC = c }
+            DispatchQueue.main.async {
+                self.telemetry.coolantC = c
+                EtubuVehicleTelemetry.shared.coolantC = c
+            }
             return
         }
         if let hex = capture(clean, pattern: "4142([0-9A-F]{4})"), let raw = Int(hex, radix: 16) {
             let v = Double(raw) / 1000.0
-            DispatchQueue.main.async { self.telemetry.voltageV = v }
+            DispatchQueue.main.async {
+                self.telemetry.voltageV = v
+                EtubuVehicleTelemetry.shared.voltageV = v
+            }
             return
         }
         if let hex = capture(clean, pattern: "4111([0-9A-F]{2})"), let raw = Int(hex, radix: 16) {
@@ -506,6 +512,12 @@ final class EtubuObdBleManager: NSObject, CBCentralManagerDelegate, CBPeripheral
     private func pushSpeed() {
         DispatchQueue.main.async {
             self.telemetry.applySpeed(kmh: self.lastKmh, rpm: self.lastRpm)
+            EtubuVehicleTelemetry.shared.applyObdFallback(
+                kmh: self.lastKmh,
+                rpm: self.lastRpm,
+                coolant: self.telemetry.coolantC,
+                voltage: self.telemetry.voltageV
+            )
         }
         var payload: [String: Any] = [
             "type": "speed",

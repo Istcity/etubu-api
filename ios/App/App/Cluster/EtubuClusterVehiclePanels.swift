@@ -18,20 +18,25 @@ struct EtubuTPMSGridView: View {
     }
 
     private func tireCell(_ name: String, _ tire: EtubuTireReading) -> some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 3) {
             Text(name)
+                .font(.caption2.weight(.semibold))
                 .foregroundStyle(.white.opacity(0.4))
+            // Keep value + unit as one run so they never wrap apart in narrow side cards
             if let psi = tire.psi {
-                Text(String(format: "%.1f", psi))
-                    .foregroundStyle(tire.warning ? Color.orange : Color.white.opacity(0.85))
-                    .fontWeight(tire.warning ? .bold : .regular)
-                Text("psi")
-                    .foregroundStyle(.white.opacity(0.35))
+                Text("\(String(format: "%.1f", psi)) psi")
+                    .font(.system(.caption, design: .monospaced).weight(tire.warning ? .bold : .semibold))
+                    .foregroundStyle(tire.warning ? Color.orange : Color.white.opacity(0.9))
             } else {
                 Text("— psi")
+                    .font(.caption.weight(.medium))
                     .foregroundStyle(.white.opacity(0.35))
             }
         }
+        .lineLimit(1)
+        .minimumScaleFactor(0.78)
+        .fixedSize(horizontal: true, vertical: false)
+        .layoutPriority(1)
     }
 }
 

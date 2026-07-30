@@ -1,18 +1,28 @@
 import SwiftUI
 import UIKit
 
-/// Theme-aware cluster fonts — gauge + UI family change per theme.
+/// Theme-aware cluster fonts — gauge + UI family, design, weight and scale change per theme.
 enum EtubuClusterFonts {
     /// Extra scale for landscape.
     static var layoutBoost: CGFloat = 0.9
 
     /// Active theme fonts — updated by `setTheme()`.
-    private(set) static var gaugeFamily = "Orbitron"
-    private(set) static var uiFamily = "DM Sans"
+    private(set) static var gaugeFamily = "Orbitron-Bold"
+    private(set) static var uiFamily = "DMSans-Regular"
+    private(set) static var gaugeDesign: Font.Design = .rounded
+    private(set) static var uiDesign: Font.Design = .default
+    private(set) static var gaugeWeight: Font.Weight = .bold
+    private(set) static var gaugeScale: CGFloat = 1.0
+    private(set) static var gaugeTracking: CGFloat = 1.0
 
     static func setTheme(_ theme: ClusterTheme) {
         gaugeFamily = theme.gaugeFont
         uiFamily = theme.uiFont
+        gaugeDesign = theme.gaugeDesign
+        uiDesign = theme.uiDesign
+        gaugeWeight = theme.gaugeWeight
+        gaugeScale = theme.gaugeScale
+        gaugeTracking = theme.gaugeTracking
     }
 
     static var displayScale: CGFloat {
@@ -27,12 +37,23 @@ enum EtubuClusterFonts {
 
     private static var scale: CGFloat { displayScale * layoutBoost }
 
-    static func gauge(_ size: CGFloat, weight: UIFont.Weight = .bold) -> Font {
-        Font(resolved(family: gaugeFamily, size: size * scale, weight: weight, fallbackDesign: .rounded))
+    static func gauge(_ size: CGFloat, weight: UIFont.Weight? = nil) -> Font {
+        let w = weight ?? uiKitWeight(gaugeWeight)
+        let px = size * scale * gaugeScale
+        if let font = UIFont(name: gaugeFamily, size: px)
+            ?? resolvedFamily(gaugeFamily, size: px, weight: w) {
+            return Font(font)
+        }
+        return .system(size: px, weight: gaugeWeight, design: gaugeDesign)
     }
 
     static func ui(_ size: CGFloat, weight: UIFont.Weight = .regular) -> Font {
-        Font(resolved(family: uiFamily, size: size * scale, weight: weight, fallbackDesign: .default))
+        let px = size * scale
+        if let font = UIFont(name: uiFamily, size: px)
+            ?? resolvedFamily(uiFamily, size: px, weight: weight) {
+            return Font(font)
+        }
+        return .system(size: px, weight: swiftWeight(weight), design: uiDesign)
     }
 
     static func ui(_ textStyle: Font.TextStyle, weight: UIFont.Weight = .regular) -> Font {
@@ -40,47 +61,61 @@ enum EtubuClusterFonts {
         return ui(size, weight: weight)
     }
 
-    private static func resolved(
-        family: String,
-        size: CGFloat,
-        weight: UIFont.Weight,
-        fallbackDesign: UIFontDescriptor.SystemDesign
-    ) -> UIFont {
-        let candidates: [String] = {
-            switch weight {
-            case .black: return ["\(family)-Black", "\(family)-ExtraBold", "\(family)-Bold", family]
-            case .heavy, .bold: return ["\(family)-Bold", "\(family)-SemiBold", "\(family)-Medium", family]
-            case .semibold: return ["\(family)-SemiBold", "\(family)-Medium", "\(family)-Bold", family]
-            case .medium: return ["\(family)-Medium", "\(family)-Regular", family]
-            case .light: return ["\(family)-Light", "\(family)-Regular", family]
-            default: return ["\(family)-Regular", family]
-            }
-        }()
-
-        let spaced = family.replacingOccurrences(of: " ", with: "")
-        let expanded = candidates.flatMap { name -> [String] in
-            if name == family { return [family, spaced] }
-            let dashed = name.replacingOccurrences(of: " ", with: "")
-            return [name, dashed, name.replacingOccurrences(of: family, with: spaced)]
+    private static func resolvedFamily(_ family: String, size: CGFloat, weight: UIFont.Weight) -> UIFont? {
+        let base = family
+            .replacingOccurrences(of: "-Bold", with: "")
+            .replacingOccurrences(of: "-Regular", with: "")
+            .replacingOccurrences(of: "-Medium", with: "")
+            .replacingOccurrences(of: "-DemiBold", with: "")
+            .replacingOccurrences(of: "-Black", with: "")
+            .replacingOccurrences(of: "-Heavy", with: "")
+            .replacingOccurrences(of: "PSMT", with: "")
+            .replacingOccurrences(of: "PS-BoldMT", with: "")
+        let spaced = base.replacingOccurrences(of: " ", with: "")
+        let candidates = [
+            family,
+            base,
+            spaced,
+            "\(base)-Bold",
+            "\(base)-Regular",
+            "\(spaced)-Bold",
+            "\(spaced)Bold",
+            "\(spaced)-Regular",
+        ]
+        for name in candidates {
+            if let font = UIFont(name: name, size: size) { return font }
         }
-
-        for name in expanded {
-            if let font = UIFont(name: name, size: size) {
-                return font
-            }
+        // Last resort: match by family name prefix in installed fonts
+        let all = UIFont.familyNames.flatMap { UIFont.fontNames(forFamilyName: $0) }
+        let needle = spaced.lowercased()
+        if let hit = all.first(where: { $0.replacingOccurrences(of: " ", with: "").lowercased().contains(needle.prefix(6)) }) {
+            return UIFont(name: hit, size: size)
         }
+        return nil
+    }
 
-        if let base = UIFont(name: family, size: size) ?? UIFont(name: spaced, size: size) {
-            let traits: [UIFontDescriptor.TraitKey: Any] = [.weight: weight]
-            let desc = base.fontDescriptor.addingAttributes([.traits: traits])
-            return UIFont(descriptor: desc, size: size)
+    private static func uiKitWeight(_ w: Font.Weight) -> UIFont.Weight {
+        switch w {
+        case .black: return .black
+        case .heavy: return .heavy
+        case .bold: return .bold
+        case .semibold: return .semibold
+        case .medium: return .medium
+        case .light: return .light
+        default: return .regular
         }
+    }
 
-        let sys = UIFont.systemFont(ofSize: size, weight: weight)
-        if let designed = sys.fontDescriptor.withDesign(fallbackDesign) {
-            return UIFont(descriptor: designed, size: size)
+    private static func swiftWeight(_ w: UIFont.Weight) -> Font.Weight {
+        switch w {
+        case .black: return .black
+        case .heavy: return .heavy
+        case .bold: return .bold
+        case .semibold: return .semibold
+        case .medium: return .medium
+        case .light: return .light
+        default: return .regular
         }
-        return sys
     }
 }
 

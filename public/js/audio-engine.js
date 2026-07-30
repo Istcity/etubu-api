@@ -56,9 +56,9 @@ class EtubuAudioEngine {
         drive: "ev_id3_body_loop.wav", driveGain: 0.72,
         drive2: "ev_hum_soft_loop.wav", drive2Gain: 0.28,
         loops: {
-          idle: "bands/ev_idle.wav",
-          mid: "bands/ev_mid.wav",
-          high: "bands/ev_high.wav",
+          idle: "bands/ev_idle_v2.wav",
+          mid: "bands/ev_mid_v2.wav",
+          high: "bands/ev_high_v2.wav",
         },
         bandEdges: { midStart: 12, highStart: 68 },
         gears: 1, waveIdle: "sine", waveMid: "sine", bodyMul: 0.32,
@@ -70,9 +70,9 @@ class EtubuAudioEngine {
         drive: "ev_modely_body_loop.wav", driveGain: 0.74,
         drive2: "ev_hum_sport_loop.wav", drive2Gain: 0.3,
         loops: {
-          idle: "bands/ev_idle.wav",
-          mid: "bands/ev_mid.wav",
-          high: "bands/ev_high.wav",
+          idle: "bands/ev_idle_v2.wav",
+          mid: "bands/ev_mid_v2.wav",
+          high: "bands/ev_high_v2.wav",
         },
         bandEdges: { midStart: 14, highStart: 75 },
         gears: 1, waveIdle: "sine", waveMid: "sine", bodyMul: 0.24,
@@ -85,8 +85,8 @@ class EtubuAudioEngine {
         drive2: "ev_modely_body_loop.wav", drive2Gain: 0.22,
         loops: {
           idle: "bands/ev_idle_alt.wav",
-          mid: "bands/ev_mid.wav",
-          high: "bands/ev_high.wav",
+          mid: "bands/ev_mid_v2.wav",
+          high: "bands/ev_high_v2.wav",
         },
         bandEdges: { midStart: 10, highStart: 70 },
         gears: 1, waveIdle: "sine", waveMid: "sine", bodyMul: 0.16,
@@ -98,9 +98,9 @@ class EtubuAudioEngine {
         drive: "ev_modely_body_loop.wav", driveGain: 0.7,
         drive2: "ev_hum_soft_loop.wav", drive2Gain: 0.26,
         loops: {
-          idle: "bands/ev_idle.wav",
-          mid: "bands/ev_mid.wav",
-          high: "bands/ev_high.wav",
+          idle: "bands/ev_idle_v2.wav",
+          mid: "bands/ev_mid_v2.wav",
+          high: "bands/ev_high_v2.wav",
         },
         bandEdges: { midStart: 12, highStart: 72 },
         gears: 1, waveIdle: "sine", waveMid: "sine", bodyMul: 0.22,
@@ -112,9 +112,9 @@ class EtubuAudioEngine {
         drive: "ev_modely_rev_body_loop.wav", driveGain: 0.78,
         drive2: "ev_hum_sport_loop.wav", drive2Gain: 0.24,
         loops: {
-          idle: "bands/ev_idle.wav",
-          mid: "bands/ev_mid.wav",
-          high: "bands/ev_high.wav",
+          idle: "bands/ev_idle_v2.wav",
+          mid: "bands/ev_mid_v2.wav",
+          high: "bands/ev_high_v2.wav",
         },
         bandEdges: { midStart: 16, highStart: 80 },
         gears: 1, waveIdle: "sine", waveMid: "triangle", bodyMul: 0.18,
@@ -128,9 +128,9 @@ class EtubuAudioEngine {
         drive: "v8_exhaust_loop.wav", driveGain: 0.82,
         drive2: "v8_exhaust_loop.wav", drive2Gain: 0.22,
         loops: {
-          idle: "bands/ice_idle_v8.wav",
-          mid: "bands/ice_mid.wav",
-          high: "bands/ice_high.wav",
+          idle: "bands/ice_idle_v8_v2.wav",
+          mid: "bands/ice_mid_v2.wav",
+          high: "bands/ice_high_v2.wav",
         },
         bandEdges: { midStart: 14, highStart: 95 },
         gears: 6, ice: true, waveIdle: "triangle", waveMid: "sawtooth", bodyMul: 0.28,
@@ -142,9 +142,9 @@ class EtubuAudioEngine {
         drive: "v8_exhaust_loop.wav", driveGain: 0.7,
         drive2: "v8_exhaust_loop.wav", drive2Gain: 0.2,
         loops: {
-          idle: "bands/ice_idle.wav",
-          mid: "bands/ice_mid.wav",
-          high: "bands/ice_high.wav",
+          idle: "bands/turbo_idle_v2.wav",
+          mid: "bands/turbo_mid_v2.wav",
+          high: "bands/turbo_high_v2.wav",
         },
         bandEdges: { midStart: 16, highStart: 100 },
         gears: 6, ice: true, waveIdle: "triangle", waveMid: "sawtooth", bodyMul: 0.22,
@@ -156,9 +156,9 @@ class EtubuAudioEngine {
         drive: "diesel_thump_loop.wav", driveGain: 0.84,
         drive2: "diesel_thump_loop.wav", drive2Gain: 0.12,
         loops: {
-          idle: "bands/diesel_idle.wav",
-          mid: "bands/diesel_mid.wav",
-          high: "bands/diesel_high.wav",
+          idle: "bands/diesel_idle_v2.wav",
+          mid: "bands/diesel_mid_v2.wav",
+          high: "bands/diesel_high_v2.wav",
         },
         bandEdges: { midStart: 12, highStart: 85 },
         gears: 6, ice: true, waveIdle: "triangle", waveMid: "triangle", bodyMul: 0.36,
@@ -170,9 +170,9 @@ class EtubuAudioEngine {
         drive: "v8_exhaust_loop.wav", driveGain: 0.78,
         drive2: "v8_exhaust_loop.wav", drive2Gain: 0.22,
         loops: {
-          idle: "bands/ice_idle.wav",
-          mid: "bands/ice_mid.wav",
-          high: "bands/ice_high.wav",
+          idle: "bands/ice_idle_v2.wav",
+          mid: "bands/ice_mid_v2.wav",
+          high: "bands/ice_high_v2.wav",
         },
         bandEdges: { midStart: 14, highStart: 88 },
         gears: 5, ice: true, waveIdle: "triangle", waveMid: "sawtooth", bodyMul: 0.26,
@@ -184,9 +184,9 @@ class EtubuAudioEngine {
         drive: "diesel_thump_loop.wav", driveGain: 0.7,
         drive2: "v8_exhaust_loop.wav", drive2Gain: 0.28,
         loops: {
-          idle: "bands/diesel_idle.wav",
-          mid: "bands/ice_mid_alt.wav",
-          high: "bands/ice_high.wav",
+          idle: "bands/diesel_idle_v2.wav",
+          mid: "bands/ice_mid_v2.wav",
+          high: "bands/ice_high_v2.wav",
         },
         bandEdges: { midStart: 10, highStart: 80 },
         gears: 4, ice: true, waveIdle: "sine", waveMid: "triangle", bodyMul: 0.42,
@@ -198,9 +198,9 @@ class EtubuAudioEngine {
         drive: "vtwin_cruiser_loop.wav", driveGain: 0.88,
         drive2: "vtwin_cruiser_loop.wav", drive2Gain: 0.14,
         loops: {
-          idle: "bands/ice_idle.wav",
-          mid: "bands/ice_mid_alt.wav",
-          high: "bands/ice_high.wav",
+          idle: "bands/ice_idle_v2.wav",
+          mid: "bands/ice_mid_v2.wav",
+          high: "bands/ice_high_v2.wav",
         },
         bandEdges: { midStart: 12, highStart: 70 },
         gears: 5, ice: true, waveIdle: "triangle", waveMid: "sawtooth", bodyMul: 0.3,
@@ -213,6 +213,12 @@ class EtubuAudioEngine {
         windGain: 0, filterHz: 2400, filterQ: 0.75, master: 1.55,
         drive: "f1_v10_loop.wav", driveGain: 0.92,
         drive2: "f1_v10_loop.wav", drive2Gain: 0.12,
+        loops: {
+          idle: "bands/formula_idle_v2.wav",
+          mid: "bands/formula_mid_v2.wav",
+          high: "bands/formula_high_v2.wav",
+        },
+        bandEdges: { midStart: 20, highStart: 110 },
         gears: 8, ice: true, waveIdle: "sawtooth", waveMid: "sawtooth", bodyMul: 0.14,
         harmMul: 0.1, subMul: 0.08, sampleLed: true,
       },
@@ -221,6 +227,12 @@ class EtubuAudioEngine {
         windGain: 0, filterHz: 2600, filterQ: 0.8, master: 1.5,
         drive: "superbike_rr_loop.wav", driveGain: 0.9,
         drive2: "superbike_rr_loop.wav", drive2Gain: 0.12,
+        loops: {
+          idle: "bands/sportbike_idle_v2.wav",
+          mid: "bands/sportbike_mid_v2.wav",
+          high: "bands/sportbike_high_v2.wav",
+        },
+        bandEdges: { midStart: 22, highStart: 115 },
         gears: 6, ice: true, waveIdle: "triangle", waveMid: "sawtooth", bodyMul: 0.12,
         harmMul: 0.1, subMul: 0.07, sampleLed: true,
       },
@@ -298,7 +310,7 @@ class EtubuAudioEngine {
     };
 
     this.SAMPLE_BASE = "assets/audio/loops/";
-    this.SAMPLE_VER = "20260729c";
+    this.SAMPLE_VER = "20260730a";
     /** Natural pitch window — avoid chipmunk / slow-mo extremes */
     this.RATE_MIN = 0.85;
     this.RATE_MAX = 1.3;

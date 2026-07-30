@@ -18,12 +18,15 @@ public struct EtubuDriveAttributes: ActivityAttributes {
         public var routeActive: Bool
         public var routeFrom: String
         public var routeTo: String
+        /// Remaining (ahead) critical-point counts — drop as passed.
         public var radarCount: Int
         public var corridorCount: Int
         public var chargeCount: Int
         public var controlCount: Int
         public var weatherCount: Int
         public var primaryWarn: String
+        public var aheadWarn2: String
+        public var remainingPoints: Int
 
         public init(
             kmh: Int,
@@ -43,7 +46,9 @@ public struct EtubuDriveAttributes: ActivityAttributes {
             chargeCount: Int = 0,
             controlCount: Int = 0,
             weatherCount: Int = 0,
-            primaryWarn: String = ""
+            primaryWarn: String = "",
+            aheadWarn2: String = "",
+            remainingPoints: Int = 0
         ) {
             self.kmh = kmh
             self.gear = gear
@@ -63,6 +68,8 @@ public struct EtubuDriveAttributes: ActivityAttributes {
             self.controlCount = controlCount
             self.weatherCount = weatherCount
             self.primaryWarn = primaryWarn
+            self.aheadWarn2 = aheadWarn2
+            self.remainingPoints = remainingPoints
         }
 
         public var routeSummaryLine: String {

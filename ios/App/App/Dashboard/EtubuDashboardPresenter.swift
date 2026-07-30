@@ -2,14 +2,16 @@ import UIKit
 import SwiftUI
 
 /// Presents the native OBD dashboard and hosts a floating entry button on the Cap root VC.
-/// `NSObject` subclass (not an enum) so `@objc` static selectors work for the UIButton target.
 final class EtubuDashboardPresenter: NSObject {
-    private static var fab: UIButton?
-    private static var hosting: UIViewController?
+    static let shared = EtubuDashboardPresenter()
 
-    static func installFloatingButton(on host: UIViewController) {
+    private var fab: UIButton?
+    private weak var fabHost: UIViewController?
+    private var hosting: UIViewController?
+
+    func installFloatingButton(on host: UIViewController) {
         DispatchQueue.main.async {
-            guard fab == nil else { return }
+            guard self.fab == nil else { return }
             let button = UIButton(type: .system)
             button.setTitle("Dashboard", for: .normal)
             button.titleLabel?.font = .systemFont(ofSize: 13, weight: .bold)
@@ -22,39 +24,34 @@ final class EtubuDashboardPresenter: NSObject {
             button.layer.shadowOffset = CGSize(width: 0, height: 3)
             button.contentEdgeInsets = UIEdgeInsets(top: 8, left: 14, bottom: 8, right: 14)
             button.translatesAutoresizingMaskIntoConstraints = false
-            button.addTarget(self, action: #selector(fabTapped), for: .touchUpInside)
+            button.addTarget(self, action: #selector(self.fabTapped), for: .touchUpInside)
             host.view.addSubview(button)
             NSLayoutConstraint.activate([
                 button.trailingAnchor.constraint(equalTo: host.view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
                 button.bottomAnchor.constraint(equalTo: host.view.safeAreaLayoutGuide.bottomAnchor, constant: -20),
             ])
-            fab = button
-            fabHost = host
+            self.fab = button
+            self.fabHost = host
         }
     }
 
-    private static weak var fabHost: UIViewController?
-
-    @objc private static func fabTapped() {
-        guard let host = fabHost ?? topViewController() else { return }
+    @objc private func fabTapped() {
+        guard let host = fabHost ?? Self.topViewController() else { return }
         present(from: host)
     }
 
-    static func present(from host: UIViewController) {
+    func present(from host: UIViewController) {
         if hosting != nil { return }
-        let root = EtubuDashboardRootView()
+        let root = EtubuDashboardRootView(onClose: { [weak self] in
+            self?.hosting?.dismiss(animated: true) {
+                self?.hosting = nil
+            }
+        })
         let hc = UIHostingController(rootView: root)
         hc.modalPresentationStyle = .fullScreen
         hc.view.backgroundColor = .black
         hosting = hc
-        host.present(hc, animated: true) {
-            // Keep reference until dismissed via environment dismiss → need wrapper
-        }
-        // Observe dismiss
-        hc.presentationController?.delegate = DismissObserver.shared
-        DismissObserver.shared.onDismiss = {
-            hosting = nil
-        }
+        host.present(hc, animated: true)
     }
 
     private static func topViewController() -> UIViewController? {
@@ -65,15 +62,5 @@ final class EtubuDashboardPresenter: NSObject {
             top = presented
         }
         return top
-    }
-}
-
-private final class DismissObserver: NSObject, UIAdaptivePresentationControllerDelegate {
-    static let shared = DismissObserver()
-    var onDismiss: (() -> Void)?
-
-    func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
-        onDismiss?()
-        onDismiss = nil
     }
 }

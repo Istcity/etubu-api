@@ -70,7 +70,30 @@ enum EtubuLiveActivityController {
     ) -> EtubuDriveAttributes.ContentState {
         let t = EtubuVehicleTelemetry.shared
         let w = EtubuDriveWarnings.shared
-        let warn = w.primary.map { "\($0.title) · \($0.distanceLabel)" } ?? ""
+        let routeOn = t.routeActive
+        // Island shows remaining critical points only when a route is active
+        let rb = routeOn ? w.remainingBrief : EtubuRouteBriefSummary()
+        let remaining = routeOn ? w.remainingHazards : []
+        let warnPrimary: String = {
+            guard routeOn else { return "" }
+            if let p = w.primary {
+                let dist = p.distanceLabel.isEmpty ? "" : " · \(p.distanceLabel)"
+                return String(("\(p.title)\(dist)").prefix(52))
+            }
+            if let h = remaining.first {
+                let dist = h.distanceLabel.isEmpty ? "" : " · \(h.distanceLabel)"
+                let name = h.label.isEmpty ? h.kindTitleTR : h.label
+                return String(("\(h.kindTitleTR): \(name)\(dist)").prefix(52))
+            }
+            return ""
+        }()
+        let warn2: String = {
+            guard routeOn, remaining.count > 1 else { return "" }
+            let h = remaining[1]
+            let dist = h.distanceLabel.isEmpty ? "" : " · \(h.distanceLabel)"
+            let name = h.label.isEmpty ? h.kindTitleTR : h.label
+            return String(("\(h.kindTitleTR): \(name)\(dist)").prefix(48))
+        }()
         return EtubuDriveAttributes.ContentState(
             kmh: kmh ?? t.kmh,
             gear: gear ?? t.gear,
@@ -81,15 +104,17 @@ enum EtubuLiveActivityController {
             tpmsFR: t.tpmsFR.psi.map { Int($0.rounded()) },
             tpmsRL: t.tpmsRL.psi.map { Int($0.rounded()) },
             tpmsRR: t.tpmsRR.psi.map { Int($0.rounded()) },
-            routeActive: t.routeActive,
+            routeActive: routeOn,
             routeFrom: t.routeFrom.isEmpty ? "Konumum" : t.routeFrom,
             routeTo: t.routeTo,
-            radarCount: w.brief.radarCount,
-            corridorCount: w.brief.corridorCount,
-            chargeCount: w.brief.chargeCount,
-            controlCount: w.brief.controlCount,
-            weatherCount: w.brief.weatherCount,
-            primaryWarn: String(warn.prefix(48))
+            radarCount: rb.radarCount,
+            corridorCount: rb.corridorCount,
+            chargeCount: rb.chargeCount,
+            controlCount: rb.controlCount,
+            weatherCount: rb.weatherCount,
+            primaryWarn: warnPrimary,
+            aheadWarn2: warn2,
+            remainingPoints: remaining.count
         )
     }
 
@@ -165,9 +190,22 @@ enum EtubuLiveActivityController {
     }
 
     static func end() async {
-        for activity in Activity<EtubuDriveAttributes>.activities {
+        stopSilentKeepalive()
+        let activities = Activity<EtubuDriveAttributes>.activities
+        current = nil
+        for activity in activities {
             await activity.end(nil, dismissalPolicy: .immediate)
         }
+    }
+
+    /// Fire-and-forget end from UIKit lifecycle (avoids main-thread semaphore deadlock).
+    static func endAllNow() {
+        stopSilentKeepalive()
         current = nil
+        Task { @MainActor in
+            for activity in Activity<EtubuDriveAttributes>.activities {
+                await activity.end(nil, dismissalPolicy: .immediate)
+            }
+        }
     }
 }

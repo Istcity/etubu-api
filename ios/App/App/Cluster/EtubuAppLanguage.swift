@@ -1,6 +1,6 @@
 import Foundation
 
-/// Web `I18n.SUPPORTED` ile aynı dil listesi.
+/// Web `I18n.SUPPORTED` ile aynı dil listesi — UserDefaults’ta kalıcı.
 enum EtubuAppLanguage: String, CaseIterable, Identifiable {
     case tr, en, de, fr, es, ja, ru
 
@@ -21,13 +21,27 @@ enum EtubuAppLanguage: String, CaseIterable, Identifiable {
     /// Kritik nokta / rota koruma uyarıları yalnızca Türkçe’de.
     var criticalAlertsEnabled: Bool { self == .tr }
 
+    private static let storageKey = "etubu.app.language"
+
     private static var inMemory: EtubuAppLanguage = {
+        if let raw = UserDefaults.standard.string(forKey: storageKey),
+           let lang = EtubuAppLanguage(rawValue: raw) {
+            return lang
+        }
         let nav = Locale.current.language.languageCode?.identifier.lowercased() ?? "tr"
         return EtubuAppLanguage(rawValue: nav) ?? .tr
     }()
 
     static var current: EtubuAppLanguage {
         get { inMemory }
-        set { inMemory = newValue }
+        set {
+            inMemory = newValue
+            UserDefaults.standard.set(newValue.rawValue, forKey: storageKey)
+            NotificationCenter.default.post(name: .etubuLanguageDidChange, object: newValue.rawValue)
+        }
     }
+}
+
+extension Notification.Name {
+    static let etubuLanguageDidChange = Notification.Name("etubuLanguageDidChange")
 }
