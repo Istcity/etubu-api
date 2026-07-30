@@ -518,9 +518,7 @@ struct EtubuClusterRootView: View {
         .presentationDetents([.medium, .large])
     }
 
-    private var shouldShowPairGuide: Bool {
-        telemetry.connectionState == .pairing || telemetry.connectionState == .waitingForCard || telemetry.connectionState == .failed
-    }
+    private var shouldShowPairGuide: Bool { tesla.pairStep != .none }
 
     private var pairGuideOverlay: some View {
         VStack {
@@ -533,15 +531,15 @@ struct EtubuClusterRootView: View {
                     .foregroundStyle(.white.opacity(0.85))
                 Text("2) Uygulama anahtar isteğini gönderiyor…")
                     .font(.subheadline)
-                    .foregroundStyle(telemetry.connectionState == .pairing ? theme.accent : .white.opacity(0.8))
+                    .foregroundStyle(tesla.pairStep == .sendingRequest ? theme.accent : .white.opacity(0.8))
                 Text("3) Tesla anahtar kartını orta konsola dokundurun. Araç ekranında onay çıkınca onaylayın.")
                     .font(.subheadline)
-                    .foregroundStyle(telemetry.connectionState == .waitingForCard ? theme.accent : .white.opacity(0.8))
+                    .foregroundStyle(tesla.pairStep == .waitingForCard ? theme.accent : .white.opacity(0.8))
                 Text(telemetry.statusMessage)
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.6))
 
-                if telemetry.connectionState == .waitingForCard {
+                if tesla.pairStep == .waitingForCard {
                     Button {
                         Task { await tesla.confirmCardTapped() }
                     } label: {

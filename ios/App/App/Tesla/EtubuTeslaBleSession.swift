@@ -6,6 +6,14 @@ import TeslaBLE
 @MainActor
 final class EtubuTeslaBleSession: ObservableObject {
     static let shared = EtubuTeslaBleSession()
+    
+    enum PairFlowStep: Equatable {
+        case none
+        case sendingRequest
+        case waitingForCard
+        case connectingAfterCard
+        case failed
+    }
 
     private let keyStore = KeychainTeslaKeyStore(service: "com.etubu.app.teslaBLE")
     private var client: TeslaVehicleClient?
@@ -16,6 +24,7 @@ final class EtubuTeslaBleSession: ObservableObject {
     private var reconnectAttempt = 0
     private var tick = 0
     private var activePairVIN: String?
+    @Published private(set) var pairStep: PairFlowStep = .none
 
     private var telemetry: EtubuVehicleTelemetry { .shared }
 
@@ -32,6 +41,7 @@ final class EtubuTeslaBleSession: ObservableObject {
         guard EtubuTeslaVinStore.pairedConfirmed(for: vin) else {
             telemetry.connectionState = .needsVIN
             telemetry.statusMessage = "Eşleştirmeyi tamamlamak için Pair açın"
+            pairStep = .none
             return
         }
         userStopped = false
@@ -69,6 +79,8 @@ final class EtubuTeslaBleSession: ObservableObject {
             await client.disconnect()
         }
         client = nil
+        activePairVIN = nil
+        pairStep = .none
         telemetry.connectionState = .idle
         telemetry.statusMessage = "Disconnected"
         if telemetry.source == .tesla {
@@ -89,6 +101,7 @@ final class EtubuTeslaBleSession: ObservableObject {
         telemetry.statusMessage = "VIN girin ve eşleştirin"
         telemetry.deviceLabel = "Tesla"
         activePairVIN = nil
+        pairStep = .none
     }
 
     func repair() async {
@@ -111,6 +124,7 @@ final class EtubuTeslaBleSession: ObservableObject {
         }
         telemetry.connectionState = .connecting
         telemetry.statusMessage = "Kart doğrulaması sonrası bağlanıyor…"
+        pairStep = .connectingAfterCard
         if let client {
             await client.disconnect()
         }
@@ -133,6 +147,7 @@ final class EtubuTeslaBleSession: ObservableObject {
     private func pair(vin: String) async {
         cancelJobs()
         activePairVIN = vin
+        pairStep = .sendingRequest
         telemetry.connectionState = .pairing
         telemetry.statusMessage = "Anahtar isteği Bluetooth üzerinden gönderiliyor…"
 
@@ -151,6 +166,7 @@ final class EtubuTeslaBleSession: ObservableObject {
             observeState(c)
 
             try await c.connect(mode: .pairing)
+            pairStep = .waitingForCard
             telemetry.connectionState = .waitingForCard
             telemetry.statusMessage = "Tesla anahtar kartını orta konsola dokundurun"
 
@@ -159,9 +175,11 @@ final class EtubuTeslaBleSession: ObservableObject {
                 role: .owner,
                 formFactor: .iosDevice
             )))
+            pairStep = .waitingForCard
             telemetry.connectionState = .waitingForCard
             telemetry.statusMessage = "Kartı dokundurup araç ekranındaki onayı verin, sonra \"Kartı dokundum — bağlan\"a basın"
         } catch {
+            pairStep = .failed
             telemetry.connectionState = .failed
             telemetry.statusMessage = error.localizedDescription
         }
@@ -172,7 +190,7 @@ final class EtubuTeslaBleSession: ObservableObject {
     private func connectNormal(vin: String, allowPairFallback: Bool = true, maxRetries: Int = 1) async {
         cancelJobs()
         telemetry.connectionState = .connecting
-        telemetry.statusMessage = "Connecting…"
+        telemetry.statusMessage = "Bağlanıyor…"
 
         if (try? keyStore.loadPrivateKey(forVIN: vin)) == nil {
             if allowPairFallback {
@@ -180,6 +198,7 @@ final class EtubuTeslaBleSession: ObservableObject {
                 try? keyStore.savePrivateKey(key, forVIN: vin)
                 await pair(vin: vin)
             } else {
+                pairStep = .failed
                 telemetry.connectionState = .failed
                 telemetry.statusMessage = "Kayıtlı anahtar bulunamadı, yeniden eşleştirin"
             }
@@ -198,6 +217,7 @@ final class EtubuTeslaBleSession: ObservableObject {
                 telemetry.statusMessage = "Bağlandı"
                 EtubuTeslaVinStore.setPairedConfirmed(true, for: vin)
                 activePairVIN = nil
+                pairStep = .none
                 startPolling(c)
                 return
             } catch {
@@ -207,9 +227,12 @@ final class EtubuTeslaBleSession: ObservableObject {
                     try? await Task.sleep(nanoseconds: UInt64(attempt) * 1_000_000_000)
                     continue
                 }
+                pairStep = allowPairFallback ? .none : .failed
                 telemetry.connectionState = .failed
                 telemetry.statusMessage = error.localizedDescription
-                scheduleReconnect(vin: vin)
+                if allowPairFallback {
+                    scheduleReconnect(vin: vin)
+                }
             }
         }
     }
@@ -378,8 +401,12 @@ final class EtubuTeslaBleSession: ObservableObject {
                         self.telemetry.statusMessage = "Connected · salt okuma"
                     case .disconnected:
                         if !self.userStopped {
-                            self.telemetry.connectionState = .reconnecting
-                            self.telemetry.statusMessage = "Reconnecting…"
+                            if self.pairStep == .waitingForCard {
+                                self.telemetry.connectionState = .waitingForCard
+                            } else {
+                                self.telemetry.connectionState = .reconnecting
+                                self.telemetry.statusMessage = "Reconnecting…"
+                            }
                         }
                     @unknown default:
                         break
