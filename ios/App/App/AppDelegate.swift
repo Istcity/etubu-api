@@ -13,6 +13,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // Do not wipe entire UserDefaults — that breaks Cap plugins and pairing recovery.
         // VIN lives in Keychain; ephemeral prefs are cleared from web storage in cluster onAppear.
         configureAudioSession(quality: true)
+        if #available(iOS 16.2, *) {
+            Task { await EtubuLiveActivityController.end() }
+        }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
             EtubuClusterPresenter.shared.installOverCapacitor()
         }
@@ -102,9 +105,16 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func applicationDidBecomeActive(_ application: UIApplication) {
         configureAudioSession(quality: true)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            EtubuTeslaBleSession.shared.bootstrapIfPossible()
+        }
     }
 
-    func applicationWillTerminate(_ application: UIApplication) {}
+    func applicationWillTerminate(_ application: UIApplication) {
+        if #available(iOS 16.2, *) {
+            Task { await EtubuLiveActivityController.end() }
+        }
+    }
 
     func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
         return ApplicationDelegateProxy.shared.application(app, open: url, options: options)
