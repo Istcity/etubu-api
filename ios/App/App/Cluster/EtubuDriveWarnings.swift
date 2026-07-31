@@ -141,7 +141,14 @@ final class EtubuDriveWarnings: ObservableObject {
 
     private func apply(_ json: [String: Any]) {
         if let arr = json["queue"] as? [[String: Any]] {
-            queue = arr.compactMap { Self.parseWarn($0) }
+            let parsed = arr.compactMap { Self.parseWarn($0) }
+            // Radar + hız koridoru her zaman önce
+            queue = parsed.sorted { a, b in
+                let pa = Self.warnPriority(a.kind)
+                let pb = Self.warnPriority(b.kind)
+                if pa != pb { return pa < pb }
+                return false
+            }
             primary = queue.first
         } else {
             queue = []
@@ -276,6 +283,15 @@ final class EtubuDriveWarnings: ObservableObject {
             stage: stage == .idle ? .far : stage,
             meta: (row["meta"] as? String) ?? ""
         )
+    }
+
+    private static func warnPriority(_ kind: String) -> Int {
+        switch kind {
+        case "corridor", "radar": return 0
+        case "charge": return 1
+        case "weather": return 2
+        default: return 3
+        }
     }
 
     private static func briefFromHazards(_ hazards: [EtubuRouteHazard]) -> EtubuRouteBriefSummary {
@@ -417,9 +433,25 @@ final class EtubuDriveWarnings: ObservableObject {
           return Math.round(sum / 100) / 10;
         }
         function fmtDist(m) {
-          if (!Number.isFinite(m)) return '';
-          if (m >= 1000) return (Math.round(m/100)/10) + ' km';
-          return Math.round(m) + ' m';
+          if (!Number.isFinite(m) || m < 0) return '';
+          var stepped;
+          if (m >= 5000) stepped = Math.max(10000, Math.floor(m / 10000) * 10000);
+          else if (m >= 2000) stepped = Math.max(1000, Math.floor(m / 1000) * 1000);
+          else if (m >= 300) stepped = Math.max(100, Math.floor(m / 100) * 100);
+          else if (m >= 100) stepped = Math.max(50, Math.floor(m / 50) * 50);
+          else stepped = Math.max(10, Math.floor(m / 10) * 10);
+          if (stepped >= 1000) {
+            var km = stepped / 1000;
+            return (Number.isInteger(km) ? km : km.toFixed(1)) + ' km';
+          }
+          return Math.round(stepped) + ' m';
+        }
+
+        function warnPri(kind) {
+          if (kind === 'corridor' || kind === 'radar') return 0;
+          if (kind === 'charge') return 1;
+          if (kind === 'weather') return 2;
+          return 3;
         }
 
         // Enrich alongKm for detail lists
@@ -488,9 +520,14 @@ final class EtubuDriveWarnings: ObservableObject {
                   kind: it.kind || 'radar',
                   title: (it.title || '').slice(0, 80),
                   dist: (it.dist || '').slice(0, 24),
+                  distM: it.distM != null ? +it.distM : null,
                   meta: (it.meta || '').slice(0, 100),
-                  stage: it.stage || (idx === 0 ? stage : 'far')
+                  stage: it.stage || (idx === 0 ? stage : 'far'),
+                  pri: warnPri(it.kind || 'radar')
                 };
+              });
+              queue.sort(function(a, b){
+                return (a.pri - b.pri) || ((a.distM||1e12) - (b.distM||1e12));
               });
               if (queue[0] && stage !== 'idle') queue[0].stage = stage;
             }

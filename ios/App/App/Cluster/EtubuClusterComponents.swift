@@ -11,28 +11,31 @@ struct EtubuSpeedDialView: View {
 
     private var dialSize: CGFloat { diameter ?? (compact ? 200 : 280) }
 
-    private var textBoost: CGFloat { 1.22 }
-    private var gearBoost: CGFloat { compact ? 0.68 : 0.82 }
+    private var textBoost: CGFloat { compact ? 1.22 * 1.15 : 1.22 }
+
+    /// 100+ km/h → 3 hane; fontu daralt ki "1…" kesilmesin
+    private var tripleDigitFactor: CGFloat { kmh >= 100 ? 0.74 : (kmh >= 10 ? 0.92 : 1.0) }
 
     private var speedFont: CGFloat {
         let base: CGFloat = compact
-            ? max(72, min(dialSize * 0.34, 104))
-            : max(100, min(dialSize * 0.40, 132))
-        return base * textBoost * theme.gaugeScale
+            ? max(64, min(dialSize * 0.32, 96))
+            : max(92, min(dialSize * 0.38, 124))
+        return base * textBoost * min(theme.gaugeScale, 1.04) * tripleDigitFactor
     }
 
     private var gearFont: CGFloat {
+        // Tek harf (aktif vites) — çember içinde okunaklı, taşmasın
         let base: CGFloat = compact
-            ? max(10, min(dialSize * 0.044, 13.5))
-            : max(12, min(dialSize * 0.052, 16))
-        return base * gearBoost
+            ? max(16, min(dialSize * 0.09, 24))
+            : max(18, min(dialSize * 0.085, 28))
+        return base
     }
 
     private var unitFont: CGFloat {
         let base: CGFloat = compact
             ? max(10, min(dialSize * 0.050, 15))
             : max(13, min(dialSize * 0.058, 18))
-        return base * textBoost
+        return base * textBoost * (kmh >= 100 ? 0.9 : 1)
     }
 
     private var kwFont: CGFloat {
@@ -51,8 +54,8 @@ struct EtubuSpeedDialView: View {
 
     /// Clearance from the visible outer stroke only (no invisible clip circle).
     private var ringClearance: CGFloat {
-        guard compact else { return dialSize * 0.06 }
-        return theme.ringLineWidth(for: dialSize) * 2.2 + dialSize * 0.04
+        guard compact else { return dialSize * 0.05 }
+        return theme.ringLineWidth(for: dialSize) * 1.8 + dialSize * 0.03
     }
 
     var body: some View {
@@ -67,11 +70,12 @@ struct EtubuSpeedDialView: View {
                 Text("\(kmh)")
                     .font(EtubuClusterFonts.gauge(speedFont))
                     .monospacedDigit()
-                    .tracking(min(theme.gaugeTracking, 0.8) * 0.06)
+                    .tracking(kmh >= 100 ? 0 : min(theme.gaugeTracking, 0.8) * 0.06)
                     .foregroundStyle(theme.primaryText)
                     .shadow(color: theme.accent.opacity(0.4), radius: compact ? 8 : 6)
-                    .minimumScaleFactor(0.5)
+                    .minimumScaleFactor(0.38)
                     .lineLimit(1)
+                    .frame(maxWidth: dialSize * (kmh >= 100 ? 0.78 : 0.70))
                     .contentTransition(.numericText())
                 Text("km/h")
                     .font(EtubuClusterFonts.ui(unitFont, weight: .semibold))
@@ -93,9 +97,9 @@ struct EtubuSpeedDialView: View {
                         .lineLimit(1)
                 }
             }
-            .padding(.horizontal, ringClearance + dialSize * 0.04)
-            .padding(.vertical, ringClearance + dialSize * 0.02)
-            .frame(maxWidth: dialSize - ringClearance * 2, maxHeight: dialSize - ringClearance * 2)
+            .padding(.horizontal, max(4, ringClearance * 0.55))
+            .padding(.vertical, ringClearance * 0.7)
+            .frame(maxWidth: dialSize * 0.88, maxHeight: dialSize * 0.88)
         }
         .frame(width: dialSize, height: dialSize)
         // No clipShape(Circle) — that was the invisible cutter
@@ -232,20 +236,13 @@ struct EtubuSpeedDialView: View {
     }
 
     private var gearRow: some View {
-        HStack(spacing: gearSpacing) {
-            ForEach(["P", "R", "N", "D"], id: \.self) { g in
-                VStack(spacing: compact ? 1 : 2) {
-                    Text(g)
-                        .font(EtubuClusterFonts.gauge(gearFont, weight: .bold))
-                        .foregroundStyle(g == gear ? theme.accent : theme.mutedText)
-                        .minimumScaleFactor(0.6)
-                        .lineLimit(1)
-                    Capsule()
-                        .fill(g == gear ? theme.accent : Color.clear)
-                        .frame(width: gearBarWidth, height: compact ? 1.5 : 2)
-                }
-            }
-        }
+        // Tek aktif vites harfi — PRND dizisi taşırıyordu
+        Text(gear.isEmpty ? "P" : String(gear.prefix(1)))
+            .font(EtubuClusterFonts.gauge(gearFont, weight: .bold))
+            .foregroundStyle(theme.accent)
+            .minimumScaleFactor(0.7)
+            .lineLimit(1)
+            .frame(height: gearFont * 1.15)
     }
 }
 
@@ -253,9 +250,9 @@ enum EtubuHazardChrome {
     static func icon(_ kind: String) -> String {
         switch kind {
         case "corridor": return "gauge.with.dots.needle.67percent"
-        case "charge": return "bolt.car.fill"
-        case "weather": return "cloud.bolt.rain.fill"
-        case "control": return "mappin.and.ellipse"
+        case "charge": return "bolt.fill"
+        case "weather": return "cloud.rain.fill"
+        case "control": return "shield.fill"
         default: return "camera.metering.spot"
         }
     }
@@ -270,13 +267,83 @@ enum EtubuHazardChrome {
         }
     }
 
+    /// Web `.hud-map-mark--*` palette — cluster themes use accent for default radar when not urgent.
     static func tint(_ kind: String, urgent: Bool, theme: ClusterTheme) -> Color {
         switch kind {
-        case "corridor": return urgent ? .orange : Color.orange.opacity(0.9)
-        case "charge": return Color.cyan
-        case "weather": return Color.blue
-        case "control": return Color.purple.opacity(0.9)
-        default: return urgent ? .orange : theme.accent
+        case "corridor": return Color(red: 1.0, green: 0.76, blue: 0.30) // #ffc14d
+        case "charge": return Color(red: 0.18, green: 1.0, blue: 0.60) // #2dff9a
+        case "weather": return Color(red: 0.56, green: 0.78, blue: 1.0) // #8ec8ff
+        case "control": return Color(red: 1.0, green: 0.54, blue: 0.30) // #ff8a4d
+        default: return urgent ? Color(red: 1.0, green: 0.35, blue: 0.35) : theme.accent
+        }
+    }
+
+    /// Fixed HUD fills for map pins (independent of theme accent).
+    static func mapFill(_ kind: String) -> Color {
+        switch kind {
+        case "corridor": return Color(red: 1.0, green: 0.76, blue: 0.30)
+        case "charge": return Color(red: 0.18, green: 1.0, blue: 0.60)
+        case "weather": return Color(red: 0.56, green: 0.78, blue: 1.0)
+        case "control": return Color(red: 1.0, green: 0.54, blue: 0.30)
+        default: return Color(red: 1.0, green: 0.35, blue: 0.35) // #ff5a5a
+        }
+    }
+}
+
+/// Harita hazard marker — web HUD mark (halo + tinted disc + dark glyph).
+struct EtubuMapHazardMark: View {
+    let kind: String
+    let theme: ClusterTheme
+    var compact: Bool = true
+
+    private var fill: Color { EtubuHazardChrome.mapFill(kind) }
+    private var core: CGFloat { compact ? 18 : 22 }
+
+    var body: some View {
+        ZStack {
+            // Halo — web .hud-map-mark-halo
+            Circle()
+                .fill(Color(red: 0.02, green: 0.05, blue: 0.09).opacity(0.88))
+                .frame(width: core + 8, height: core + 8)
+                .overlay(
+                    Circle()
+                        .strokeBorder(Color.white.opacity(0.55), lineWidth: 1.2)
+                )
+
+            // Core disc
+            Circle()
+                .fill(fill)
+                .frame(width: core, height: core)
+                .overlay(
+                    Circle()
+                        .strokeBorder(Color(red: 0.02, green: 0.06, blue: 0.09), lineWidth: 1.4)
+                )
+
+            Image(systemName: EtubuHazardChrome.icon(kind))
+                .font(.system(size: compact ? 9 : 11, weight: .bold))
+                .foregroundStyle(Color(red: 0.02, green: 0.06, blue: 0.09))
+        }
+        .shadow(color: fill.opacity(0.85), radius: 5, y: 0)
+        .accessibilityLabel(EtubuHazardChrome.kicker(kind, urgent: false))
+    }
+}
+
+/// Araç konumu — şık kuzey oku + halo.
+struct EtubuMapVehicleMark: View {
+    var headingDeg: Double?
+
+    var body: some View {
+        let red = Color(red: 0.86, green: 0.08, blue: 0.24)
+        ZStack {
+            Circle()
+                .fill(Color(red: 0.02, green: 0.05, blue: 0.09).opacity(0.75))
+                .frame(width: 28, height: 28)
+                .overlay(Circle().strokeBorder(Color.white.opacity(0.45), lineWidth: 1.1))
+            Image(systemName: "location.north.fill")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(red)
+                .rotationEffect(.degrees(headingDeg ?? 0))
+                .shadow(color: red.opacity(0.75), radius: 5)
         }
     }
 }
@@ -294,47 +361,52 @@ struct EtubuWarnBannerView: View {
     }
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: EtubuHazardChrome.icon(item.kind))
-                .font(.title3.weight(.bold))
-                .foregroundStyle(tint)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(EtubuHazardChrome.kicker(item.kind, urgent: urgent))
-                    .font(EtubuClusterFonts.ui(10, weight: .heavy))
-                    .tracking(1)
-                    .foregroundStyle(tint)
-                Text(item.title)
-                    .font(EtubuClusterFonts.ui(15, weight: .semibold))
-                    .foregroundStyle(theme.primaryText)
-                    .lineLimit(2)
-                if !item.meta.isEmpty {
-                    Text(item.meta)
-                        .font(EtubuClusterFonts.ui(11, weight: .medium))
-                        .foregroundStyle(theme.secondaryText)
-                        .lineLimit(1)
+        // Yazı sabit; yalnızca renk nabız atar (ölçek/opacity blink yok)
+        TimelineView(.animation(minimumInterval: urgent ? 1.0 / 8.0 : 1.0, paused: !urgent)) { timeline in
+            let pulse = urgent
+                ? (0.55 + 0.45 * abs(sin(timeline.date.timeIntervalSinceReferenceDate * 3.2)))
+                : 1.0
+            let liveTint = tint.opacity(pulse)
+            HStack(spacing: 12) {
+                Image(systemName: EtubuHazardChrome.icon(item.kind))
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(liveTint)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(EtubuHazardChrome.kicker(item.kind, urgent: urgent))
+                        .font(EtubuClusterFonts.ui(10, weight: .heavy))
+                        .tracking(1)
+                        .foregroundStyle(liveTint)
+                    Text(item.title)
+                        .font(EtubuClusterFonts.ui(15, weight: .semibold))
+                        .foregroundStyle(theme.primaryText)
+                        .lineLimit(2)
+                    if !item.meta.isEmpty {
+                        Text(item.meta)
+                            .font(EtubuClusterFonts.ui(11, weight: .medium))
+                            .foregroundStyle(theme.secondaryText)
+                            .lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 0)
+                if !item.distanceLabel.isEmpty {
+                    Text(item.distanceLabel)
+                        .font(EtubuClusterFonts.gauge(20))
+                        .monospacedDigit()
+                        .foregroundStyle(theme.primaryText)
                 }
             }
-            Spacer(minLength: 0)
-            if !item.distanceLabel.isEmpty {
-                Text(item.distanceLabel)
-                    .font(EtubuClusterFonts.gauge(20))
-                    .monospacedDigit()
-                    .foregroundStyle(theme.primaryText)
-            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(theme.surface)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .strokeBorder(liveTint.opacity(0.75), lineWidth: 1.2)
+                    )
+            )
+            .shadow(color: liveTint.opacity(urgent ? 0.45 : 0.25), radius: urgent ? 12 : 6)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(theme.surface)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .strokeBorder(tint.opacity(0.7), lineWidth: 1.2)
-                )
-        )
-        .shadow(color: tint.opacity(0.35), radius: urgent ? 12 : 6)
-        .scaleEffect(item.stage == .critical ? 1.02 : 1)
-        .animation(item.stage == .critical ? .easeInOut(duration: 0.55).repeatForever(autoreverses: true) : .default, value: item.stage)
     }
 }
 
@@ -367,44 +439,49 @@ struct EtubuHudWarnSideView: View {
     }
 
     var body: some View {
-        VStack(spacing: 4) {
-            Text(item.title.isEmpty ? EtubuHazardChrome.kicker(item.kind, urgent: urgent) : item.title)
-                .font(EtubuClusterFonts.ui((compact ? 11 : 12) * contentScale, weight: .bold))
-                .foregroundStyle(tint)
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
-                .minimumScaleFactor(0.7)
-            Text(item.distanceLabel.isEmpty ? "—" : item.distanceLabel)
-                .font(EtubuClusterFonts.gauge((compact ? 22 : 28) * contentScale))
-                .monospacedDigit()
-                .foregroundStyle(theme.primaryText)
-                .minimumScaleFactor(0.65)
-                .lineLimit(1)
-            if !item.meta.isEmpty {
-                Text(item.meta)
-                    .font(EtubuClusterFonts.ui(10 * contentScale, weight: .medium))
-                    .foregroundStyle(theme.secondaryText)
-                    .lineLimit(1)
+        // Mesafe/başlık sabit; kritikte yalnızca renk nabız atar
+        TimelineView(.animation(minimumInterval: urgent ? 1.0 / 8.0 : 1.0, paused: !urgent)) { timeline in
+            let pulse = urgent
+                ? (0.55 + 0.45 * abs(sin(timeline.date.timeIntervalSinceReferenceDate * 3.2)))
+                : 1.0
+            let liveTint = tint.opacity(pulse)
+            VStack(spacing: 4) {
+                Text(item.title.isEmpty ? EtubuHazardChrome.kicker(item.kind, urgent: urgent) : item.title)
+                    .font(EtubuClusterFonts.ui((compact ? 11 : 12) * contentScale, weight: .bold))
+                    .foregroundStyle(liveTint)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
                     .minimumScaleFactor(0.7)
+                Text(item.distanceLabel.isEmpty ? "—" : item.distanceLabel)
+                    .font(EtubuClusterFonts.gauge((compact ? 22 : 28) * contentScale))
+                    .monospacedDigit()
+                    .foregroundStyle(theme.primaryText)
+                    .minimumScaleFactor(0.65)
+                    .lineLimit(1)
+                if !item.meta.isEmpty {
+                    Text(item.meta)
+                        .font(EtubuClusterFonts.ui(10 * contentScale, weight: .medium))
+                        .foregroundStyle(theme.secondaryText)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
             }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, 8)
-        .padding(.vertical, compact ? 8 : 10)
-        .background {
-            if !frameless {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.black.opacity(0.28))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .strokeBorder(tint.opacity(urgent ? 0.65 : 0.35), lineWidth: 1)
-                    )
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 8)
+            .padding(.vertical, compact ? 8 : 10)
+            .background {
+                if !frameless {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.black.opacity(0.28))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .strokeBorder(liveTint.opacity(urgent ? 0.7 : 0.35), lineWidth: 1)
+                        )
+                }
             }
+            .shadow(color: frameless ? .clear : liveTint.opacity(urgent ? 0.4 : 0.12), radius: urgent ? 10 : 4)
+            .opacity(stageOpacity)
         }
-        .shadow(color: frameless ? .clear : tint.opacity(urgent ? 0.35 : 0.12), radius: urgent ? 10 : 4)
-        .opacity(stageOpacity)
-        .scaleEffect(item.stage == .critical ? 1.03 : 1)
-        .animation(item.stage == .critical ? .easeInOut(duration: 0.55).repeatForever(autoreverses: true) : .default, value: item.stage)
     }
 }
 
@@ -491,11 +568,11 @@ struct EtubuRouteBriefChipsView: View {
 
     private var chips: [(String, Int, String, Color)] {
         [
-            ("camera.metering.spot", brief.radarCount, "Radar", .orange),
-            ("mappin.and.ellipse", brief.controlCount, "Kontrol", .purple),
-            ("gauge.with.dots.needle.67percent", brief.corridorCount, "Koridor", .orange),
-            ("bolt.car.fill", brief.chargeCount, "Şarj", .cyan),
-            ("cloud.bolt.rain.fill", brief.weatherCount, "Hava", .blue),
+            ("camera.metering.spot", brief.radarCount, EtubuClusterL10n.t("routeRadar"), .orange),
+            ("mappin.and.ellipse", brief.controlCount, EtubuClusterL10n.t("routeControl"), .purple),
+            ("gauge.with.dots.needle.67percent", brief.corridorCount, EtubuClusterL10n.t("radarCorridor"), .orange),
+            ("bolt.car.fill", brief.chargeCount, EtubuClusterL10n.t("routeCharge"), .cyan),
+            ("cloud.bolt.rain.fill", brief.weatherCount, EtubuClusterL10n.t("routeWeatherShort"), .blue),
         ]
     }
 
@@ -560,7 +637,9 @@ struct EtubuCorridorChipView: View {
 
     private var titleSize: CGFloat { (isCorridor ? 11 : 10) * contentScale }
     private var avgSize: CGFloat {
-        (isCorridor ? (compact ? 26 : 30) : (compact ? 20 : 24)) * contentScale
+        // Landscape (compact) +15% on average speed digits
+        let base = (isCorridor ? (compact ? 26 : 30) : (compact ? 20 : 24)) * contentScale
+        return compact ? base * 1.15 : base
     }
     private var metaSize: CGFloat { 10 * contentScale }
 
@@ -596,12 +675,24 @@ struct EtubuCorridorChipView: View {
                 .lineLimit(1)
 
             HStack(alignment: .firstTextBaseline, spacing: 3) {
-                Text("\(avg)")
-                    .font(EtubuClusterFonts.gauge(avgSize))
-                    .monospacedDigit()
-                    .foregroundStyle(isOver ? Color(red: 1, green: 0.6, blue: 0.6) : (isCorridor ? Color(red: 1, green: 0.88, blue: 0.54) : theme.primaryText))
-                    .minimumScaleFactor(0.55)
-                    .lineLimit(1)
+                if isOver {
+                    TimelineView(.animation(minimumInterval: 1.0 / 8.0, paused: false)) { timeline in
+                        let pulse = 0.55 + 0.45 * abs(sin(timeline.date.timeIntervalSinceReferenceDate * 3.2))
+                        Text("\(avg)")
+                            .font(EtubuClusterFonts.gauge(avgSize))
+                            .monospacedDigit()
+                            .foregroundStyle(Color(red: 1, green: 0.35, blue: 0.35).opacity(pulse))
+                            .minimumScaleFactor(0.55)
+                            .lineLimit(1)
+                    }
+                } else {
+                    Text("\(avg)")
+                        .font(EtubuClusterFonts.gauge(avgSize))
+                        .monospacedDigit()
+                        .foregroundStyle(isCorridor ? Color(red: 1, green: 0.88, blue: 0.54) : theme.primaryText)
+                        .minimumScaleFactor(0.55)
+                        .lineLimit(1)
+                }
                 Text("km/h")
                     .font(EtubuClusterFonts.ui(9 * contentScale, weight: .medium))
                     .foregroundStyle(theme.mutedText.opacity(0.8))
@@ -624,10 +715,13 @@ struct EtubuCorridorChipView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
                 if isOver {
-                    Text(EtubuClusterL10n.slowDown)
-                        .font(EtubuClusterFonts.ui(10 * contentScale, weight: .black))
-                        .foregroundStyle(.red)
-                        .lineLimit(1)
+                    TimelineView(.animation(minimumInterval: 1.0 / 8.0, paused: false)) { timeline in
+                        let pulse = 0.55 + 0.45 * abs(sin(timeline.date.timeIntervalSinceReferenceDate * 3.2))
+                        Text(EtubuClusterL10n.slowDown)
+                            .font(EtubuClusterFonts.ui(10 * contentScale, weight: .black))
+                            .foregroundStyle(Color.red.opacity(pulse))
+                            .lineLimit(1)
+                    }
                 }
             } else if !warnings.tripDistLabel.isEmpty {
                 Text(warnings.tripDistLabel)

@@ -7,6 +7,7 @@ struct EtubuClusterRootView: View {
     @ObservedObject private var telemetry = EtubuVehicleTelemetry.shared
     @ObservedObject private var tesla = EtubuTeslaBleSession.shared
     @ObservedObject private var warnings = EtubuDriveWarnings.shared
+    @ObservedObject private var demo = EtubuDemoDrive.shared
 
     @State private var theme: ClusterTheme = ClusterTheme.stored
     @State private var vinDraft: String = ""
@@ -14,16 +15,23 @@ struct EtubuClusterRootView: View {
     @State private var showSettings = false
     @State private var mixMode: String = "blend"
     @State private var soundOn = false
+    @State private var selectedVoice: String = EtubuClusterAudioBridge.storedVoice
     @State private var showObdMenu = false
     @State private var showRoutePicker = false
     @State private var now = Date()
     @State private var appLanguage: EtubuAppLanguage = EtubuAppLanguage.current
     @State private var showSim = !EtubuClusterSimView.isDone
+    @State private var showLegal = !EtubuLegalAcceptance.isAccepted
     @State private var leftCardPage: LeftCardPage = .tpms
     @State private var l10nTick = 0
     @State private var keyboardInset: CGFloat = 0
     @State private var hotspotFrames: [EtubuClusterHotspotID: CGRect] = [:]
+    @FocusState private var vinFocused: Bool
     @AppStorage("etubu.cluster.notchAuraEnabled") private var notchAuraEnabled = true
+    @AppStorage("etubu.cluster.mapEnabled") private var mapEnabled = true
+    @AppStorage(EtubuMapLocationHelper.locationEnabledKey) private var locationEnabled = true
+    @AppStorage("etubu.cluster.alertOverMusic") private var alertOverMusic = true
+    @AppStorage("etubu.cluster.alertVolume") private var alertVolume: Double = 0.85
 
     private let clock = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
 
@@ -77,6 +85,7 @@ struct EtubuClusterRootView: View {
                 .padding(.bottom, max(insets.bottom, 4))
                 .padding(.leading, landscape ? 0 : max(insets.leading, 6))
                 .padding(.trailing, landscape ? 0 : max(insets.trailing, 6))
+                .scaleEffect(x: demo.mirrorEnabled ? -1 : 1, y: 1)
 
                 if let cutout {
                     EtubuNotchAuraView(kmh: telemetry.kmh, theme: theme, cutout: cutout)
@@ -84,6 +93,20 @@ struct EtubuClusterRootView: View {
                         .position(x: cutout.aura.midX, y: cutout.aura.midY)
                         .allowsHitTesting(false)
                         .zIndex(5)
+                }
+
+                if demo.isRunning {
+                    demoExitChip
+                        .padding(.top, landscape ? max(insets.top, 8) + 4 : max(insets.top, 12) + 36)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                        .zIndex(6)
+                }
+
+                // Menzil < 100 km → çevrede kırmızı pulse
+                if let range = telemetry.rangeKm, range > 0, range < 100 {
+                    lowRangePulseOverlay
+                        .allowsHitTesting(false)
+                        .zIndex(4)
                 }
 
                 if showVINEditor {
@@ -111,6 +134,19 @@ struct EtubuClusterRootView: View {
                     }
                     .transition(.opacity)
                     .zIndex(40)
+                }
+
+                if showLegal {
+                    EtubuLegalAcceptanceView(theme: theme) {
+                        withAnimation(.easeOut(duration: 0.3)) {
+                            showLegal = false
+                        }
+                        if !showSim {
+                            startCoreIfNeeded()
+                        }
+                    }
+                    .transition(.opacity)
+                    .zIndex(50)
                 }
             }
             .coordinateSpace(name: "etubuCluster")
@@ -143,7 +179,7 @@ struct EtubuClusterRootView: View {
             EtubuClusterFonts.setTheme(theme)
             EtubuClusterAudioBridge.setLanguage(appLanguage.rawValue)
             EtubuClusterAudioBridge.setTheme(theme.webKey)
-            if !showSim {
+            if !showSim && !showLegal {
                 startCoreIfNeeded()
             }
         }
@@ -184,7 +220,9 @@ struct EtubuClusterRootView: View {
                 overlap = max(0, UIScreen.main.bounds.height - frame.minY)
             }
             withAnimation(.easeOut(duration: 0.2)) {
-                keyboardInset = min(overlap, UIScreen.main.bounds.height * 0.55)
+                // Yatayda VIN kartı klavye üstünde kalsın — yüksekliği fazla kırpma
+                let landscape = UIScreen.main.bounds.width > UIScreen.main.bounds.height
+                keyboardInset = min(overlap, UIScreen.main.bounds.height * (landscape ? 0.72 : 0.55))
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
@@ -201,6 +239,9 @@ struct EtubuClusterRootView: View {
         EtubuClusterAudioBridge.armPowerRegenHook()
         EtubuMapLocationHelper.shared.startIfNeeded()
         UIApplication.shared.isIdleTimerDisabled = true
+        if !locationEnabled {
+            EtubuMapLocationHelper.shared.stop()
+        }
         EtubuRouteBridge.status { st in
             telemetry.routeActive = st.active
             telemetry.routeFrom = st.fromLabel
@@ -208,10 +249,59 @@ struct EtubuClusterRootView: View {
         }
         EtubuRouteBridge.ensureIndex(completion: nil)
         startLiveActivityShell()
+        EtubuClusterAudioBridge.setMixMode(mixMode)
+        EtubuClusterAudioBridge.setAlertVolume(alertVolume)
+        // Her açılışta sessiz — kayıtlı sesi otomatik çalma
+        selectedVoice = "silent-mode"
+        soundOn = false
+        UserDefaults.standard.set("silent-mode", forKey: "etubu.cluster.voice")
+        EtubuClusterAudioBridge.setSoundEnabled(false)
+        EtubuClusterAudioBridge.setVoice("silent-mode")
+    }
+
+    /// Demo sürüşünü ana ekrandan durdur
+    private var demoExitChip: some View {
+        Button {
+            demo.stop()
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "stop.fill")
+                    .font(.caption.weight(.bold))
+                Text(EtubuClusterL10n.t("demoStop"))
+                    .font(EtubuClusterFonts.ui(13, weight: .bold))
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(
+                Capsule()
+                    .fill(Color.red.opacity(0.88))
+                    .overlay(Capsule().strokeBorder(Color.white.opacity(0.35), lineWidth: 1))
+            )
+            .shadow(color: .black.opacity(0.35), radius: 8, y: 2)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(EtubuClusterL10n.t("demoStop"))
     }
 
     private static func applyLayoutBoost(landscape: Bool) {
         EtubuClusterFonts.layoutBoost = landscape ? 1.12 : 0.95
+    }
+
+    /// Menzil kritik (<100 km) — ekran kenarında yumuşak kırmızı pulse
+    private var lowRangePulseOverlay: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 12.0, paused: false)) { timeline in
+            let t = timeline.date.timeIntervalSinceReferenceDate
+            let pulse = 0.35 + 0.35 * abs(sin(t * 2.2))
+            RoundedRectangle(cornerRadius: 0, style: .continuous)
+                .strokeBorder(
+                    Color.red.opacity(pulse),
+                    lineWidth: 5 + CGFloat(pulse) * 6
+                )
+                .blur(radius: 8)
+                .ignoresSafeArea()
+                .opacity(0.85)
+        }
     }
 
     // MARK: - Background
@@ -224,67 +314,70 @@ struct EtubuClusterRootView: View {
             if landscape {
                 HStack(spacing: 0) {
                     Color.clear.frame(maxWidth: .infinity)
-                    mapBackdrop
-                        .frame(maxWidth: .infinity)
-                        .colorMultiply(Color(hue: theme.hue / 360, saturation: 0.25, brightness: 1))
-                        .overlay(theme.accent.opacity(0.12).allowsHitTesting(false))
-                        .mask(
-                            LinearGradient(colors: [.clear, .black, .black], startPoint: .leading, endPoint: .trailing)
-                        )
+                    if mapEnabled {
+                        mapBackdrop
+                            .frame(maxWidth: .infinity)
+                            .colorMultiply(Color(hue: theme.hue / 360, saturation: 0.25, brightness: 1))
+                            .overlay(theme.accent.opacity(0.12).allowsHitTesting(false))
+                            .mask(
+                                LinearGradient(colors: [.clear, .black, .black], startPoint: .leading, endPoint: .trailing)
+                            )
+                    } else {
+                        Color.clear.frame(maxWidth: .infinity)
+                    }
                 }
                 .ignoresSafeArea()
             } else {
                 // Portrait: map as ground wash (same idea as landscape half-map)
-                VStack(spacing: 0) {
-                    Spacer(minLength: 0)
-                    mapBackdrop
-                        .frame(maxWidth: .infinity)
-                        .frame(height: min(420, UIScreen.main.bounds.height * 0.48))
-                        .colorMultiply(Color(hue: theme.hue / 360, saturation: 0.22, brightness: 1))
-                        .overlay(theme.accent.opacity(0.10).allowsHitTesting(false))
-                        .mask(
-                            LinearGradient(colors: [.clear, .black.opacity(0.55), .black], startPoint: .top, endPoint: .bottom)
-                        )
+                if mapEnabled {
+                    VStack(spacing: 0) {
+                        Spacer(minLength: 0)
+                        mapBackdrop
+                            .frame(maxWidth: .infinity)
+                            .frame(height: min(420, UIScreen.main.bounds.height * 0.48))
+                            .colorMultiply(Color(hue: theme.hue / 360, saturation: 0.22, brightness: 1))
+                            .overlay(theme.accent.opacity(0.10).allowsHitTesting(false))
+                            .mask(
+                                LinearGradient(colors: [.clear, .black.opacity(0.55), .black], startPoint: .top, endPoint: .bottom)
+                            )
+                    }
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
                 }
-                .ignoresSafeArea()
-                .allowsHitTesting(false)
             }
         }
     }
 
     private var mapBackdrop: some View {
-        Map(position: .constant(mapCameraPosition), interactionModes: []) {
-            if warnings.routeCoords.count >= 2 {
-                MapPolyline(coordinates: warnings.routeCoords)
-                    .stroke(theme.accent.opacity(0.8), lineWidth: 3)
-            }
-            ForEach(criticalAlertsOn ? warnings.hazards.prefix(80) : []) { hazard in
-                Annotation(hazard.label.isEmpty ? hazard.kind : hazard.label, coordinate: hazard.coordinate) {
-                    Image(systemName: EtubuHazardChrome.icon(hazard.kind))
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(.white)
-                        .padding(5)
-                        .background(Circle().fill(EtubuHazardChrome.tint(hazard.kind, urgent: false, theme: theme)))
-                        .shadow(color: .black.opacity(0.45), radius: 2)
+        ZStack(alignment: .bottomTrailing) {
+            Map(position: .constant(mapCameraPosition), interactionModes: []) {
+                if warnings.routeCoords.count >= 2 {
+                    MapPolyline(coordinates: warnings.routeCoords)
+                        .stroke(theme.accent.opacity(0.8), lineWidth: 3)
+                }
+                ForEach(criticalAlertsOn ? warnings.hazards.prefix(80) : []) { hazard in
+                    Annotation("", coordinate: hazard.coordinate) {
+                        EtubuMapHazardMark(kind: hazard.kind, theme: theme, compact: true)
+                    }
+                }
+                if locationEnabled, let lat = telemetry.latitude, let lng = telemetry.longitude {
+                    Annotation("", coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lng)) {
+                        EtubuMapVehicleMark(headingDeg: telemetry.headingDeg)
+                    }
                 }
             }
-            if let lat = telemetry.latitude, let lng = telemetry.longitude {
-                Annotation("", coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lng)) {
-                    Image(systemName: "location.north.fill")
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundStyle(Color(red: 0.86, green: 0.08, blue: 0.24))
-                        .rotationEffect(.degrees(telemetry.headingDeg ?? 0))
-                        .shadow(color: Color(red: 0.86, green: 0.08, blue: 0.24).opacity(0.55), radius: 6)
-                }
+            .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll, showsTraffic: false))
+            .colorScheme(.dark)
+            .saturation(0.2)
+            .contrast(1.08)
+            .allowsHitTesting(false)
+            .overlay {
+                Color.black.opacity(0.28).allowsHitTesting(false)
             }
-        }
-        .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll, showsTraffic: false))
-        .colorScheme(.dark)
-        .saturation(0.2)
-        .contrast(1.08)
-        .allowsHitTesting(false)
-        .overlay {
-            Color.black.opacity(0.28).allowsHitTesting(false)
+
+            // OSM ODbL atıfı — harita üzerinde görünür ve tıklanabilir
+            EtubuOsmAttributionChip(compact: true, theme: theme)
+                .padding(8)
         }
     }
 
@@ -354,11 +447,20 @@ struct EtubuClusterRootView: View {
                     .modifier(SidePanelChrome())
 
                 VStack(spacing: 4) {
-                    HStack(alignment: .center, spacing: 6) {
+                    HStack(alignment: .top, spacing: 8) {
                         speedDialWithThemeGesture(compact: true, diameter: dialMax)
                             .layoutPriority(2)
 
-                        // Jul 29: avg top = dial top · warn bottom = dial bottom · equal twins · no overlap
+                        // Gidilen yol hız limiti — kadran ile ortalama hız arasında üstte
+                        EtubuRoadSpeedLimitSign(size: max(28, min(40, dialMax * 0.14)))
+                            .padding(.top, 2)
+                            .onAppear {
+                                EtubuOsmSpeedLimit.shared.refreshIfNeeded(
+                                    lat: telemetry.latitude,
+                                    lng: telemetry.longitude
+                                )
+                            }
+
                         twinCardsColumn(
                             dialSize: dialMax,
                             boxW: boxW,
@@ -366,6 +468,12 @@ struct EtubuClusterRootView: View {
                         )
                     }
                     .frame(maxWidth: .infinity)
+                    .onChange(of: telemetry.latitude) { _, _ in
+                        EtubuOsmSpeedLimit.shared.refreshIfNeeded(
+                            lat: telemetry.latitude,
+                            lng: telemetry.longitude
+                        )
+                    }
                 }
                 .frame(maxWidth: .infinity)
                 .layoutPriority(1)
@@ -477,7 +585,7 @@ struct EtubuClusterRootView: View {
     }
 
     /// Jul 29 twin panels — equal size, shared chrome, never overlap.
-    private let twinCardGap: CGFloat = 4
+    private let twinCardGap: CGFloat = 8
 
     private func twinCardHeight(dialSize: CGFloat) -> CGFloat {
         max(56, (dialSize - twinCardGap) / 2)
@@ -615,7 +723,7 @@ struct EtubuClusterRootView: View {
             navRow(EtubuClusterL10n.destination, value: {
                 if !telemetry.navDestination.isEmpty { return telemetry.navDestination }
                 if !telemetry.routeTo.isEmpty { return telemetry.routeTo }
-                return "—"
+                return "sadece il ilçe yazınız"
             }())
             navRow(EtubuClusterL10n.arrivalTime, value: telemetry.arrivalTimeLabel)
             navRow(EtubuClusterL10n.energyAtArrival, value: telemetry.energyAtArrivalPercent.map { "\($0)%" } ?? "—")
@@ -667,10 +775,10 @@ struct EtubuClusterRootView: View {
         let short = size.height < 720
         let narrow = size.width < 390
         let layoutScale = min(1.08, max(0.78, min(size.width / 402, size.height / 874)))
-        let portraitDialSize = min(short ? 250 : 310, size.width * (narrow ? 0.48 : 0.54)) * layoutScale
-        let portraitBoxW = min(132, size.width * 0.28) * layoutScale
+        let portraitDialSize = min(short ? 220 : 290, size.width * (narrow ? 0.46 : 0.52)) * layoutScale
+        let portraitBoxW = min(126, size.width * 0.27) * layoutScale
         let topChrome = max(insets.top + 8, 24)
-        let cardScale = max(0.95, layoutScale * 1.05)
+        let cardScale = max(0.92, layoutScale * 1.02)
 
         return VStack(spacing: 0) {
             HStack {
@@ -683,7 +791,7 @@ struct EtubuClusterRootView: View {
                     )
                 }
                 .clusterHotspot(.pair)
-                Spacer()
+                Spacer(minLength: 0)
                 if criticalAlertsOn {
                     Button {
                         EtubuRouteBridge.primeWarningAudio()
@@ -709,11 +817,20 @@ struct EtubuClusterRootView: View {
             .padding(.horizontal, 12)
             .padding(.top, topChrome)
 
-            Spacer(minLength: short ? 4 : 8)
+            Spacer(minLength: short ? 2 : 6)
 
-            HStack(alignment: .center, spacing: 8) {
+            HStack(alignment: .top, spacing: 6) {
                 Spacer(minLength: 0)
                 speedDialWithThemeGesture(compact: false, diameter: portraitDialSize)
+                // Gidilen yol hız limiti — kadran ile ortalama hız arasında üstte (sadece ikon)
+                EtubuRoadSpeedLimitSign(size: short ? 30 : 36)
+                    .padding(.top, 4)
+                    .onAppear {
+                        EtubuOsmSpeedLimit.shared.refreshIfNeeded(
+                            lat: telemetry.latitude,
+                            lng: telemetry.longitude
+                        )
+                    }
                 twinCardsColumn(
                     dialSize: portraitDialSize,
                     boxW: portraitBoxW,
@@ -722,6 +839,12 @@ struct EtubuClusterRootView: View {
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 12)
+            .onChange(of: telemetry.latitude) { _, _ in
+                EtubuOsmSpeedLimit.shared.refreshIfNeeded(
+                    lat: telemetry.latitude,
+                    lng: telemetry.longitude
+                )
+            }
 
             EtubuPowerRegenBarView(powerKw: telemetry.powerKw, compact: short, theme: theme)
                 .padding(.horizontal, 28)
@@ -740,9 +863,6 @@ struct EtubuClusterRootView: View {
 
             HStack(alignment: .center, spacing: 12) {
                 soundControl(compact: false)
-                Text(soundOn ? "EV Sound" : "—")
-                    .font(EtubuClusterFonts.ui(15, weight: .medium))
-                    .foregroundStyle(theme.secondaryText)
                 Spacer()
             }
             .padding(.horizontal, 22)
@@ -793,35 +913,98 @@ struct EtubuClusterRootView: View {
     // MARK: - Shared controls
 
     private func soundControl(compact: Bool) -> some View {
-        Button {
-            soundOn.toggle()
-            toggleSound(soundOn)
-        } label: {
-            Image(systemName: soundOn ? "speaker.wave.2.fill" : "music.note")
-                .font(compact ? .body.weight(.bold) : .title3.weight(.semibold))
-                .foregroundStyle(soundOn ? .black : .white)
-                .frame(width: compact ? 40 : 48, height: compact ? 40 : 48)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(soundOn ? theme.accent : Color.white.opacity(0.12))
-                )
+        HStack(spacing: compact ? 8 : 10) {
+            Button {
+                withAnimation(.easeOut(duration: 0.15)) {
+                    soundOn.toggle()
+                }
+                toggleSound(soundOn)
+            } label: {
+                Image(systemName: soundOn ? "speaker.wave.2.fill" : "speaker.slash.fill")
+                    .font(compact ? .body.weight(.bold) : .title3.weight(.semibold))
+                    .foregroundStyle(soundOn ? .black : .white)
+                    .frame(width: compact ? 40 : 48, height: compact ? 40 : 48)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(soundOn ? theme.accent : Color.white.opacity(0.12))
+                    )
+            }
+            .accessibilityLabel(soundOn ? "Ses açık" : "Ses kapalı")
+
+            Button {
+                cycleSoundProfile()
+            } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(currentSoundProfileLabel)
+                        .font(EtubuClusterFonts.ui(compact ? 13 : 15, weight: .semibold))
+                        .foregroundStyle(soundOn ? theme.primaryText : theme.secondaryText)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                    Text(soundOn ? EtubuClusterL10n.t("soundSelect") : "—")
+                        .font(EtubuClusterFonts.ui(10, weight: .medium))
+                        .foregroundStyle(theme.mutedText)
+                        .lineLimit(1)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Ses profili")
+            .accessibilityHint("Dokunarak değiştir")
         }
-        .accessibilityLabel("EV Sound")
         .clusterHotspot(.sound)
     }
 
+    private var currentSoundProfileLabel: String {
+        if let voice = EtubuSoundVoice.all.first(where: { $0.key == selectedVoice }) {
+            return voice.localizedLabel
+        }
+        return EtubuClusterL10n.t("voiceSilentMode")
+    }
+
+    private func cycleSoundProfile() {
+        let list = EtubuSoundVoice.all.filter { $0.key != "silent-mode" }
+        guard !list.isEmpty else { return }
+        let idx = list.firstIndex(where: { $0.key == selectedVoice }).map { $0 + 1 } ?? 0
+        let next = list[idx % list.count]
+        selectedVoice = next.key
+        soundOn = true
+        EtubuClusterAudioBridge.setVoice(next.key)
+        EtubuClusterAudioBridge.pushDrive(
+            kmh: telemetry.kmh,
+            powerKw: telemetry.powerKw,
+            source: telemetry.source.rawValue
+        )
+    }
+
     private var vinOverlay: some View {
-        VStack {
-            ScrollView {
+        let kbOpen = keyboardInset > 40
+        return ZStack(alignment: .bottom) {
+            Color.black.opacity(0.45)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                    showVINEditor = false
+                }
+
+            VStack(spacing: 0) {
+                if !kbOpen {
+                    Spacer(minLength: 48)
+                } else {
+                    Spacer(minLength: 0)
+                }
+
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {
                         Text("Vehicle VIN")
                             .font(.caption.weight(.bold))
                             .foregroundStyle(.white.opacity(0.6))
                         Spacer()
-                        Button("Close") { showVINEditor = false }
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(theme.accent)
+                        Button("Close") {
+                            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                            showVINEditor = false
+                        }
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(theme.accent)
                     }
                     HStack(spacing: 10) {
                         TextField("5YJ…", text: $vinDraft)
@@ -832,10 +1015,9 @@ struct EtubuClusterRootView: View {
                             .padding(12)
                             .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
                             .foregroundStyle(.white)
-                            .onAppear {
-                                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-                            }
+                            .focused($vinFocused)
                         Button {
+                            vinFocused = false
                             Task { await tesla.saveVINAndPair(vinDraft) }
                         } label: {
                             Text("Pair")
@@ -846,44 +1028,58 @@ struct EtubuClusterRootView: View {
                                 .background(theme.accent, in: RoundedRectangle(cornerRadius: 12))
                         }
                     }
-                    HStack(spacing: 10) {
-                        Button {
-                            Task { await tesla.connectSaved() }
-                        } label: {
-                            Text("Bağlan")
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                                .background(Color.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
-                        }
-                        Button {
-                            Task { await tesla.repair() }
-                        } label: {
-                            Text("Yeniden eşleştir")
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                                .background(Color.orange.opacity(0.35), in: RoundedRectangle(cornerRadius: 10))
-                        }
+
+                    if kbOpen, !vinDraft.isEmpty {
+                        Text(vinDraft)
+                            .font(.system(.body, design: .monospaced).weight(.semibold))
+                            .foregroundStyle(theme.accent)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
                     }
-                    Text(telemetry.statusMessage)
-                        .font(.caption2)
-                        .foregroundStyle(.white.opacity(0.45))
-                    Text("NFC key card on console · data stays on device · not affiliated with Tesla")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.white.opacity(0.28))
+
+                    if !kbOpen {
+                        HStack(spacing: 10) {
+                            Button {
+                                Task { await tesla.connectSaved() }
+                            } label: {
+                                Text("Bağlan")
+                                    .font(.caption.weight(.bold))
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
+                                    .background(Color.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+                            }
+                            Button {
+                                Task { await tesla.repair() }
+                            } label: {
+                                Text("Yeniden eşleştir")
+                                    .font(.caption.weight(.bold))
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
+                                    .background(Color.orange.opacity(0.35), in: RoundedRectangle(cornerRadius: 10))
+                            }
+                        }
+                        Text(telemetry.statusMessage)
+                            .font(.caption2)
+                            .foregroundStyle(.white.opacity(0.45))
+                        Text("NFC key card on console · data stays on device · not affiliated with Tesla")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.white.opacity(0.28))
+                    }
                 }
                 .padding(16)
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                 .padding(.horizontal, 16)
-                .padding(.top, 56)
+                .padding(.bottom, kbOpen ? max(8, keyboardInset - 4) : 24)
             }
-            .padding(.bottom, max(12, keyboardInset - 8))
-            Spacer(minLength: 0)
         }
-        .background(Color.black.opacity(0.45).ignoresSafeArea())
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                vinFocused = true
+            }
+        }
+        .onDisappear { vinFocused = false }
     }
 
     private var pairGuideOverlay: some View {
@@ -895,30 +1091,32 @@ struct EtubuClusterRootView: View {
         let step3Active = linking || connected
         let step2Done = linking || connected
         let step1Done = waiting || step2Done
+        let ringColor = connected ? Color.green : theme.accent
 
         return ZStack(alignment: .bottom) {
-            Color.black.opacity(0.55)
-                .ignoresSafeArea()
-                .allowsHitTesting(true)
+            // Karartma + Pair kutucuğunda delik (dikey/yatay hotspot)
+            GeometryReader { geo in
+                let hole: CGRect = {
+                    if let h = pairHole, h.width > 4, h.height > 4 {
+                        return h.insetBy(dx: -10, dy: -10)
+                    }
+                    // Fallback: dikey sol üst / yatay sağ üst yaklaşık Pair yeri
+                    let landscape = geo.size.width > geo.size.height
+                    if landscape {
+                        return CGRect(x: geo.size.width - 210, y: 8, width: 120, height: 40)
+                    }
+                    return CGRect(x: 10, y: 10, width: 48, height: 48)
+                }()
+                ZStack {
+                    EtubuSpotlightHole(hole: hole, cornerRadius: min(22, hole.height * 0.48))
+                        .fill(Color.black.opacity(0.62), style: FillStyle(eoFill: true))
+                        .ignoresSafeArea()
+                        .allowsHitTesting(true)
 
-            if let hole = pairHole, hole.width > 4 {
-                RoundedRectangle(cornerRadius: min(20, hole.height * 0.45), style: .continuous)
-                    .stroke(
-                        AngularGradient(
-                            colors: [
-                                (connected ? Color.green : theme.accent).opacity(0.2),
-                                connected ? Color.green : theme.accent,
-                                Color.white.opacity(0.95),
-                                (connected ? Color.green : theme.accent).opacity(0.2)
-                            ],
-                            center: .center
-                        ),
-                        lineWidth: 2.4
-                    )
-                    .frame(width: hole.width + 20, height: hole.height + 20)
-                    .position(x: hole.midX, y: hole.midY)
-                    .allowsHitTesting(false)
-                    .shadow(color: (connected ? Color.green : theme.accent).opacity(0.55), radius: 16)
+                    // Pulse yalnızca Pair kutucuğunun çevresinde
+                    EtubuPairSpotlightPulse(hole: hole, color: ringColor)
+                        .allowsHitTesting(false)
+                }
             }
 
             VStack(alignment: .leading, spacing: 16) {
@@ -927,7 +1125,8 @@ struct EtubuClusterRootView: View {
                         connectionState: telemetry.connectionState,
                         theme: theme,
                         label: pairLabel,
-                        compact: true
+                        compact: true,
+                        showPulse: false
                     )
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Araç bağlantısı")
@@ -1094,6 +1293,24 @@ struct EtubuClusterRootView: View {
         let _ = l10nTick
         return NavigationStack {
             List {
+                Section {
+                    DisclosureGroup {
+                        VStack(alignment: .leading, spacing: 14) {
+                            Text(EtubuAppSummary.text)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            EtubuOnboardScreenshotStrip(theme: theme, highlight: nil)
+                            Divider()
+                            EtubuOsmAttributionBlock()
+                        }
+                        .padding(.vertical, 4)
+                    } label: {
+                        Label("Uygulama hakkında", systemImage: "info.circle")
+                            .font(.body.weight(.semibold))
+                    }
+                }
+
                 Section(EtubuClusterL10n.language) {
                     Picker(EtubuClusterL10n.language, selection: $appLanguage) {
                         ForEach(EtubuAppLanguage.allCases) { lang in
@@ -1102,63 +1319,96 @@ struct EtubuClusterRootView: View {
                     }
                 }
                 Section(EtubuClusterL10n.theme) {
-                    ForEach(ClusterTheme.allCases) { t in
-                        Button {
-                            theme = t
-                        } label: {
-                            HStack(spacing: 12) {
-                                ZStack {
-                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                        .fill(
-                                            LinearGradient(
-                                                colors: t.canvasGradient,
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            )
-                                        )
-                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                        .strokeBorder(t.accent.opacity(0.55), lineWidth: 1)
-                                    Text("88")
-                                        .font(EtubuClusterFonts.gauge(16))
-                                        .foregroundStyle(t.accent)
-                                }
-                                .frame(width: 52, height: 36)
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(t.title)
-                                        .font(EtubuClusterFonts.ui(16, weight: .semibold))
-                                    Text(EtubuCutoutFX.forTheme(t).title)
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                if t == theme {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(t.accent)
-                                }
-                            }
-                            .padding(.vertical, 4)
+                    Picker(EtubuClusterL10n.theme, selection: $theme) {
+                        ForEach(ClusterTheme.allCases) { t in
+                            Text("\(t.title) · \(EtubuCutoutFX.forTheme(t).title)")
+                                .tag(t)
                         }
-                        .listRowBackground(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(t == theme ? t.accent.opacity(0.12) : Color.clear)
-                        )
-                        .foregroundStyle(.primary)
                     }
+                    .pickerStyle(.menu)
                 }
-                Section("Kamera efekti") {
-                    Toggle("Çentik / Dynamic Island FX", isOn: $notchAuraEnabled)
+                Section(EtubuClusterL10n.t("cameraEffect")) {
+                    Toggle(EtubuClusterL10n.t("notchAuraToggle"), isOn: $notchAuraEnabled)
                     Text("\(theme.title) · \(EtubuCutoutFX.forTheme(theme).title)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                Section(EtubuClusterL10n.t("mapFeatures")) {
+                    Toggle(EtubuClusterL10n.t("mapEnabled"), isOn: $mapEnabled)
+                    Text(EtubuClusterL10n.t("mapEnabledHint"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Toggle(EtubuClusterL10n.t("locationEnabled"), isOn: $locationEnabled)
+                        .onChange(of: locationEnabled) { _, enabled in
+                            EtubuMapLocationHelper.shared.setLocationEnabled(enabled)
+                        }
+                    Text(EtubuClusterL10n.t("locationEnabledHint"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    EtubuOsmAttributionBlock()
+                        .padding(.top, 4)
+                }
+                Section(EtubuClusterL10n.t("soundSelect")) {
+                    Picker(EtubuClusterL10n.t("soundSelect"), selection: $selectedVoice) {
+                        ForEach(EtubuSoundVoice.groups, id: \.group) { group in
+                            ForEach(group.voices) { voice in
+                                Text("\(EtubuClusterL10n.t(group.labelKey)) — \(voice.localizedLabel)")
+                                    .tag(voice.key)
+                            }
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .onChange(of: selectedVoice) { _, key in
+                        soundOn = key != "silent-mode"
+                        EtubuClusterAudioBridge.setVoice(key)
+                        if key != "silent-mode" {
+                            EtubuClusterAudioBridge.setSoundEnabled(true, voice: key)
+                            EtubuClusterAudioBridge.startDrive(
+                                kmh: max(telemetry.kmh, 0),
+                                gear: telemetry.gear,
+                                source: telemetry.source.rawValue,
+                                powerKw: telemetry.powerKw
+                            )
+                        } else {
+                            EtubuClusterAudioBridge.setSoundEnabled(false, voice: "silent-mode")
+                        }
+                    }
+                }
                 Section(EtubuClusterL10n.audioMix) {
                     Picker(EtubuClusterL10n.audioMix, selection: $mixMode) {
-                        Text("Blend").tag("blend")
-                        Text("Under").tag("under")
-                        Text("Solo").tag("solo")
+                        Text(EtubuClusterL10n.t("mixBlend")).tag("blend")
+                        Text(EtubuClusterL10n.t("mixUnder")).tag("under")
+                        Text(EtubuClusterL10n.t("mixSolo")).tag("solo")
                     }
                     .onChange(of: mixMode) { _, v in EtubuClusterAudioBridge.setMixMode(v) }
+                    Toggle(EtubuClusterL10n.alertsOverMusic, isOn: $alertOverMusic)
+                        .onChange(of: alertOverMusic) { _, on in
+                            // blend = müzik üstüne yaz; solo = yalnız uyarı
+                            let mode = on ? "blend" : mixMode
+                            mixMode = on ? "blend" : mixMode
+                            EtubuClusterAudioBridge.setMixMode(on ? "blend" : mode)
+                            AppDelegate.activateDriveAudioSession()
+                        }
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(EtubuClusterL10n.alertDuck)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Slider(value: $alertVolume, in: 0.2...1.0, step: 0.05)
+                            .tint(theme.accent)
+                            .onChange(of: alertVolume) { _, v in
+                                EtubuClusterAudioBridge.setAlertVolume(v)
+                            }
+                    }
+                }
+                Section("Demo") {
+                    Toggle("Demo sürüşü", isOn: Binding(
+                        get: { demo.isRunning },
+                        set: { on in if on { demo.start() } else { demo.stop() } }
+                    ))
+                    Toggle("Aynalama (ters yansıtma)", isOn: $demo.mirrorEnabled)
+                    Text("Hızlanma, yavaşlama, radar/koridor/şarj/hava/kontrol uyarıları simüle edilir.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
                 if criticalAlertsOn {
                     EtubuRadarSettingsView()
@@ -1185,9 +1435,11 @@ struct EtubuClusterRootView: View {
                     Button(EtubuClusterL10n.obdFallback) { showObdMenu = true }
                 }
             }
-            .navigationTitle("ETUBU")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    EtubuBrandMark(size: 28, showGlow: true)
+                }
                 ToolbarItem(placement: .cancellationAction) {
                     Button(EtubuClusterL10n.done) { showSettings = false }
                 }
@@ -1242,33 +1494,23 @@ struct EtubuClusterRootView: View {
 
     private func toggleSound(_ on: Bool) {
         if on {
-            EtubuClusterAudioBridge.startDrive(
+            let voice = selectedVoice == "silent-mode" ? "asphalt-roar" : selectedVoice
+            if selectedVoice == "silent-mode" {
+                selectedVoice = voice
+            }
+            EtubuClusterAudioBridge.setSoundEnabled(true, voice: voice)
+            EtubuClusterAudioBridge.pushDrive(
                 kmh: telemetry.kmh,
-                gear: telemetry.gear,
-                source: telemetry.source.rawValue,
-                powerKw: telemetry.powerKw
+                powerKw: telemetry.powerKw,
+                source: telemetry.source.rawValue
             )
         } else {
-            EtubuClusterAudioBridge.endDrive()
+            EtubuClusterAudioBridge.setSoundEnabled(false)
         }
     }
 
     private func startLiveActivityShell() {
-        guard #available(iOS 16.2, *) else { return }
-        Task {
-            EtubuLiveActivityController.ensureAudioSession(mixWithOthers: mixMode != "solo")
-            EtubuLiveActivityController.startSilentKeepalive()
-            _ = await EtubuLiveActivityController.start(
-                voice: "ETUBU",
-                kmh: telemetry.kmh,
-                gear: telemetry.gear,
-                rpm: telemetry.rpm,
-                source: telemetry.source == .none ? "idle" : telemetry.source.rawValue,
-                tpmsFL: telemetry.tpmsFL.psi.map { Int($0.rounded()) },
-                tpmsFR: telemetry.tpmsFR.psi.map { Int($0.rounded()) },
-                tpmsRL: telemetry.tpmsRL.psi.map { Int($0.rounded()) },
-                tpmsRR: telemetry.tpmsRR.psi.map { Int($0.rounded()) }
-            )
-        }
+        // Dynamic Island / Live Activity yalnızca AppDelegate arka planında başlar.
+        // Ön planda başlatma → uygulama kapanınca da kalıyordu.
     }
 }

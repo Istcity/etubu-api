@@ -22,7 +22,7 @@
     </linearGradient>
   </defs>
   <g transform="translate(4,4)">
-    <circle cx="32" cy="32" r="26" fill="#0A1628" opacity="0.85"/>
+    <circle cx="32" cy="32" r="26" fill="none"/>
     <path d="M48.5 16.2A18.5 18.5 0 1 1 18.2 48.8" stroke="url(#lgRing)" stroke-width="4.2" stroke-linecap="round"/>
     <path d="M46.8 18.4A16.2 16.2 0 1 1 20.5 46.2" stroke="#5CE1FF" stroke-width="1.2" stroke-linecap="round" opacity="0.35"/>
     <path d="M14 38c6.5-2.5 11-7.5 16.5-8.2 5.2-.7 9.2 2.8 14.8 1.6 3.2-.7 6.2-2.6 8.7-4.8" stroke="url(#lgWave)" stroke-width="3.4" stroke-linecap="round"/>

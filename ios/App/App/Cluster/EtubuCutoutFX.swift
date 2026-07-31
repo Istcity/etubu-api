@@ -18,20 +18,7 @@ enum EtubuCutoutFX: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 
     var title: String {
-        switch self {
-        case .elektrik: return "Elektrik"
-        case .ates: return "Ateş"
-        case .duman: return "Duman"
-        case .patlama: return "Patlama"
-        case .isikHuzmesi: return "Işık Hüzmesi"
-        case .buzKristali: return "Buz Kristali"
-        case .warpHalka: return "Warp Halka"
-        case .plazma: return "Plazma"
-        case .solarCorona: return "Güneş Koronası"
-        case .yildirimMor: return "Mor Yıldırım"
-        case .okyanusDalga: return "Okyanus Dalga"
-        case .tunelCizgi: return "Tünel Çizgi"
-        }
+        EtubuClusterL10n.t("cutout.\(rawValue)")
     }
 
     /// Strict 1:1 with themes — never share FX across themes.
@@ -49,6 +36,7 @@ enum EtubuCutoutFX: String, CaseIterable, Identifiable {
         case .violetStorm: return .yildirimMor
         case .deepOcean: return .okyanusDalga
         case .tunnel: return .tunelCizgi
+        case .tesla: return .duman
         }
     }
 
@@ -63,11 +51,11 @@ enum EtubuCutoutFX: String, CaseIterable, Identifiable {
         motion: CGFloat = 1,
         transparentGround: Bool = false
     ) {
-        let base = max(0.95, min(1.65, max(island.width, island.height) / 110))
-        // Transparent notch FX: keep particles short so soft fade never meets a hard clip
-        let scaleCap: CGFloat = transparentGround ? 0.85 : 1.65
-        let scale = min(scaleCap, base * max(0.55, min(1.15, sizeBoost)))
-        let gated = max(0.10, min(transparentGround ? 1.05 : 1.8, intensity * max(0.12, motion)))
+        let base = max(0.95, min(1.85, max(island.width, island.height) / 100))
+        // Transparent notch: daha uzun parçacıklar — tema efektleri Island’da okunur kalsın
+        let scaleCap: CGFloat = transparentGround ? 1.15 : 1.85
+        let scale = min(scaleCap, base * max(0.65, min(1.25, sizeBoost)))
+        let gated = max(0.22, min(transparentGround ? 1.55 : 2.0, intensity * max(0.28, motion)))
         switch self {
         case .elektrik: Self.drawElectric(ctx: ctx, island: island, t: t, intensity: gated, scale: scale, clearGround: transparentGround)
         case .ates: Self.drawFire(ctx: ctx, island: island, t: t, intensity: gated, scale: scale, clearGround: transparentGround)
@@ -75,8 +63,8 @@ enum EtubuCutoutFX: String, CaseIterable, Identifiable {
         case .patlama: Self.drawExplosion(ctx: ctx, island: island, t: t, intensity: gated, scale: scale, clearGround: transparentGround)
         case .isikHuzmesi: Self.drawBeam(ctx: ctx, island: island, t: t, intensity: gated, scale: scale, accent: accent, clearGround: transparentGround)
         case .buzKristali: Self.drawFrost(ctx: ctx, island: island, t: t, intensity: gated, scale: scale, clearGround: transparentGround)
-        case .warpHalka: Self.drawWarp(ctx: ctx, island: island, t: t, intensity: gated, scale: scale, accent: accent)
-        case .plazma: Self.drawPlasma(ctx: ctx, island: island, t: t, intensity: gated, scale: scale, hue: hue)
+        case .warpHalka: Self.drawWarp(ctx: ctx, island: island, t: t, intensity: gated, scale: scale, accent: accent, clearGround: transparentGround)
+        case .plazma: Self.drawPlasma(ctx: ctx, island: island, t: t, intensity: gated, scale: scale, hue: hue, clearGround: transparentGround)
         case .solarCorona: Self.drawSolarCorona(ctx: ctx, island: island, t: t, intensity: gated, scale: scale, clearGround: transparentGround)
         case .yildirimMor: Self.drawVioletStorm(ctx: ctx, island: island, t: t, intensity: gated, scale: scale, clearGround: transparentGround)
         case .okyanusDalga: Self.drawOceanWave(ctx: ctx, island: island, t: t, intensity: gated, scale: scale, accent: accent, clearGround: transparentGround)
@@ -304,35 +292,40 @@ private extension EtubuCutoutFX {
         }
     }
 
-    static func drawWarp(ctx: GraphicsContext, island: CGRect, t: Double, intensity: CGFloat, scale: CGFloat, accent: Color) {
+    static func drawWarp(ctx: GraphicsContext, island: CGRect, t: Double, intensity: CGFloat, scale: CGFloat, accent: Color, clearGround: Bool = false) {
         let c = CGPoint(x: island.midX, y: island.midY)
-        for i in 0..<6 {
+        let maxR = clearGround ? (18 + intensity * 14) : (42 + intensity * 34)
+        let rings = clearGround ? 4 : 6
+        for i in 0..<rings {
             let phase = frag(t * 0.85 + Double(i) * 0.16)
-            let r = (6 + CGFloat(phase) * (42 + intensity * 34)) * scale
-            let op = (1 - phase) * 0.58
+            let r = (6 + CGFloat(phase) * maxR) * scale
+            let op = (1 - phase) * (clearGround ? 0.42 : 0.58)
             ctx.stroke(Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r * 0.68, width: r * 2, height: r * 1.36)), with: .color(accent.opacity(op)), lineWidth: 2.1 * scale)
             ctx.stroke(Path(ellipseIn: CGRect(x: c.x - r * 0.9, y: c.y - r * 0.62, width: r * 1.8, height: r * 1.24)), with: .color(Color.white.opacity(op * 0.45)), lineWidth: 0.8 * scale)
         }
     }
 
-    static func drawPlasma(ctx: GraphicsContext, island: CGRect, t: Double, intensity: CGFloat, scale: CGFloat, hue: Double) {
-        for ribbon in 0..<4 {
+    static func drawPlasma(ctx: GraphicsContext, island: CGRect, t: Double, intensity: CGFloat, scale: CGFloat, hue: Double, clearGround: Bool = false) {
+        let ribbons = clearGround ? 3 : 4
+        for ribbon in 0..<ribbons {
             var path = Path()
-            let samples = 40
+            let samples = clearGround ? 28 : 40
             for s in 0...samples {
                 let u = Double(s) / Double(samples)
+                let inset = clearGround ? (-2 - CGFloat(ribbon) * 2) : (-3 - CGFloat(ribbon) * 5)
                 var p = EtubuCutoutGeom.pointOnCapsule(
-                    island.insetBy(dx: (-3 - CGFloat(ribbon) * 5) * scale, dy: (-3 - CGFloat(ribbon) * 4) * scale),
+                    island.insetBy(dx: inset * scale, dy: inset * 0.85 * scale),
                     u: frag(u + t * (0.12 + Double(ribbon) * 0.04))
                 )
-                let wob = CGFloat(sin(t * 9 + u * 14 + Double(ribbon))) * (6 + intensity * 3) * scale
+                let wob = CGFloat(sin(t * 9 + u * 14 + Double(ribbon))) * (clearGround ? 3 : 6 + intensity * 3) * scale
                 p.x += wob; p.y += wob * 0.35
                 if s == 0 { path.move(to: p) } else { path.addLine(to: p) }
             }
             let h = (hue / 360 + Double(ribbon) * 0.05).truncatingRemainder(dividingBy: 1)
-            ctx.stroke(path, with: .color(Color(hue: h, saturation: 0.92, brightness: 1).opacity(0.72)), style: StrokeStyle(lineWidth: (3.8 - CGFloat(ribbon) * 0.55) * scale, lineCap: .round))
+            ctx.stroke(path, with: .color(Color(hue: h, saturation: 0.92, brightness: 1).opacity(clearGround ? 0.55 : 0.72)), style: StrokeStyle(lineWidth: (3.2 - CGFloat(ribbon) * 0.55) * scale, lineCap: .round))
         }
-        if sin(t * 4.5) > 0.72 {
+        // Notch'ta patlama burst yok — keskin taşma yapıyor
+        if !clearGround, sin(t * 4.5) > 0.72 {
             drawExplosion(ctx: ctx, island: island, t: t * 1.8, intensity: intensity * 0.7, scale: scale * 0.85)
         }
     }

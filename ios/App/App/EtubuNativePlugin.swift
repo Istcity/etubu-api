@@ -28,6 +28,8 @@ public class EtubuNativePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "obdBleConnect", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "obdBleDisconnect", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "obdBleState", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "trafikGet", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "trafikPost", returnType: CAPPluginReturnPromise),
     ]
 
     private let unlockLifetimeId = "etubu.unlock.lifetime"
@@ -129,7 +131,7 @@ public class EtubuNativePlugin: CAPPlugin, CAPBridgedPlugin {
             if mode == "solo" {
                 try session.setCategory(.playback, mode: .default, options: [])
             } else {
-                try session.setCategory(.playback, mode: .default, options: [.mixWithOthers, .duckOthers, .allowBluetoothA2DP, .allowAirPlay])
+                try session.setCategory(.playback, mode: .default, options: [.mixWithOthers, .allowBluetoothA2DP, .allowAirPlay])
             }
             try session.setActive(true, options: [])
             call.resolve(["ok": true, "mode": mode])
@@ -181,7 +183,7 @@ public class EtubuNativePlugin: CAPPlugin, CAPBridgedPlugin {
 
         if #available(iOS 16.2, *) {
             EtubuLiveActivityController.ensureAudioSession(mixWithOthers: mix)
-            EtubuLiveActivityController.startSilentKeepalive()
+            // Keepalive + LA yalnızca arka planda (AppDelegate); burada başlatma.
             Task {
                 let ok = await EtubuLiveActivityController.start(
                     voice: voice, kmh: kmh, gear: gear, rpm: rpm, source: source
@@ -265,6 +267,55 @@ public class EtubuNativePlugin: CAPPlugin, CAPBridgedPlugin {
     @objc func obdBleDisconnect(_ call: CAPPluginCall) {
         obdBle.disconnect()
         call.resolve(["ok": true])
+    }
+
+    /// Cap RouteGuard proxy — bypasses WKWebView CORS for etubu.com/api/trafik.php
+    @objc func trafikGet(_ call: CAPPluginCall) {
+        var params: [String: String] = [:]
+        if let action = call.getString("action") { params["action"] = action }
+        if let cityId = call.getString("cityId") { params["cityId"] = cityId }
+        // Also accept arbitrary string map under "params"
+        if let extra = call.getObject("params") {
+            for (k, v) in extra {
+                if let s = v as? String { params[k] = s }
+                else if let n = v as? NSNumber { params[k] = n.stringValue }
+            }
+        }
+        guard !params.isEmpty else {
+            call.reject("action required")
+            return
+        }
+        Task {
+            do {
+                let json = try await EtubuTrafikAPI.get(params: params)
+                call.resolve(json)
+            } catch {
+                call.reject(error.localizedDescription)
+            }
+        }
+    }
+
+    @objc func trafikPost(_ call: CAPPluginCall) {
+        var body: [String: Any] = [:]
+        if let obj = call.getObject("body") {
+            body = obj
+        } else {
+            for (k, v) in call.options {
+                let key = String(describing: k)
+                if key == "action" { continue }
+                body[key] = v
+            }
+            if let action = call.getString("action") { body["action"] = action }
+        }
+        if body["action"] == nil { body["action"] = "createRoute" }
+        Task {
+            do {
+                let json = try await EtubuTrafikAPI.postCreateRoute(body: body)
+                call.resolve(json)
+            } catch {
+                call.reject(error.localizedDescription)
+            }
+        }
     }
 
     @objc func obdBleState(_ call: CAPPluginCall) {

@@ -830,57 +830,59 @@ class EtubuAudioEngine {
     this._targetKmh = Math.max(0, Number(kmh) || 0);
     if (meta?.source === "obd") this.setSpeedSource("obd");
     else if (meta?.source === "tesla") this.setSpeedSource("tesla");
+    else if (meta?.source === "demo") this.setSpeedSource("gps");
     else if (meta?.source) this.setSpeedSource("gps");
     const trend = Number(meta?.trend);
     this._extTrend = Number.isFinite(trend) ? trend : 0;
     const lag = this._targetKmh - this._smoothKmh;
     // Gaz (+) / fren (−) yükü — ikisi de sesi besler
-    const fromLagUp = Math.max(0, Math.min(1, lag / 6));
-    const fromLagDown = Math.max(0, Math.min(1, -lag / 6));
-    const fromTrendUp = Math.max(0, Math.min(1, this._extTrend / 6));
-    const fromTrendDown = Math.max(0, Math.min(1, -this._extTrend / 6));
+    const fromLagUp = Math.max(0, Math.min(1, lag / 5));
+    const fromLagDown = Math.max(0, Math.min(1, -lag / 5));
+    const fromTrendUp = Math.max(0, Math.min(1, this._extTrend / 4));
+    const fromTrendDown = Math.max(0, Math.min(1, -this._extTrend / 4));
     this._throttleLoad = Math.max(fromLagUp, fromTrendUp);
     this._brakeLoad = Math.max(fromLagDown, fromTrendDown);
 
     // Tesla / OBD power — negatif = regen, pozitif = gaz
     const powerKw = Number(meta?.powerKw);
     if (Number.isFinite(powerKw)) {
-      if (powerKw < -2) {
-        const regen = Math.min(1, Math.abs(powerKw) / 120);
+      if (powerKw < -1) {
+        const regen = Math.min(1, Math.abs(powerKw) / 100);
         this._brakeLoad = Math.max(this._brakeLoad, regen);
         this._throttleLoad = Math.min(this._throttleLoad, Math.max(0, 1 - regen));
-      } else if (powerKw > 8) {
-        this._throttleLoad = Math.max(this._throttleLoad, Math.min(1, powerKw / 220));
+      } else if (powerKw > 4) {
+        this._throttleLoad = Math.max(this._throttleLoad, Math.min(1, powerKw / 180));
       }
     }
 
     // Her iki yönde de hedefi hemen yakala
-    if (Math.abs(lag) > 0.12) {
-      this._smoothKmh += lag * 0.88;
+    if (Math.abs(lag) > 0.08) {
+      this._smoothKmh += lag * 0.92;
     } else {
       this._smoothKmh = this._targetKmh;
     }
     const feelKmh = this._smoothKmh;
     const norm = this._norm(feelKmh);
     this._gearInfo = this._gearFromNorm(norm, this._currentProfile());
-    if (this._throttleLoad > 0.05) {
+    if (this._throttleLoad > 0.04) {
       this._gearInfo = {
         ...this._gearInfo,
-        rpm: Math.min(1, this._gearInfo.rpm + this._throttleLoad * 0.32),
+        rpm: Math.min(1, this._gearInfo.rpm + this._throttleLoad * 0.38),
       };
-    } else if (this._brakeLoad > 0.08) {
+    } else if (this._brakeLoad > 0.05) {
       this._gearInfo = {
         ...this._gearInfo,
-        rpm: Math.max(0.08, this._gearInfo.rpm - this._brakeLoad * 0.22),
+        rpm: Math.max(0.08, this._gearInfo.rpm - this._brakeLoad * 0.28),
       };
     }
-    // Throttle soft apply (~60–120 Hz max) — titreme önleme
+    // Cap / native: daha sık uygula — hızlanma/yavaşlama net duyulsun
     const now = performance.now();
-    if (
-      this._running &&
-      now - (this._lastApplyMs || 0) >= 48 &&
-      (Math.abs(lag) > 0.2 || this._throttleLoad > 0.1 || this._brakeLoad > 0.1)
-    ) {
+    const busy =
+      Math.abs(lag) > 0.12 || this._throttleLoad > 0.05 || this._brakeLoad > 0.05;
+    if (this._running && now - (this._lastApplyMs || 0) >= 32 && busy) {
+      this._applyParams(this._smoothKmh, false);
+      this._lastApplyMs = now;
+    } else if (this._running && now - (this._lastApplyMs || 0) >= 120) {
       this._applyParams(this._smoothKmh, false);
       this._lastApplyMs = now;
     }

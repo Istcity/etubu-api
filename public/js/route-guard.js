@@ -12,7 +12,8 @@ const RouteGuard = (() => {
     } catch (_) {}
     return "https://etubu.com/api/trafik.php";
   })();
-  const INDEX_KEY = "etubu_place_index_v3";
+  const INDEX_KEY = "etubu_place_index_v4";
+  const INDEX_KEY_LEGACY = "etubu_place_index_v3";
   const INDEX_TTL_MS = 7 * 24 * 3600 * 1000;
   /** TR büyükşehirler — merkez ilçe yok; il adı tek başına ilçe seçimi gerektirir */
   const METROPOLITAN_FOLDS = new Set([
@@ -82,8 +83,12 @@ const RouteGuard = (() => {
   }
 
   function fold(s) {
-    return String(s || "")
+    // NFC + combining diacritics — iOS keyboard sometimes emits NFD (C + ̧)
+    let t = String(s || "")
+      .normalize("NFC")
       .toLocaleLowerCase("tr-TR")
+      .replace(/[\u0300-\u036f]/g, "");
+    return t
       .replace(/ğ/g, "g")
       .replace(/ü/g, "u")
       .replace(/ş/g, "s")
@@ -160,11 +165,26 @@ const RouteGuard = (() => {
   }
 
   function formatDist(m) {
-    if (m >= 1000) {
-      const km = m / 1000;
-      return `${km >= 10 ? Math.round(km) : km.toFixed(1)} km`;
+    if (!Number.isFinite(m) || m < 0) return "";
+    // Basamaklı mesafe (yol uyarıları tablosu):
+    // >5 km → 10 km; <5 km → 1 km; <2 km → 100 m; <300 m → 50 m; <100 m → 10 m
+    let stepped;
+    if (m >= 5000) {
+      stepped = Math.max(10000, Math.floor(m / 10000) * 10000);
+    } else if (m >= 2000) {
+      stepped = Math.max(1000, Math.floor(m / 1000) * 1000);
+    } else if (m >= 300) {
+      stepped = Math.max(100, Math.floor(m / 100) * 100);
+    } else if (m >= 100) {
+      stepped = Math.max(50, Math.floor(m / 50) * 50);
+    } else {
+      stepped = Math.max(10, Math.floor(m / 10) * 10);
     }
-    return `${Math.round(m / 10) * 10} m`;
+    if (stepped >= 1000) {
+      const km = stepped / 1000;
+      return `${Number.isInteger(km) ? km : km.toFixed(1)} km`;
+    }
+    return `${Math.round(stepped)} m`;
   }
 
   function setStatus(msg) {
@@ -258,6 +278,13 @@ const RouteGuard = (() => {
   }
 
   async function proxyGet(params) {
+    // Cap WKWebView → etubu.com is cross-origin; native URLSession has no CORS.
+    try {
+      if (window.EtubuNative && typeof window.EtubuNative.trafikGet === "function") {
+        const native = await window.EtubuNative.trafikGet(params || {});
+        if (native && typeof native === "object") return native;
+      }
+    } catch (_) {}
     const qs = new URLSearchParams(params).toString();
     const res = await fetch(`${PROXY}?${qs}`, { headers: { Accept: "application/json" } });
     if (!res.ok) throw new Error("proxy " + res.status);
@@ -265,6 +292,12 @@ const RouteGuard = (() => {
   }
 
   async function proxyPost(body) {
+    try {
+      if (window.EtubuNative && typeof window.EtubuNative.trafikPost === "function") {
+        const native = await window.EtubuNative.trafikPost(body || {});
+        if (native && typeof native === "object") return native;
+      }
+    } catch (_) {}
     const res = await fetch(`${PROXY}?action=createRoute`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
@@ -388,9 +421,20 @@ const RouteGuard = (() => {
       const raw = JSON.parse(
         sessionStorage.getItem(INDEX_KEY) ||
           localStorage.getItem(INDEX_KEY) ||
+          sessionStorage.getItem(INDEX_KEY_LEGACY) ||
+          localStorage.getItem(INDEX_KEY_LEGACY) ||
           "null"
       );
       if (raw?.at && Date.now() - raw.at < INDEX_TTL_MS && Array.isArray(raw.items) && raw.items.length > 100) {
+        // Skip legacy caches that were corrupted by atob UTF-8 mojibake (e.g. Ã‡orum)
+        const sample = String(raw.items[0]?.cityName || raw.items[0]?.label || "");
+        if (/Ã.|Â.|â€/.test(sample)) {
+          try {
+            sessionStorage.removeItem(INDEX_KEY_LEGACY);
+            localStorage.removeItem(INDEX_KEY_LEGACY);
+          } catch (_) {}
+          return false;
+        }
         placeIndex = raw.items;
         return true;
       }
@@ -1493,17 +1537,19 @@ const RouteGuard = (() => {
     const list = [];
     for (const h of hazards) {
       const d = haversineM(lat, lng, h.lat, h.lng);
+      // Radar/koridor: uzak mesafede de tabloda görünsün (basamaklı km)
       const maxD =
-        h.kind === "weather" ? 12000 : h.kind === "charge" ? 5000 : 5500;
+        h.kind === "weather" ? 12000 : h.kind === "charge" ? 5000 : 80000;
       if (d > maxD) continue;
       if (heading != null && Number.isFinite(heading) && h.kind !== "weather") {
         const b = bearingDeg(lat, lng, h.lat, h.lng);
         const tol = h.kind === "charge" ? 75 : 58;
-        if (angleDiff(b, heading) > tol) continue;
+        // Uzak radar/koridor (>5.5 km): açı filtresi gevşek — ilk uyarı kaçmasın
+        if (d <= 5500 && angleDiff(b, heading) > tol) continue;
       }
       const stage =
         STAGES.find((s) => d <= s.max)?.key ||
-        (h.kind === "weather" && d <= 12000 ? "far" : null);
+        (d <= 80000 ? "far" : null);
       if (!stage) continue;
       list.push({
         id: h.id || `${h.kind}-${h.lat},${h.lng}`,
@@ -1523,6 +1569,7 @@ const RouteGuard = (() => {
         pri: hazardPriority(h.kind),
       });
     }
+    // Radar + hız koridoru her zaman önce
     list.sort((a, b) => a.pri - b.pri || a.distM - b.distM);
     return list.slice(0, limit);
   }

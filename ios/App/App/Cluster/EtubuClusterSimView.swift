@@ -1,293 +1,235 @@
 import SwiftUI
 import CoreLocation
 
-/// First-launch coach-marks — cards point at the real UI hotspot they describe.
+/// Klasik swipe onboarding — 4 ekran, altta dots, Atla + son ekranda Başla.
+/// İzinler (konum + Bluetooth) ilk ekranda istenir.
 struct EtubuClusterSimView: View {
     var theme: ClusterTheme
-    var hotspots: [EtubuClusterHotspotID: CGRect]
-    var canvasSize: CGSize
+    /// Kept for call-site compatibility (spotlight removed).
+    var hotspots: [EtubuClusterHotspotID: CGRect] = [:]
+    var canvasSize: CGSize = .zero
     var onFinished: () -> Void
 
-    @State private var step: Step = .welcome
-    @State private var hintPulse = false
+    @State private var page = 0
     @ObservedObject private var permissions = EtubuSimPermissionState.shared
 
-    enum Step: Int, CaseIterable {
-        case welcome, pair, theme, location, bluetooth, ready
-    }
-
-    private var targetID: EtubuClusterHotspotID? {
-        switch step {
-        case .welcome: return nil
-        case .pair: return .pair
-        case .theme: return .dial
-        case .location: return hotspots[.route] != nil ? .route : .dial
-        case .bluetooth: return .pair
-        case .ready: return hotspots[.sound] != nil ? .sound : .settings
-        }
-    }
-
-    private var holeRect: CGRect? {
-        guard let id = targetID, let r = hotspots[id], r.width > 4, r.height > 4 else { return nil }
-        return r
-    }
+    private let pages: [OnboardPage] = [
+        OnboardPage(
+            icon: "sparkles",
+            title: "ETUBU Cluster",
+            body: "Tesla’nızın hız, vites, menzil ve yol uyarılarını tek ekranda, araç içi kadran gibi gösterir. Kaydırarak kısa tura başlayın."
+        ),
+        OnboardPage(
+            icon: "antenna.radiowaves.left.and.right",
+            title: "Araç bağlantısı",
+            body: "Bluetooth ile VIN üzerinden Tesla’ya bağlanır. Pair rozetinden eşleştirin; bir kez tanımlandıktan sonra otomatik yeniden bağlanır."
+        ),
+        OnboardPage(
+            icon: "point.topleft.down.to.point.bottomright.curvepath",
+            title: "Rota & kritik uyarılar",
+            body: "Türkiye’de il/ilçe arayıp rota çizin. Radar, hız koridoru, şarj, hava ve kontrol noktaları haritada ve Dynamic Island’da görünür; sesli uyarılar müzik üstünde çalar."
+        ),
+        OnboardPage(
+            icon: "waveform",
+            title: "Ses, tema & hazır",
+            body: "EV Sound hızlanma/yavaşlamaya duyarlıdır. Temaları kadrandan kaydırın; çentik efektleri temaya özeldir. Ayarlardan her şeyi yönetebilirsiniz."
+        ),
+    ]
 
     var body: some View {
         ZStack {
-            // Dim with spotlight cutout over the live control
-            if let hole = holeRect {
-                Rectangle()
-                    .fill(Color.black.opacity(0.72))
-                    .ignoresSafeArea()
-                    .reverseMask {
-                        RoundedRectangle(cornerRadius: holeCorner(for: hole), style: .continuous)
-                            .frame(width: hole.width + 14, height: hole.height + 14)
-                            .position(x: hole.midX, y: hole.midY)
-                    }
-                    .allowsHitTesting(true)
-
-                // Living ring around the pointed control
-                RoundedRectangle(cornerRadius: holeCorner(for: hole), style: .continuous)
-                    .stroke(
-                        AngularGradient(
-                            colors: [theme.accent.opacity(0.15), theme.accent, Color.white.opacity(0.9), theme.accent.opacity(0.15)],
-                            center: .center
-                        ),
-                        lineWidth: 2.2
-                    )
-                    .frame(width: hole.width + 18, height: hole.height + 18)
-                    .position(x: hole.midX, y: hole.midY)
-                    .scaleEffect(hintPulse ? 1.04 : 0.98)
-                    .opacity(hintPulse ? 1 : 0.65)
-                    .allowsHitTesting(false)
-
-                connector(from: hole)
-                    .stroke(theme.accent.opacity(0.75), style: StrokeStyle(lineWidth: 1.5, lineCap: .round, dash: [5, 4]))
-                    .allowsHitTesting(false)
-            } else {
-                Color.black.opacity(0.66).ignoresSafeArea()
-            }
+            LinearGradient(
+                colors: theme.canvasGradient,
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
 
             VStack(spacing: 0) {
                 HStack {
-                    Spacer()
                     Button("Atla") { finish(requestRemainder: true) }
-                        .font(EtubuClusterFonts.ui(14, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.78))
+                        .font(EtubuClusterFonts.ui(15, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.8))
                         .padding(.horizontal, 14)
                         .padding(.vertical, 8)
                         .background(Capsule().fill(Color.white.opacity(0.12)))
+                    Spacer()
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 10)
+                .padding(.horizontal, 20)
+                .padding(.top, 14)
 
-                Spacer(minLength: 0)
-
-                card
-                    .padding(.horizontal, 18)
-                    .padding(.bottom, 10)
+                TabView(selection: $page) {
+                    ForEach(Array(pages.enumerated()), id: \.offset) { index, item in
+                        pageContent(item, index: index)
+                            .tag(index)
+                    }
+                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                .animation(.easeInOut(duration: 0.25), value: page)
 
                 progressDots
-                    .padding(.bottom, max(18, canvasSize.height * 0.03))
+                    .padding(.top, 8)
+                    .padding(.bottom, 12)
+
+                bottomCTA
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 28)
             }
         }
         .onAppear {
-            withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
-                hintPulse = true
+            // İzinleri en başta al
+            permissions.requestLocation(completion: nil)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+                permissions.requestBluetooth(completion: nil)
             }
         }
     }
 
-    private func holeCorner(for rect: CGRect) -> CGFloat {
-        min(18, min(rect.width, rect.height) * 0.35)
-    }
+    private func pageContent(_ item: OnboardPage, index: Int) -> some View {
+        let shot = EtubuOnboardShot.forPage(index)
+        return ScrollView(showsIndicators: false) {
+            VStack(spacing: 18) {
+                Spacer(minLength: 8)
 
-    private func connector(from hole: CGRect) -> Path {
-        Path { p in
-            let start = CGPoint(x: hole.midX, y: hole.maxY + 10)
-            let endY = canvasSize.height - 210
-            let end = CGPoint(x: canvasSize.width * 0.5, y: max(endY, start.y + 40))
-            p.move(to: start)
-            p.addQuadCurve(to: end, control: CGPoint(x: start.x, y: (start.y + end.y) / 2))
-        }
-    }
+                VStack(spacing: 10) {
+                    if index == 0 {
+                        EtubuBrandMark(size: 44, showGlow: true)
+                    } else {
+                        Image(systemName: item.icon)
+                            .font(.system(size: 28, weight: .semibold))
+                            .foregroundStyle(theme.accent)
+                            .frame(width: 52, height: 52)
+                            .background(Circle().fill(theme.accent.opacity(0.14)))
+                    }
 
-    private var card: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 10) {
-                Image(systemName: stepIcon)
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundStyle(theme.accent)
-                    .frame(width: 36, height: 36)
-                    .background(Circle().fill(theme.accent.opacity(0.16)))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(EtubuClusterFonts.ui(20, weight: .bold))
+                    Text(item.title)
+                        .font(EtubuClusterFonts.ui(24, weight: .bold))
                         .foregroundStyle(.white)
-                    Text(subtitle)
-                        .font(EtubuClusterFonts.ui(12, weight: .medium))
-                        .foregroundStyle(theme.mutedText)
-                        .lineLimit(2)
+                        .multilineTextAlignment(.center)
+                    Text(item.body)
+                        .font(EtubuClusterFonts.ui(14, weight: .medium))
+                        .foregroundStyle(theme.secondaryText)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 4)
                 }
-            }
 
-            Text(detail)
-                .font(EtubuClusterFonts.ui(14, weight: .medium))
-                .foregroundStyle(theme.secondaryText)
-                .fixedSize(horizontal: false, vertical: true)
+                // Tanıtım metninin altında gerçek ekran görüntüleri + işaretlemeler
+                VStack(spacing: 10) {
+                    EtubuOnboardScreenshotCard(
+                        shot: shot,
+                        theme: theme,
+                        emphasized: true,
+                        width: index == 2 ? 260 : 168,
+                        height: index == 2 ? 148 : 280
+                    )
 
-            Button(action: primaryAction) {
-                Text(primaryLabel)
-                    .font(EtubuClusterFonts.ui(16, weight: .bold))
-                    .foregroundStyle(.black)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(theme.accent, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    EtubuOnboardScreenshotStrip(theme: theme, highlight: shot)
+                }
+                .padding(.top, 2)
+
+                if index == 0 {
+                    permissionHints
+                        .padding(.top, 4)
+                }
+
+                Spacer(minLength: 12)
             }
+            .padding(.horizontal, 24)
+            .frame(maxWidth: .infinity)
         }
-        .padding(18)
+    }
+
+    private var permissionHints: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            permRow(
+                ok: permissions.locationReady,
+                title: "Konum",
+                detail: "Rota, harita ve koridor ortalaması"
+            )
+            permRow(
+                ok: permissions.bluetoothAsked,
+                title: "Bluetooth",
+                detail: "Tesla BLE bağlantısı"
+            )
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .strokeBorder(
-                            LinearGradient(
-                                colors: [theme.accent.opacity(0.55), theme.stroke.opacity(0.35)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 1
-                        )
-                )
-                .shadow(color: theme.accent.opacity(0.22), radius: 18, y: 8)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.white.opacity(0.07))
         )
     }
 
-    private var stepIcon: String {
-        switch step {
-        case .welcome: return "sparkles"
-        case .pair: return "antenna.radiowaves.left.and.right"
-        case .theme: return "circle.hexagongrid.fill"
-        case .location: return "location.fill"
-        case .bluetooth: return "wave.3.right"
-        case .ready: return "checkmark.seal.fill"
-        }
-    }
-
-    private var title: String {
-        switch step {
-        case .welcome: return "ETUBU Cluster"
-        case .pair: return "Araç bağlantısı"
-        case .theme: return "Tema & kadran"
-        case .location: return "Konum (GPS)"
-        case .bluetooth: return "Bluetooth"
-        case .ready: return "Hazırsın"
-        }
-    }
-
-    private var subtitle: String {
-        switch step {
-        case .welcome: return "Kısa tur — işaretli kontroller gerçek yerler"
-        case .pair: return "Üstteki Pair / bağlantı rozeti"
-        case .theme: return "Ortadaki hız kadranı"
-        case .location: return hotspots[.route] != nil ? "Üstteki rota düğmesi" : "Ortadaki hız kadranı"
-        case .bluetooth: return "Tesla BLE anahtarı için"
-        case .ready: return "EV Sound · Rota · Ayarlar"
-        }
-    }
-
-    private var detail: String {
-        switch step {
-        case .welcome:
-            return "Aydınlatılan bölgeler uygulamadaki gerçek düğmeleri gösterir. Pair ile Tesla’ya bağlanır, kadranda temayı kaydırır, rota ve EV sesini buradan yönetirsin."
-        case .pair:
-            return "Işıklı rozet bağlantı durumunu gösterir. Dokun → VIN gir → Pair. İstek gidince araçta anahtar kartını konsola dokundur; onaydan sonra rozet yeşile döner."
-        case .theme:
-            return "Kadranı dikey kaydırarak temaları değiştir. Hız, vites ve (yatayda) kW bu dairenin içinde kalır."
-        case .location:
-            return hotspots[.route] != nil
-                ? "Konum izni rota araması, koridor ortalaması ve harita zemini için kullanılır. Rota düğmesine dokunarak hedef seçersin; önce “İzin ver”."
-                : "Konum izni rota, koridor ortalaması ve harita zemini için kullanılır. “İzin ver” ile sistem penceresini aç."
-        case .bluetooth:
-            return "Bluetooth, Tesla BLE oturumu için şart. İzni ver; ardından Pair rozetinden eşleştirmeyi tamamla. Kart beklenirken rozet nabız gibi yanar."
-        case .ready:
-            return "Sol altta EV Sound, üstte rota / ayarlar. Bağlantı koparsa rozete tekrar dokun. Keyifli sürüş."
-        }
-    }
-
-    private var primaryLabel: String {
-        switch step {
-        case .welcome: return "Başla"
-        case .pair: return "Anladım"
-        case .theme: return "Devam"
-        case .location: return permissions.locationReady ? "Devam" : "Konum izni ver"
-        case .bluetooth: return permissions.bluetoothAsked ? "Devam" : "Bluetooth izni ver"
-        case .ready: return "Cluster’a geç"
+    private func permRow(ok: Bool, title: String, detail: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: ok ? "checkmark.circle.fill" : "circle")
+                .foregroundStyle(ok ? Color.green : theme.mutedText)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(EtubuClusterFonts.ui(13, weight: .semibold))
+                    .foregroundStyle(.white)
+                Text(detail)
+                    .font(EtubuClusterFonts.ui(11, weight: .medium))
+                    .foregroundStyle(theme.mutedText)
+            }
+            Spacer(minLength: 0)
         }
     }
 
     private var progressDots: some View {
-        HStack(spacing: 7) {
-            ForEach(Step.allCases, id: \.rawValue) { s in
+        HStack(spacing: 8) {
+            ForEach(0..<pages.count, id: \.self) { i in
                 Capsule()
-                    .fill(s == step ? theme.accent : Color.white.opacity(0.22))
-                    .frame(width: s == step ? 22 : 7, height: 7)
+                    .fill(i == page ? theme.accent : Color.white.opacity(0.25))
+                    .frame(width: i == page ? 22 : 8, height: 8)
+                    .animation(.easeOut(duration: 0.2), value: page)
             }
         }
     }
 
-    private func primaryAction() {
-        switch step {
-        case .welcome, .pair, .theme:
-            advance()
-        case .location:
-            if permissions.locationReady { advance() }
-            else { permissions.requestLocation { advance() } }
-        case .bluetooth:
-            if permissions.bluetoothAsked { advance() }
-            else { permissions.requestBluetooth { advance() } }
-        case .ready:
-            finish(requestRemainder: false)
-        }
-    }
-
-    private func advance() {
-        withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
-            if let next = Step(rawValue: step.rawValue + 1) {
-                step = next
-            } else {
+    private var bottomCTA: some View {
+        let isLast = page >= pages.count - 1
+        return Button {
+            if isLast {
                 finish(requestRemainder: false)
+            } else {
+                withAnimation { page += 1 }
             }
+        } label: {
+            Text(isLast ? "Başla" : "Devam")
+                .font(EtubuClusterFonts.ui(17, weight: .bold))
+                .foregroundStyle(.black)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 15)
+                .background(theme.accent, in: Capsule())
         }
     }
 
     private func finish(requestRemainder: Bool) {
-        UserDefaults.standard.set(true, forKey: EtubuClusterSimView.doneKey)
+        UserDefaults.standard.set(true, forKey: Self.doneKey)
         if requestRemainder {
-            permissions.requestLocation(completion: nil)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                permissions.requestBluetooth(completion: nil)
+            if !permissions.locationReady {
+                permissions.requestLocation(completion: nil)
+            }
+            if !permissions.bluetoothAsked {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    permissions.requestBluetooth(completion: nil)
+                }
             }
         }
         onFinished()
     }
 
-    static let doneKey = "etubu.cluster.simDone.v1"
+    /// v4 — gerçek ekran görüntüleri + işaretlemeler
+    static let doneKey = "etubu.cluster.simDone.v4"
     static var isDone: Bool { UserDefaults.standard.bool(forKey: doneKey) }
 }
 
-private extension View {
-    /// Cut a hole in the dim layer (even-odd fill via reverse mask).
-    func reverseMask<M: View>(@ViewBuilder _ mask: () -> M) -> some View {
-        self.mask(
-            ZStack {
-                Rectangle().fill(Color.white)
-                mask().blendMode(.destinationOut)
-            }
-            .compositingGroup()
-        )
-    }
+private struct OnboardPage {
+    let icon: String
+    let title: String
+    let body: String
 }
 
 @MainActor

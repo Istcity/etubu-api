@@ -4,39 +4,40 @@ struct EtubuTPMSGridView: View {
     @ObservedObject var telemetry: EtubuVehicleTelemetry
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 14) {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
                 tireCell("FL", telemetry.tpmsFL)
                 tireCell("FR", telemetry.tpmsFR)
             }
-            HStack(spacing: 14) {
+            HStack(spacing: 8) {
                 tireCell("RL", telemetry.tpmsRL)
                 tireCell("RR", telemetry.tpmsRR)
             }
         }
-        .font(.caption.monospacedDigit())
     }
 
     private func tireCell(_ name: String, _ tire: EtubuTireReading) -> some View {
-        HStack(spacing: 3) {
+        HStack(spacing: 4) {
             Text(name)
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.4))
-            // Keep value + unit as one run so they never wrap apart in narrow side cards
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(.white.opacity(0.45))
+                .frame(width: 22, alignment: .leading)
             if let psi = tire.psi {
-                Text("\(String(format: "%.1f", psi)) psi")
-                    .font(.system(.caption, design: .monospaced).weight(tire.warning ? .bold : .semibold))
-                    .foregroundStyle(tire.warning ? Color.orange : Color.white.opacity(0.9))
+                Text(String(format: "%.1f", psi))
+                    .font(.system(size: 13, weight: tire.warning ? .bold : .semibold, design: .rounded).monospacedDigit())
+                    .foregroundStyle(tire.warning ? Color.orange : Color.white.opacity(0.95))
+                Text("psi")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.4))
             } else {
-                Text("— psi")
-                    .font(.caption.weight(.medium))
+                Text("—")
+                    .font(.system(size: 13, weight: .medium, design: .rounded))
                     .foregroundStyle(.white.opacity(0.35))
             }
         }
         .lineLimit(1)
-        .minimumScaleFactor(0.78)
-        .fixedSize(horizontal: true, vertical: false)
-        .layoutPriority(1)
+        .minimumScaleFactor(0.7)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

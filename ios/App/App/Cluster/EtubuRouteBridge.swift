@@ -32,16 +32,20 @@ enum EtubuRouteBridge {
     /// Shared JS helpers mirroring js/route-guard.js fold / searchPlaces / resolvePlace.
     private static let placeHelpersJS = """
     function __etubuFold(s){
-      return String(s||'').toLocaleLowerCase('tr-TR')
+      var t = String(s||'').normalize('NFC').toLocaleLowerCase('tr-TR')
+        .replace(/[\\u0300-\\u036f]/g,'');
+      return t
         .replace(/ğ/g,'g').replace(/ü/g,'u').replace(/ş/g,'s')
         .replace(/ı/g,'i').replace(/İ/g,'i').replace(/ö/g,'o').replace(/ç/g,'c')
         .replace(/[^a-z0-9\\s]/g,' ').replace(/\\s+/g,' ').trim();
     }
     function __etubuPlaceItems(){
       try {
-        // Web RouteGuard INDEX_KEY = etubu_place_index_v3 (v2 fallback)
+        // Prefer v4 (UTF-8 safe inject); fall back to v3/v2
         var raw = JSON.parse(
-          localStorage.getItem('etubu_place_index_v3')
+          localStorage.getItem('etubu_place_index_v4')
+          || sessionStorage.getItem('etubu_place_index_v4')
+          || localStorage.getItem('etubu_place_index_v3')
           || sessionStorage.getItem('etubu_place_index_v3')
           || localStorage.getItem('etubu_place_index_v2')
           || sessionStorage.getItem('etubu_place_index_v2')
@@ -222,38 +226,74 @@ enum EtubuRouteBridge {
 
     /// Builds TR place index (web RouteGuard) and enables route UI even when Cap UI lang ≠ tr.
     static func ensureIndex(completion: ((Bool) -> Void)? = nil) {
-        EtubuClusterAudioBridge.evalJS("""
-        (async function(){
-          try {
-            localStorage.setItem('etubu_force_tr_route', '1');
-            sessionStorage.setItem('etubu_force_tr_route', '1');
-            var rg = document.getElementById('routeGuard');
-            if (rg) { rg.hidden = false; rg.classList.remove('is-collapsed','is-drive-hidden'); }
-            var form = document.getElementById('routeForm');
-            if (form) form.hidden = false;
-            if (window.RouteGuard && window.RouteGuard.buildPlaceIndex) {
-              await window.RouteGuard.buildPlaceIndex();
+        // Native URLSession first (Cap WebView CORS often blocks etubu.com fetch).
+        Task {
+            var injected = false
+            do {
+                var n = try await EtubuTrafikAPI.buildAndCachePlaceIndex()
+                // First launch after UTF-8 fix: rebuild if only legacy/corrupt cache exists
+                if n < 100 {
+                    n = try await EtubuTrafikAPI.buildAndCachePlaceIndex(force: true)
+                }
+                if n > 100, let raw = EtubuTrafikAPI.cachedIndexJSONString() {
+                    let b64 = Data(raw.utf8).base64EncodedString()
+                    // atob alone breaks UTF-8 (Çorum → mojibake). Decode bytes → TextDecoder.
+                    EtubuClusterAudioBridge.evalJS("""
+                    (function(){
+                      try {
+                        var bin = atob('\(b64)');
+                        var bytes = new Uint8Array(bin.length);
+                        for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+                        var raw = (typeof TextDecoder !== 'undefined')
+                          ? new TextDecoder('utf-8').decode(bytes)
+                          : decodeURIComponent(escape(bin));
+                        localStorage.setItem('etubu_place_index_v3', raw);
+                        sessionStorage.setItem('etubu_place_index_v3', raw);
+                        localStorage.setItem('etubu_place_index_v4', raw);
+                        sessionStorage.setItem('etubu_place_index_v4', raw);
+                      } catch (e) {}
+                    })();
+                    """)
+                    injected = true
+                }
+            } catch {
+                // Fall through to JS RouteGuard.buildPlaceIndex via native trafikGet.
             }
-            var from = document.getElementById('routeFromInput');
-            if (from) {
-              if (!from.value || !String(from.value).trim()) from.value = 'Konumum';
-              from.dispatchEvent(new Event('focus', { bubbles: true }));
-              from.dispatchEvent(new Event('input', { bubbles: true }));
+            _ = injected
+            DispatchQueue.main.async {
+                EtubuClusterAudioBridge.evalJS("""
+                (async function(){
+                  try {
+                    localStorage.setItem('etubu_force_tr_route', '1');
+                    sessionStorage.setItem('etubu_force_tr_route', '1');
+                    var rg = document.getElementById('routeGuard');
+                    if (rg) { rg.hidden = false; rg.classList.remove('is-collapsed','is-drive-hidden'); }
+                    var form = document.getElementById('routeForm');
+                    if (form) form.hidden = false;
+                    if (window.RouteGuard && window.RouteGuard.buildPlaceIndex) {
+                      await window.RouteGuard.buildPlaceIndex();
+                    }
+                    var from = document.getElementById('routeFromInput');
+                    if (from) {
+                      if (!from.value || !String(from.value).trim()) from.value = 'Konumum';
+                      from.dispatchEvent(new Event('focus', { bubbles: true }));
+                      from.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                    if (navigator.geolocation) {
+                      navigator.geolocation.getCurrentPosition(function(pos){
+                        try {
+                          localStorage.setItem('etubu_last_map_location', JSON.stringify({
+                            lat: pos.coords.latitude, lng: pos.coords.longitude
+                          }));
+                        } catch(e) {}
+                      }, function(){}, { enableHighAccuracy: true, timeout: 10000, maximumAge: 120000 });
+                    }
+                  } catch (e) {}
+                })();
+                """)
+                pollIndexReady(attemptsLeft: 60, completion: completion)
             }
-            if (navigator.geolocation) {
-              navigator.geolocation.getCurrentPosition(function(pos){
-                try {
-                  localStorage.setItem('etubu_last_map_location', JSON.stringify({
-                    lat: pos.coords.latitude, lng: pos.coords.longitude
-                  }));
-                } catch(e) {}
-              }, function(){}, { enableHighAccuracy: true, timeout: 10000, maximumAge: 120000 });
-            }
-          } catch (e) {}
-        })();
-        """)
-        // Poll until index ready (web builds async)
-        pollIndexReady(attemptsLeft: 60, completion: completion)
+        }
     }
 
     private static func pollIndexReady(attemptsLeft: Int, completion: ((Bool) -> Void)?) {
@@ -264,7 +304,9 @@ enum EtubuRouteBridge {
               await window.RouteGuard.buildPlaceIndex();
             }
             var raw = JSON.parse(
-              localStorage.getItem('etubu_place_index_v3')
+              localStorage.getItem('etubu_place_index_v4')
+              || sessionStorage.getItem('etubu_place_index_v4')
+              || localStorage.getItem('etubu_place_index_v3')
               || sessionStorage.getItem('etubu_place_index_v3')
               || localStorage.getItem('etubu_place_index_v2')
               || '{}'
@@ -291,18 +333,17 @@ enum EtubuRouteBridge {
 
     /// Autocomplete — prefers live `RouteGuard.suggest` (builds index, Jul-29 city/district UX).
     static func search(query: String, forFrom: Bool, completion: @escaping ([EtubuRoutePlace]) -> Void) {
-        let q = escape(query)
+        let qJSON = jsStringLiteral(query)
         let forFromJS = forFrom ? "true" : "false"
         EtubuClusterAudioBridge.evalJSReturning("""
         (async function(){
           try {
+            var qRaw = \(qJSON);
             if (window.RouteGuard && window.RouteGuard.suggest) {
-              var hits = await window.RouteGuard.suggest('\(q)', \(forFromJS));
-              // İl adı → tam ilçe listesi; diğerleri de makul üst sınır
+              var hits = await window.RouteGuard.suggest(qRaw, \(forFromJS));
               return JSON.stringify((hits || []).slice(0, 48));
             }
             \(placeHelpersJS)
-            var qRaw = '\(q)';
             var qf = __etubuFold(qRaw);
             var out = [];
             var mine = __etubuMyLocation();
@@ -333,19 +374,20 @@ enum EtubuRouteBridge {
     /// True when `text` matches a city name with more than one district and no
     /// unambiguous (Merkez / exact-district) match — UI must ask the user to pick a district.
     static func needsDistrictPick(text: String, completion: @escaping (Bool) -> Void) {
-        let t = escape(text)
+        let tJSON = jsStringLiteral(text)
         EtubuClusterAudioBridge.evalJSReturning("""
         (async function(){
           try {
+            var t = \(tJSON);
             if (window.RouteGuard && window.RouteGuard.buildPlaceIndex) {
               await window.RouteGuard.buildPlaceIndex();
             }
             // Web: yalnızca büyükşehir adı tek başına → ilçe şart
             if (window.RouteGuard && window.RouteGuard.needsDistrictPick) {
-              return window.RouteGuard.needsDistrictPick('\(t)') ? '1' : '0';
+              return window.RouteGuard.needsDistrictPick(t) ? '1' : '0';
             }
             \(placeHelpersJS)
-            var q = __etubuFold('\(t)');
+            var q = __etubuFold(t);
             if (!q || q === 'konumum' || q === 'konum') return '0';
             var tokens = q.split(' ').filter(Boolean);
             if (tokens.length !== 1) return '0';
@@ -369,12 +411,17 @@ enum EtubuRouteBridge {
 
     /// Resolve typed text like web (Çorum→Merkez, Alaca→Çorum/Alaca).
     static func resolve(text: String, completion: @escaping (EtubuRoutePlace?) -> Void) {
-        let t = escape(text)
+        let tJSON = jsStringLiteral(text)
         EtubuClusterAudioBridge.evalJSReturning("""
-        (function(){
+        (async function(){
           try {
+            var t = \(tJSON);
+            if (window.RouteGuard && window.RouteGuard.resolve) {
+              var p = await window.RouteGuard.resolve(t);
+              return JSON.stringify(p || null);
+            }
             \(placeHelpersJS)
-            return JSON.stringify(__etubuMapPlace(__etubuResolvePlace('\(t)')) || null);
+            return JSON.stringify(__etubuMapPlace(__etubuResolvePlace(t)) || null);
           } catch(e) { return 'null'; }
         })();
         """) { raw in
@@ -396,84 +443,49 @@ enum EtubuRouteBridge {
     static func plan(from: String, to: String, completion: ((Bool, String) -> Void)? = nil) {
         primeWarningAudio()
         EtubuDriveWarnings.armRouteHazardHook()
-        let fromEsc = escape(from.isEmpty ? "Konumum" : from)
-        let toEsc = escape(to)
-        EtubuClusterAudioBridge.evalJS("""
-        (function(){
+        let fromJSON = jsStringLiteral(from.isEmpty ? "Konumum" : from)
+        let toJSON = jsStringLiteral(to)
+        EtubuClusterAudioBridge.evalJSReturning("""
+        (async function(){
           try {
-            \(placeHelpersJS)
             localStorage.setItem('etubu_force_tr_route', '1');
+            sessionStorage.setItem('etubu_force_tr_route', '1');
             if (window.RadarAlert && window.RadarAlert.primeAudio) window.RadarAlert.primeAudio();
             var rg = document.getElementById('routeGuard');
             if (rg) { rg.hidden = false; rg.classList.remove('is-collapsed','is-drive-hidden'); }
             var form = document.getElementById('routeForm');
             if (form) form.hidden = false;
-            var from = document.getElementById('routeFromInput');
-            var to = document.getElementById('routeToInput');
-            if (!from || !to) return;
-
-            function applyResolved(input, text) {
-              var p = null;
-              if (window.RouteGuard && window.RouteGuard.resolvePlace) {
-                if (window.RouteGuard.needsDistrictPick && window.RouteGuard.needsDistrictPick(text)) {
-                  input.value = text;
-                  return null;
-                }
-                p = window.RouteGuard.resolvePlace(text);
-              } else {
-                p = __etubuResolvePlace(text);
-              }
-              if (p && p.label) {
-                input.value = p.label;
-                return p;
-              }
-              input.value = text;
-              return null;
+            var fromLabel = \(fromJSON);
+            var toLabel = \(toJSON);
+            // Same path as web Cap bridge — resolve + buildRoute (createRoute + hazards + brief)
+            if (window.RouteGuard && window.RouteGuard.buildRoute) {
+              var out = await window.RouteGuard.buildRoute(fromLabel, toLabel);
+              return JSON.stringify(out || { ok: false, message: 'Rota kurulamadı' });
             }
-
-            // GPS for Konumum (web requestMyLocationOnce)
-            function finish() {
-              var fromPlace = applyResolved(from, '\(fromEsc)');
-              var toPlace = applyResolved(to, '\(toEsc)');
-              // Kick blur/enter resolve path used by web
-              from.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
-              setTimeout(function(){
-                to.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
-                var go = document.getElementById('routeGoBtn');
-                if (go) { go.disabled = false; go.click(); }
-                window.__etubuLastPlanMeta = {
-                  fromLabel: from.value,
-                  toLabel: to.value,
-                  navOnly: false
-                };
-                try {
-                  var pos = __etubuLiveCoords();
-                  if (pos && !__etubuInTurkey(pos.lat, pos.lng)) {
-                    window.__etubuLastPlanMeta.navOnly = true;
-                  }
-                  if (toPlace && toPlace.lat != null && !__etubuInTurkey(+toPlace.lat, +toPlace.lng)) {
-                    window.__etubuLastPlanMeta.navOnly = true;
-                  }
-                } catch(e) {}
-              }, 100);
-            }
-
-            if (navigator.geolocation && (__etubuFold('\(fromEsc)') === 'konumum' || !__etubuLiveCoords())) {
-              navigator.geolocation.getCurrentPosition(function(pos){
-                try {
-                  localStorage.setItem('etubu_last_map_location', JSON.stringify({
-                    lat: pos.coords.latitude, lng: pos.coords.longitude
-                  }));
-                } catch(e) {}
-                finish();
-              }, function(){ finish(); }, { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 });
-            } else {
-              finish();
-            }
-          } catch (e) {}
+            return JSON.stringify({ ok: false, message: 'RouteGuard yok' });
+          } catch (e) {
+            return JSON.stringify({ ok: false, message: String(e && e.message ? e.message : e) });
+          }
         })();
-        """)
-        pollPlanReady(attemptsLeft: 14, completion: completion)
+        """) { raw in
+            var ok = false
+            var msg = "Rota kurulamadı"
+            if let raw, let data = raw.data(using: .utf8),
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                ok = json["ok"] as? Bool ?? false
+                msg = (json["message"] as? String) ?? msg
+            }
+            if ok {
+                pollPlanReady(attemptsLeft: 16) { ready, statusMsg in
+                    completion?(ready, ready ? statusMsg : (statusMsg.isEmpty ? msg : statusMsg))
+                }
+            } else {
+                // Still poll briefly — createRoute may have partially activated
+                pollPlanReady(attemptsLeft: 6) { ready, statusMsg in
+                    completion?(ready || ok, ready ? statusMsg : msg)
+                }
+            }
+        }
     }
 
     private static func pollPlanReady(attemptsLeft: Int, completion: ((Bool, String) -> Void)?) {
@@ -708,7 +720,17 @@ enum EtubuRouteBridge {
         }
     }
 
+    /// UTF-8 safe JS string literal (Turkish ç/ğ/ı/ö/ş/ü etc.).
+    private static func jsStringLiteral(_ s: String) -> String {
+        guard let data = try? JSONSerialization.data(withJSONObject: s, options: [.fragmentsAllowed]),
+              let out = String(data: data, encoding: .utf8) else {
+            return "\"\""
+        }
+        return out
+    }
+
     private static func escape(_ s: String) -> String {
+        // Prefer jsStringLiteral for query paths; kept for rare inline helpers.
         s
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "'", with: "\\'")

@@ -24,6 +24,9 @@ final class EtubuTeslaBleSession: ObservableObject {
     private var reconnectAttempt = 0
     private var tick = 0
     private var activePairVIN: String?
+    /// Ignore brief BLE disconnect flickers right after a successful connect.
+    private var connectedAt: Date?
+    private var ignoreDisconnectUntil: Date?
     @Published private(set) var pairStep: PairFlowStep = .none
 
     private var telemetry: EtubuVehicleTelemetry { .shared }
@@ -212,6 +215,8 @@ final class EtubuTeslaBleSession: ObservableObject {
                 observeState(c)
                 try await c.connect(mode: .normal)
                 reconnectAttempt = 0
+                connectedAt = Date()
+                ignoreDisconnectUntil = Date().addingTimeInterval(5)
                 telemetry.connectionState = .connected
                 telemetry.source = .tesla
                 telemetry.statusMessage = "Bağlandı"
@@ -241,37 +246,58 @@ final class EtubuTeslaBleSession: ObservableObject {
         pollTask?.cancel()
         pollTask = Task { [weak self] in
             guard let self else { return }
+            var failStreak = 0
+            // İlk bağlanmada iklim / enerji / lastik hemen gelsin
+            do {
+                let boot = try await client.fetch(.categories([.charge, .climate, .tirePressure]))
+                await MainActor.run { self.applySnapshot(boot) }
+            } catch {
+                // devam — drive poll yine dener
+            }
             while !Task.isCancelled {
                 do {
                     let drive = try await client.fetchDrive()
+                    failStreak = 0
                     await MainActor.run { self.applyDrive(drive) }
 
                     self.tick += 1
-                    // Rotate extended categories to keep BLE payload light
-                    if self.tick % 3 == 0 {
+                    let parked = await MainActor.run { self.telemetry.kmh < 3 }
+                    // Hareket: sık; park: seyrek — pil tasarrufu
+                    if self.tick % (parked ? 3 : 2) == 0 {
                         let snap = try await client.fetch(.categories([.charge, .climate]))
                         await MainActor.run { self.applySnapshot(snap) }
                     }
-                    if self.tick % 5 == 0 {
+                    if self.tick % (parked ? 5 : 3) == 0 {
                         let snap = try await client.fetch(.categories([.tirePressure]))
                         await MainActor.run { self.applySnapshot(snap) }
                     }
-                    if self.tick % 7 == 0 {
+                    if self.tick % (parked ? 10 : 7) == 0 {
                         let snap = try await client.fetch(.categories([.closures]))
                         await MainActor.run { self.applySnapshot(snap) }
                     }
-                    if self.tick % 4 == 0 {
+                    if self.tick % (parked ? 8 : 5) == 0 {
                         let snap = try await client.fetch(.categories([.media, .mediaDetail]))
                         await MainActor.run { self.applySnapshot(snap) }
                     }
                 } catch {
+                    failStreak += 1
+                    if failStreak < 5 {
+                        await MainActor.run {
+                            self.telemetry.statusMessage = "Sinyal zayıf… (\(failStreak)/5)"
+                        }
+                        try? await Task.sleep(nanoseconds: 700_000_000)
+                        continue
+                    }
                     await MainActor.run {
                         self.telemetry.statusMessage = error.localizedDescription
                         self.telemetry.connectionState = .reconnecting
                     }
                     break
                 }
-                try? await Task.sleep(nanoseconds: 1_600_000_000)
+                let sleepNs: UInt64 = await MainActor.run {
+                    self.telemetry.kmh < 3 ? 2_400_000_000 : 1_400_000_000
+                }
+                try? await Task.sleep(nanoseconds: sleepNs)
             }
             if !self.userStopped, let vin = EtubuTeslaVinStore.vin {
                 await MainActor.run { self.scheduleReconnect(vin: vin) }
@@ -314,6 +340,7 @@ final class EtubuTeslaBleSession: ObservableObject {
             powerKw: drive.powerKW,
             source: "tesla"
         )
+        AppDelegate.activateDriveAudioSession()
         pushLiveActivity()
     }
 
@@ -397,15 +424,29 @@ final class EtubuTeslaBleSession: ObservableObject {
                         self.telemetry.connectionState = .connecting
                         self.telemetry.statusMessage = "Handshaking…"
                     case .connected:
+                        self.connectedAt = Date()
+                        self.ignoreDisconnectUntil = Date().addingTimeInterval(4)
                         self.telemetry.connectionState = .connected
-                        self.telemetry.statusMessage = "Connected · salt okuma"
+                        self.telemetry.statusMessage = "Bağlandı · salt okuma"
                     case .disconnected:
                         if !self.userStopped {
                             if self.pairStep == .waitingForCard {
                                 self.telemetry.connectionState = .waitingForCard
+                            } else if let until = self.ignoreDisconnectUntil, Date() < until {
+                                // Bağlantı sonrası kısa flicker — yok say, oturumu bozma
+                                break
+                            } else if let last = self.telemetry.lastUpdateAt,
+                                      Date().timeIntervalSince(last) < 4 {
+                                // Poll hâlâ veri alıyor — sahte disconnect
+                                break
+                            } else if let vin = EtubuTeslaVinStore.vin,
+                                      EtubuTeslaVinStore.pairedConfirmed(for: vin) {
+                                self.telemetry.connectionState = .reconnecting
+                                self.telemetry.statusMessage = "Yeniden bağlanıyor…"
+                                self.scheduleReconnect(vin: vin, debounce: 2.5)
                             } else {
                                 self.telemetry.connectionState = .reconnecting
-                                self.telemetry.statusMessage = "Reconnecting…"
+                                self.telemetry.statusMessage = "Yeniden bağlanıyor…"
                             }
                         }
                     @unknown default:
@@ -416,17 +457,30 @@ final class EtubuTeslaBleSession: ObservableObject {
         }
     }
 
-    private func scheduleReconnect(vin: String) {
+    private func scheduleReconnect(vin: String, debounce: TimeInterval = 0) {
         guard !userStopped else { return }
+        guard EtubuTeslaVinStore.pairedConfirmed(for: vin) else { return }
+        // Zaten bağlı ve taze veri geliyorsa yeniden bağlanma başlatma
+        if telemetry.connectionState == .connected,
+           let last = telemetry.lastUpdateAt,
+           Date().timeIntervalSince(last) < 3 {
+            return
+        }
         reconnectTask?.cancel()
         reconnectAttempt += 1
-        let delay = min(15.0, pow(2.0, Double(min(reconnectAttempt, 4) - 1)))
+        let delay = max(debounce, min(8.0, pow(2.0, Double(min(reconnectAttempt, 4) - 1))))
         telemetry.connectionState = .reconnecting
-        telemetry.statusMessage = "Reconnecting in \(Int(delay))s…"
+        telemetry.statusMessage = "Yeniden bağlanıyor (\(Int(delay))s)…"
         reconnectTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
             guard let self, !self.userStopped else { return }
-            await self.connectNormal(vin: vin)
+            // Beklerken tekrar bağlandıysa iptal
+            if self.telemetry.connectionState == .connected,
+               let last = self.telemetry.lastUpdateAt,
+               Date().timeIntervalSince(last) < 3 {
+                return
+            }
+            await self.connectNormal(vin: vin, allowPairFallback: false, maxRetries: 3)
         }
     }
 

@@ -25,12 +25,12 @@ final class EtubuClusterPresenter: NSObject {
             self.tearDownLegacyOverlayWindow()
 
             guard let window = Self.capWindow(),
-                  let root = window.rootViewController else {
+                  let root = window.rootViewController,
+                  let container = root.view else {
                 self.scheduleRetry()
                 return
             }
 
-            let container = root.view!
             let bounds = container.bounds.width > 40 ? container.bounds : window.bounds
             guard bounds.width > 40, bounds.height > 40 else {
                 self.scheduleRetry()
@@ -82,11 +82,11 @@ final class EtubuClusterPresenter: NSObject {
         DispatchQueue.main.async {
             guard let window = Self.capWindow(),
                   let root = window.rootViewController,
-                  let hv = self.hosting?.view else {
+                  let hv = self.hosting?.view,
+                  let container = root.view else {
                 self.installOverCapacitor()
                 return
             }
-            let container = root.view!
             if hv.superview !== container {
                 self.installOverCapacitor()
                 return

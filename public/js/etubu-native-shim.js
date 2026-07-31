@@ -50,6 +50,12 @@
       obdBleState: function () {
         return P.obdBleState();
       },
+      trafikGet: function (params) {
+        return P.trafikGet(params || {});
+      },
+      trafikPost: function (body) {
+        return P.trafikPost({ body: body || {} });
+      },
       addObdBleListener: function (fn) {
         return P.addListener("obdBleEvent", fn);
       },

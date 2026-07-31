@@ -2,7 +2,7 @@ import SwiftUI
 
 /// ETUBU visual themes (aligned with `js/scene-webgl.js` MODE_HUE).
 enum ClusterTheme: String, CaseIterable, Identifiable {
-    case aurora, plasma, redline, cyberLime, electricIce, solarFlare
+    case tesla, aurora, plasma, redline, cyberLime, electricIce, solarFlare
     case neon, violetStorm, deepOcean, midnight, tunnel, warp
 
     var id: String { rawValue }
@@ -14,6 +14,7 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
     /// Scene hue degrees from ETUBU web themes.
     var hue: Double {
         switch self {
+        case .tesla: return 0
         case .aurora: return 185
         case .plasma: return 295
         case .redline: return 358
@@ -32,57 +33,96 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
     private var h: Double { hue / 360 }
 
     var accent: Color {
-        Color(hue: h, saturation: 0.85, brightness: 0.95)
+        switch self {
+        case .tesla: return Color(red: 0.92, green: 0.22, blue: 0.22) // Tesla red
+        default: return Color(hue: h, saturation: 0.85, brightness: 0.95)
+        }
     }
 
     var accentSoft: Color {
-        Color(hue: h, saturation: 0.55, brightness: 0.7)
+        switch self {
+        case .tesla: return Color(white: 0.72)
+        default: return Color(hue: h, saturation: 0.55, brightness: 0.7)
+        }
     }
 
     /// Deep tinted base — entire cluster reads as this theme, not flat black.
     var canvas: Color {
-        Color(hue: h, saturation: 0.55, brightness: 0.07)
+        switch self {
+        case .tesla: return Color(red: 0.04, green: 0.04, blue: 0.045)
+        default: return Color(hue: h, saturation: 0.55, brightness: 0.07)
+        }
     }
 
     var canvasHigh: Color {
-        Color(hue: h, saturation: 0.5, brightness: 0.14)
+        switch self {
+        case .tesla: return Color(red: 0.10, green: 0.10, blue: 0.11)
+        default: return Color(hue: h, saturation: 0.5, brightness: 0.14)
+        }
     }
 
     var surface: Color {
-        Color(hue: h, saturation: 0.35, brightness: 0.16).opacity(0.72)
+        switch self {
+        case .tesla: return Color.white.opacity(0.06)
+        default: return Color(hue: h, saturation: 0.35, brightness: 0.16).opacity(0.72)
+        }
     }
 
     var primaryText: Color { .white }
 
     var secondaryText: Color {
-        Color(hue: h, saturation: 0.12, brightness: 0.78).opacity(0.72)
+        switch self {
+        case .tesla: return Color.white.opacity(0.70)
+        default: return Color(hue: h, saturation: 0.12, brightness: 0.78).opacity(0.72)
+        }
     }
 
     var mutedText: Color {
-        Color(hue: h, saturation: 0.1, brightness: 0.7).opacity(0.45)
+        switch self {
+        case .tesla: return Color.white.opacity(0.42)
+        default: return Color(hue: h, saturation: 0.1, brightness: 0.7).opacity(0.45)
+        }
     }
 
     var stroke: Color {
-        accent.opacity(0.28)
+        switch self {
+        case .tesla: return Color.white.opacity(0.18)
+        default: return accent.opacity(0.28)
+        }
     }
 
     var glow: Color {
-        accent.opacity(0.35)
+        switch self {
+        case .tesla: return accent.opacity(0.28)
+        default: return accent.opacity(0.35)
+        }
     }
 
     /// Full-bleed atmospheric gradient.
     var canvasGradient: [Color] {
-        [
-            canvasHigh,
-            canvas,
-            Color(hue: h, saturation: 0.4, brightness: 0.04),
-            Color.black,
-        ]
+        switch self {
+        case .tesla:
+            return [
+                Color(red: 0.12, green: 0.12, blue: 0.13),
+                Color(red: 0.05, green: 0.05, blue: 0.055),
+                Color(red: 0.02, green: 0.02, blue: 0.025),
+                Color.black,
+            ]
+        default:
+            return [
+                canvasHigh,
+                canvas,
+                Color(hue: h, saturation: 0.4, brightness: 0.04),
+                Color.black,
+            ]
+        }
     }
 
     /// Portrait / landscape edge wash.
     var washColors: [Color] {
         switch self {
+        case .tesla:
+            return [Color.white.opacity(0.12), accent.opacity(0.35)]
         case .solarFlare, .redline, .neon:
             return [
                 Color(hue: h, saturation: 0.85, brightness: 0.35),
@@ -107,6 +147,7 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
     /// Font family for speed gauge / numbers — PostScript names that resolve on iOS.
     var gaugeFont: String {
         switch self {
+        case .tesla: return "HelveticaNeue-Bold"
         case .aurora: return "Orbitron-Bold"
         case .plasma: return "Menlo-Bold"
         case .redline: return "DINCondensed-Bold"
@@ -125,6 +166,7 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
     /// Font family for UI labels, nav column, cards.
     var uiFont: String {
         switch self {
+        case .tesla: return "HelveticaNeue"
         case .aurora: return "DMSans-Regular"
         case .plasma: return "Menlo-Regular"
         case .redline: return "AvenirNext-Medium"
@@ -143,7 +185,7 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
     /// System design fallback when family missing — shapes typography character.
     var gaugeDesign: Font.Design {
         switch self {
-        case .aurora, .electricIce, .deepOcean: return .rounded
+        case .tesla, .aurora, .electricIce, .deepOcean: return .rounded
         case .plasma, .warp, .cyberLime, .tunnel: return .monospaced
         case .redline, .solarFlare, .neon: return .default
         case .violetStorm, .midnight: return .serif
@@ -152,7 +194,7 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
 
     var uiDesign: Font.Design {
         switch self {
-        case .aurora, .midnight, .electricIce: return .default
+        case .tesla, .aurora, .midnight, .electricIce: return .default
         case .plasma, .warp, .cyberLime, .tunnel: return .monospaced
         case .redline, .solarFlare, .neon: return .rounded
         case .violetStorm, .deepOcean: return .serif
@@ -161,6 +203,7 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
 
     var gaugeWeight: Font.Weight {
         switch self {
+        case .tesla: return .semibold
         case .redline, .neon, .solarFlare: return .black
         case .cyberLime, .tunnel, .warp: return .bold
         case .plasma, .violetStorm: return .heavy
@@ -170,6 +213,7 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
 
     var gaugeTracking: CGFloat {
         switch self {
+        case .tesla: return 0.15
         case .redline, .solarFlare: return 0.4
         case .neon: return 0.2
         case .cyberLime, .tunnel: return 1.6
@@ -182,6 +226,7 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
     /// Relative gauge digit scale vs baseline (shape feel: condensed vs expansive).
     var gaugeScale: CGFloat {
         switch self {
+        case .tesla: return 1.06
         case .neon, .redline: return 1.08          // condensed tall
         case .cyberLime, .tunnel: return 0.94      // mono compact
         case .plasma, .warp: return 0.97
@@ -201,6 +246,7 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
 
     var dialRingStyle: DialRingStyle {
         switch self {
+        case .tesla: return .thin
         case .neon, .cyberLime, .warp: return .neonSweep
         case .redline, .solarFlare: return .dualGlow
         case .plasma, .violetStorm: return .plasmaRibbon
@@ -235,6 +281,7 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
         case .violetStorm: return "violet-storm"
         case .deepOcean: return "deep-ocean"
         case .midnight: return "aurora"
+        case .tesla: return "aurora"
         default: return rawValue
         }
     }

@@ -1,13 +1,24 @@
 import Foundation
 import ActivityKit
 import AVFoundation
+import UIKit
 
-/// Live Activity + arka plan ses oturumu yönetimi
+/// Live Activity + Dynamic Island — yalnızca uygulama **arka plandayken**.
+/// Ön plana gelince veya süreç ölünce (staleDate) kapanır; uygulama kapalıyken kalmaz.
 @available(iOS 16.2, *)
 enum EtubuLiveActivityController {
     private static var current: Activity<EtubuDriveAttributes>?
     private static var engine: AVAudioEngine?
     private static var player: AVAudioPlayerNode?
+
+    /// Uygulama öldürülürse güncelleme kesilir; bu süre sonra sistem LA’yı bayat sayar.
+    private static let staleSeconds: TimeInterval = 75
+
+    /// Sadece gerçek arka plan — foreground / terminate sonrası LA yok.
+    @MainActor
+    static var isBackgroundOnlySession: Bool {
+        UIApplication.shared.applicationState == .background
+    }
 
     static func ensureAudioSession(mixWithOthers: Bool) {
         let session = AVAudioSession.sharedInstance()
@@ -23,13 +34,13 @@ enum EtubuLiveActivityController {
         }
     }
 
-    /// Arka planda audio session canlı kalsın (WKWebView suspend riskine karşı)
+    /// Arka planda audio session canlı kalsın — yalnızca background'da çağır.
     static func startSilentKeepalive() {
         guard engine == nil else { return }
         let eng = AVAudioEngine()
         let node = AVAudioPlayerNode()
         eng.attach(node)
-        let format = AVAudioFormat(standardFormatWithSampleRate: 22050, channels: 1)!
+        guard let format = AVAudioFormat(standardFormatWithSampleRate: 22050, channels: 1) else { return }
         eng.connect(node, to: eng.mainMixerNode, format: format)
         eng.mainMixerNode.outputVolume = 0.0001
 
@@ -59,6 +70,13 @@ enum EtubuLiveActivityController {
         engine = nil
     }
 
+    private static func makeContent(state: EtubuDriveAttributes.ContentState) -> ActivityContent<EtubuDriveAttributes.ContentState> {
+        ActivityContent(
+            state: state,
+            staleDate: Date().addingTimeInterval(staleSeconds)
+        )
+    }
+
     /// Build state from live telemetry + route brief (Island / lock screen).
     @MainActor
     static func makeState(
@@ -71,7 +89,6 @@ enum EtubuLiveActivityController {
         let t = EtubuVehicleTelemetry.shared
         let w = EtubuDriveWarnings.shared
         let routeOn = t.routeActive
-        // Island shows remaining critical points only when a route is active
         let rb = routeOn ? w.remainingBrief : EtubuRouteBriefSummary()
         let remaining = routeOn ? w.remainingHazards : []
         let warnPrimary: String = {
@@ -129,8 +146,24 @@ enum EtubuLiveActivityController {
         tpmsRL: Int? = nil,
         tpmsRR: Int? = nil
     ) async -> Bool {
-        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return false }
-        await end()
+        let allowed = await MainActor.run { isBackgroundOnlySession }
+        guard allowed else {
+            // Ön planda başlatma — varsa kapat
+            await end()
+            return false
+        }
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else {
+            print("ETUBU Live Activity: disabled in Settings")
+            return false
+        }
+        if let existing = current ?? Activity<EtubuDriveAttributes>.activities.first {
+            current = existing
+            await update(
+                kmh: kmh, gear: gear, rpm: rpm, voice: voice, source: source,
+                tpmsFL: tpmsFL, tpmsFR: tpmsFR, tpmsRL: tpmsRL, tpmsRR: tpmsRR
+            )
+            return true
+        }
         let attributes = EtubuDriveAttributes(startedAt: Date())
         let state = await MainActor.run {
             var s = makeState(voice: voice, kmh: kmh, gear: gear, rpm: rpm, source: source)
@@ -143,7 +176,7 @@ enum EtubuLiveActivityController {
         do {
             let activity = try Activity.request(
                 attributes: attributes,
-                content: .init(state: state, staleDate: nil),
+                content: makeContent(state: state),
                 pushType: nil
             )
             current = activity
@@ -165,6 +198,8 @@ enum EtubuLiveActivityController {
         tpmsRL: Int? = nil,
         tpmsRR: Int? = nil
     ) async {
+        let allowed = await MainActor.run { isBackgroundOnlySession }
+        guard allowed else { return }
         guard let activity = current ?? Activity<EtubuDriveAttributes>.activities.first else { return }
         current = activity
         let state = await MainActor.run {
@@ -175,18 +210,51 @@ enum EtubuLiveActivityController {
             if tpmsRR != nil { s.tpmsRR = tpmsRR }
             return s
         }
-        await activity.update(.init(state: state, staleDate: nil))
+        await activity.update(makeContent(state: state))
     }
 
-    /// Push latest telemetry + route brief without callers repeating fields.
+    /// Arka planda yayınla; ön plandaysa varsa LA’yı kapat (otomatik start yok).
     static func publishCurrent(voice: String = "ETUBU") async {
+        let allowed = await MainActor.run { isBackgroundOnlySession }
+        guard allowed else {
+            await end()
+            return
+        }
         guard let activity = current ?? Activity<EtubuDriveAttributes>.activities.first else {
             _ = await start(voice: voice, kmh: 0, gear: "P", rpm: 0, source: "idle")
             return
         }
         current = activity
         let state = await MainActor.run { makeState(voice: voice) }
-        await activity.update(.init(state: state, staleDate: nil))
+        await activity.update(makeContent(state: state))
+    }
+
+    /// Arka plana geçince Island’ı aç.
+    static func beginBackgroundSession() async {
+        let snap = await MainActor.run { () -> (kmh: Int, gear: String, rpm: Int, source: String, fl: Int?, fr: Int?, rl: Int?, rr: Int?) in
+            let t = EtubuVehicleTelemetry.shared
+            return (
+                t.kmh,
+                t.gear,
+                t.rpm,
+                t.source == .none ? "idle" : t.source.rawValue,
+                t.tpmsFL.psi.map { Int($0.rounded()) },
+                t.tpmsFR.psi.map { Int($0.rounded()) },
+                t.tpmsRL.psi.map { Int($0.rounded()) },
+                t.tpmsRR.psi.map { Int($0.rounded()) }
+            )
+        }
+        _ = await start(
+            voice: "ETUBU",
+            kmh: snap.kmh,
+            gear: snap.gear,
+            rpm: snap.rpm,
+            source: snap.source,
+            tpmsFL: snap.fl,
+            tpmsFR: snap.fr,
+            tpmsRL: snap.rl,
+            tpmsRR: snap.rr
+        )
     }
 
     static func end() async {

@@ -8,24 +8,32 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
     /// When true, lifecycle must not drop back to ambient (kills EV / alert audio).
     static var driveAudioActive = false
+    /// Avoid racing Live Activity end/start across launch + becomeActive.
+    private static var liveActivityBootstrapped = false
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         configureAudioSession(quality: true)
-        // Kill leftover Island/LA from a previous process before cluster can start a new one.
-        Self.endLiveActivitySync()
-        // Install cluster ASAP and keep retrying until the key window exists.
+        // Install cluster ASAP — do NOT block RunLoop or fire-and-forget end that races start.
         DispatchQueue.main.async {
             EtubuClusterPresenter.shared.installOverCapacitor()
         }
-        for delay in [0.15, 0.4, 0.8, 1.5] as [Double] {
+        for delay in [0.2, 0.5, 1.0] as [Double] {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                 EtubuClusterPresenter.shared.installOverCapacitor()
             }
         }
+        // Clean leftover LA from prior process, then allow cluster to start one.
+        if #available(iOS 16.2, *) {
+            Task { @MainActor in
+                await EtubuLiveActivityController.end()
+                Self.liveActivityBootstrapped = true
+            }
+        } else {
+            Self.liveActivityBootstrapped = true
+        }
         return true
     }
 
-    /// App starts in silent-safe mode (respects hardware mute switch).
     private func configureAudioSession(quality: Bool = false) {
         if Self.driveAudioActive {
             Self.activateDriveAudioSession()
@@ -40,7 +48,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             )
             if quality {
                 try session.setPreferredSampleRate(48_000)
-                try session.setPreferredIOBufferDuration(0.005)
+                try session.setPreferredIOBufferDuration(0.01)
             }
             try session.setActive(true)
         } catch {
@@ -48,7 +56,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         }
     }
 
-    /// User enables drive audio explicitly — high quality playback path.
     static func activateDriveAudioSession() {
         driveAudioActive = true
         let session = AVAudioSession.sharedInstance()
@@ -56,10 +63,10 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             try session.setCategory(
                 .playback,
                 mode: .default,
-                options: [.mixWithOthers, .duckOthers, .allowBluetoothA2DP, .allowAirPlay]
+                options: [.mixWithOthers, .allowBluetoothA2DP, .allowAirPlay]
             )
             try session.setPreferredSampleRate(48_000)
-            try session.setPreferredIOBufferDuration(0.005)
+            try session.setPreferredIOBufferDuration(0.01)
             try session.setActive(true, options: [])
         } catch {
             print("ETUBU audio session activate:", error)
@@ -96,19 +103,25 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func applicationDidEnterBackground(_ application: UIApplication) {
-        if !Self.driveAudioActive {
+        if Self.driveAudioActive {
+            Self.activateDriveAudioSession()
+        } else {
             Self.activateSilentSafeSession()
         }
-        // Leaving the app → dismiss Dynamic Island / Live Activity.
+        // Dynamic Island / Live Activity: yalnızca arka planda
+        if #available(iOS 16.2, *) {
+            EtubuLiveActivityController.ensureAudioSession(mixWithOthers: true)
+            EtubuLiveActivityController.startSilentKeepalive()
+            Task { await EtubuLiveActivityController.beginBackgroundSession() }
+        }
         var taskId: UIBackgroundTaskIdentifier = .invalid
-        taskId = application.beginBackgroundTask(withName: "etubu.endLiveActivity") {
+        taskId = application.beginBackgroundTask(withName: "etubu.keepDriveAlive") {
             if taskId != .invalid {
                 application.endBackgroundTask(taskId)
                 taskId = .invalid
             }
         }
-        Self.endLiveActivityNow()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 25) {
             if taskId != .invalid {
                 application.endBackgroundTask(taskId)
                 taskId = .invalid
@@ -118,49 +131,30 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func applicationWillEnterForeground(_ application: UIApplication) {
         configureAudioSession(quality: true)
+        if #available(iOS 16.2, *) {
+            // Ön plana dönünce Island + LA hemen bitsin
+            EtubuLiveActivityController.stopSilentKeepalive()
+            EtubuLiveActivityController.endAllNow()
+        }
     }
 
     func applicationDidBecomeActive(_ application: UIApplication) {
         configureAudioSession(quality: true)
         EtubuClusterPresenter.shared.installOverCapacitor()
-        // Re-attempt Tesla BLE whenever app returns to foreground.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
             Task { @MainActor in
                 EtubuTeslaBleSession.shared.bootstrapIfPossible()
             }
         }
-        // Restart Island after background end (if cluster already running).
+        // Foreground’da LA yok — publish/start yok
         if #available(iOS 16.2, *) {
-            Task { @MainActor in
-                let t = EtubuVehicleTelemetry.shared
-                _ = await EtubuLiveActivityController.start(
-                    voice: "ETUBU",
-                    kmh: t.kmh,
-                    gear: t.gear,
-                    rpm: t.rpm,
-                    source: t.source == .none ? "idle" : t.source.rawValue
-                )
-                EtubuLiveActivityController.startSilentKeepalive()
-            }
+            EtubuLiveActivityController.endAllNow()
         }
     }
 
     func applicationWillTerminate(_ application: UIApplication) {
-        Self.endLiveActivityNow()
-    }
-
-    /// Ends Island/LA without blocking the main thread (semaphore + Activity.end deadlocks).
-    private static func endLiveActivityNow() {
-        guard #available(iOS 16.2, *) else { return }
-        EtubuLiveActivityController.endAllNow()
-    }
-
-    /// Launch-time cleanup of leftover activities from a previous process.
-    private static func endLiveActivitySync() {
-        endLiveActivityNow()
-        // Brief yield so Activity.end can enqueue before UI starts a new LA.
-        if Thread.isMainThread {
-            RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+        if #available(iOS 16.2, *) {
+            EtubuLiveActivityController.endAllNow()
         }
     }
 

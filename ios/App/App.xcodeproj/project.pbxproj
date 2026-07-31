@@ -8,6 +8,16 @@
 
 /* Begin PBXBuildFile section */
 		D4BCDAD7890A45CEAB9D3E08 /* EtubuClusterHotspots.swift in Sources */ = {isa = PBXBuildFile; fileRef = B67E1884622C423EA48A68EA /* EtubuClusterHotspots.swift */; };
+		66BB146C9FEA2CA0268A9C18 /* EtubuBrandMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC7496DCE28D2B084DE2D7BB /* EtubuBrandMark.swift */; };
+		19E162CAFC694B98B7AE6496 /* EtubuAppSummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFD2F4DDF4A94910B67BE762 /* EtubuAppSummary.swift */; };
+		A91E0C44B2D74F1A9C6E8F01 /* EtubuOnboardScreenshots.swift in Sources */ = {isa = PBXBuildFile; fileRef = B82F1D55C3E85A2B0D7F9E12 /* EtubuOnboardScreenshots.swift */; };
+		E7A1B2C3D4E5F60718293A4B /* EtubuLegalAcceptanceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A2B3C4D5E6F708293A4B5C /* EtubuLegalAcceptanceView.swift */; };
+		E8B2C3D4E5F60718293A4B5C /* EtubuOsmSpeedLimit.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2B3C4D5E6F708293A4B5C6D /* EtubuOsmSpeedLimit.swift */; };
+		E9C3D4E5F60718293A4B5C6D /* EtubuTurkeySpeedTableView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3C4D5E6F708293A4B5C6D7E /* EtubuTurkeySpeedTableView.swift */; };
+		EA04D5E6F708293A4B5C6D7E /* EtubuOsmAttribution.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB15E6F708293A4B5C6D7E8F /* EtubuOsmAttribution.swift */; };
+		7CF0CEB29FF140A0914F3177 /* EtubuDemoDrive.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F2C77951EC343488AF9F5B1 /* EtubuDemoDrive.swift */; };
+		D1C76F24C56DB05F3C96562B /* EtubuSoundVoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28561D1D3DBD7DDDB93DD7F1 /* EtubuSoundVoice.swift */; };
+		79BDDD2ABB97108F5CAECFA4 /* EtubuTrafikAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DBDD1FD43680FBD991BD83D /* EtubuTrafikAPI.swift */; };
 		008E63FE607E62C933A5B49C /* EtubuDriveAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14A4E32586D75971FEFDE157 /* EtubuDriveAttributes.swift */; };
 		0A503F7D2005DA0F00D3C937 /* EtubuClusterL10n.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3C0A0A5E70E7F945B3BE33A /* EtubuClusterL10n.swift */; };
 		0B4CA45A9AD60BFA24D03341 /* EtubuWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D7E8E9A50DD4D8C3EBE1C78E /* EtubuWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeaderOnCopy, ); }; };
@@ -62,6 +72,14 @@
 		F5BBE4EAF804E9EA36CE24FD /* Pods_Etubu.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1F56AE98655AC7C378EDF215 /* Pods_Etubu.framework */; };
 		F7B9E498C41B1DAD786CC501 /* EtubuClusterComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF992E9F8FF9FD1410C7C698 /* EtubuClusterComponents.swift */; };
 		FD8738279E416DE25E228862 /* EtubuTeslaVinStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F90DB12D21940C953B91600B /* EtubuTeslaVinStore.swift */; };
+		A1VFXTYPE00000000000001 /* EtubuVFXType.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1VFXTYPE00000000000011 /* EtubuVFXType.swift */; };
+		A1VFXMGR000000000000002 /* EtubuVFXManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1VFXMGR000000000000012 /* EtubuVFXManager.swift */; };
+		A1VFXFAC000000000000003 /* EtubuVFXParticleFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1VFXFAC000000000000013 /* EtubuVFXParticleFactory.swift */; };
+		A1VFXVIEW00000000000004 /* EtubuVFXCameraAnchorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1VFXVIEW00000000000014 /* EtubuVFXCameraAnchorView.swift */; };
+A1REALITYKITBUILD00001 /* RealityKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A1REALITYKITFILEREF001 /* RealityKit.framework */; };
+A1STATUSWIDGETBUILD001 /* EtubuStatusWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1STATUSWIDGETFILEREF01 /* EtubuStatusWidget.swift */; };
+		A1VFXMETALFXBUILD0001 /* EtubuVFXMetalEffects.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1VFXMETALFXFILEREF01 /* EtubuVFXMetalEffects.swift */; };
+		A1VFXSHADERBUILD00001 /* EtubuVFXShaders.metal in Sources */ = {isa = PBXBuildFile; fileRef = A1VFXSHADERFILEREF001 /* EtubuVFXShaders.metal */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -90,6 +108,16 @@
 
 /* Begin PBXFileReference section */
 		B67E1884622C423EA48A68EA /* EtubuClusterHotspots.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuClusterHotspots.swift; sourceTree = "<group>"; };
+		FC7496DCE28D2B084DE2D7BB /* EtubuBrandMark.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuBrandMark.swift; sourceTree = "<group>"; };
+		AFD2F4DDF4A94910B67BE762 /* EtubuAppSummary.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuAppSummary.swift; sourceTree = "<group>"; };
+		B82F1D55C3E85A2B0D7F9E12 /* EtubuOnboardScreenshots.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuOnboardScreenshots.swift; sourceTree = "<group>"; };
+		F1A2B3C4D5E6F708293A4B5C /* EtubuLegalAcceptanceView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuLegalAcceptanceView.swift; sourceTree = "<group>"; };
+		F2B3C4D5E6F708293A4B5C6D /* EtubuOsmSpeedLimit.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuOsmSpeedLimit.swift; sourceTree = "<group>"; };
+		F3C4D5E6F708293A4B5C6D7E /* EtubuTurkeySpeedTableView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuTurkeySpeedTableView.swift; sourceTree = "<group>"; };
+		FB15E6F708293A4B5C6D7E8F /* EtubuOsmAttribution.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuOsmAttribution.swift; sourceTree = "<group>"; };
+		2F2C77951EC343488AF9F5B1 /* EtubuDemoDrive.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuDemoDrive.swift; sourceTree = "<group>"; };
+		28561D1D3DBD7DDDB93DD7F1 /* EtubuSoundVoice.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuSoundVoice.swift; sourceTree = "<group>"; };
+		2DBDD1FD43680FBD991BD83D /* EtubuTrafikAPI.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuTrafikAPI.swift; sourceTree = "<group>"; };
 		032E0F793399BBE326062E0D /* DMSans.ttf */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = file; path = DMSans.ttf; sourceTree = "<group>"; };
 		09957FDD6325E3C5A1C15646 /* EtubuBluetoothGate.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuBluetoothGate.swift; sourceTree = "<group>"; };
 		09AEE6E92B641D664DC31580 /* EtubuObdBleManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuObdBleManager.swift; sourceTree = "<group>"; };
@@ -151,6 +179,14 @@
 		FE46C929135374CA2FCB40FF /* EtubuClusterAudioBridge.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuClusterAudioBridge.swift; sourceTree = "<group>"; };
 		FF696C3DDC15AECBA11DEA27 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		FF992E9F8FF9FD1410C7C698 /* EtubuClusterComponents.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuClusterComponents.swift; sourceTree = "<group>"; };
+		A1VFXTYPE00000000000011 /* EtubuVFXType.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuVFXType.swift; sourceTree = "<group>"; };
+		A1VFXMGR000000000000012 /* EtubuVFXManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuVFXManager.swift; sourceTree = "<group>"; };
+		A1VFXFAC000000000000013 /* EtubuVFXParticleFactory.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuVFXParticleFactory.swift; sourceTree = "<group>"; };
+		A1VFXVIEW00000000000014 /* EtubuVFXCameraAnchorView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuVFXCameraAnchorView.swift; sourceTree = "<group>"; };
+		A1VFXMETALFXFILEREF01 /* EtubuVFXMetalEffects.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuVFXMetalEffects.swift; sourceTree = "<group>"; };
+		A1VFXSHADERFILEREF001 /* EtubuVFXShaders.metal */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.metal; path = EtubuVFXShaders.metal; sourceTree = "<group>"; };
+A1REALITYKITFILEREF001 /* RealityKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = RealityKit.framework; path = System/Library/Frameworks/RealityKit.framework; sourceTree = SDKROOT; };
+A1STATUSWIDGETFILEREF01 /* EtubuStatusWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuStatusWidget.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -159,6 +195,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A5EB1E45A4DEFE55931C39AD /* TeslaBLE in Frameworks */,
+				A1REALITYKITBUILD00001 /* RealityKit.framework in Frameworks */,
 				F5BBE4EAF804E9EA36CE24FD /* Pods_Etubu.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -177,6 +214,20 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		A1VFXGROUP000000000001 /* VFX */ = {
+			isa = PBXGroup;
+			children = (
+				A1VFXTYPE00000000000011 /* EtubuVFXType.swift */,
+				A1VFXMGR000000000000012 /* EtubuVFXManager.swift */,
+				A1VFXFAC000000000000013 /* EtubuVFXParticleFactory.swift */,
+				A1VFXVIEW00000000000014 /* EtubuVFXCameraAnchorView.swift */,
+				A1VFXMETALFXFILEREF01 /* EtubuVFXMetalEffects.swift */,
+				A1VFXSHADERFILEREF001 /* EtubuVFXShaders.metal */,
+			);
+			path = VFX;
+			sourceTree = "<group>";
+		};
+
 		116A50EDA7742103601C05AF /* Cluster */ = {
 			isa = PBXGroup;
 			children = (
@@ -191,8 +242,19 @@
 				D58E4D55285BB8872631C73D /* EtubuClusterRootView.swift */,
 				0C8611F7BBE0F155EFEDD298 /* EtubuClusterSimView.swift */,
 				B67E1884622C423EA48A68EA /* EtubuClusterHotspots.swift */,
+				FC7496DCE28D2B084DE2D7BB /* EtubuBrandMark.swift */,
+				AFD2F4DDF4A94910B67BE762 /* EtubuAppSummary.swift */,
+				B82F1D55C3E85A2B0D7F9E12 /* EtubuOnboardScreenshots.swift */,
+				F1A2B3C4D5E6F708293A4B5C /* EtubuLegalAcceptanceView.swift */,
+				F2B3C4D5E6F708293A4B5C6D /* EtubuOsmSpeedLimit.swift */,
+				F3C4D5E6F708293A4B5C6D7E /* EtubuTurkeySpeedTableView.swift */,
+				FB15E6F708293A4B5C6D7E8F /* EtubuOsmAttribution.swift */,
+				2F2C77951EC343488AF9F5B1 /* EtubuDemoDrive.swift */,
+				28561D1D3DBD7DDDB93DD7F1 /* EtubuSoundVoice.swift */,
+				2DBDD1FD43680FBD991BD83D /* EtubuTrafikAPI.swift */,
 				64C086E2E1A8BD7F426D5574 /* EtubuClusterVehiclePanels.swift */,
 				8F2C919C429E14B2D036FD26 /* EtubuCutoutFX.swift */,
+				A1VFXGROUP000000000001 /* VFX */,
 				BA92EF270AF486BADBF59F74 /* EtubuDriveWarnings.swift */,
 				0CBAA090886F11786F8B8B2F /* EtubuMapLocationHelper.swift */,
 				AAACC9BE1260B703CD04294B /* EtubuNotchAuraView.swift */,
@@ -211,6 +273,7 @@
 				30F441A88DDAD87DC7DBF200 /* WidgetKit.framework */,
 				1DA438ED0FB570B278DCC3DB /* SwiftUI.framework */,
 				3C0F64A6AECB4896D7141F16 /* ActivityKit.framework */,
+				A1REALITYKITFILEREF001 /* RealityKit.framework */,
 				1F56AE98655AC7C378EDF215 /* Pods_Etubu.framework */,
 			);
 			name = Frameworks;
@@ -264,6 +327,7 @@
 		5B4EB13FBE4A9085CA4426D1 /* EtubuWidgets */ = {
 			isa = PBXGroup;
 			children = (
+				A1STATUSWIDGETFILEREF01 /* EtubuStatusWidget.swift */,
 				A26E8DFAD008A380B6D2208A /* EtubuDriveAttributes.swift */,
 				0A7E3AE63A5590BD596E6216 /* EtubuLiveActivityWidget.swift */,
 				9D726A99DF94760C63DEEFC7 /* Info.plist */,
@@ -495,8 +559,24 @@
 				C7A97F0DD3FF27D34309D423 /* EtubuClusterRootView.swift in Sources */,
 				C38DAE28AFB608FF4CB785A5 /* EtubuClusterSimView.swift in Sources */,
 				D4BCDAD7890A45CEAB9D3E08 /* EtubuClusterHotspots.swift in Sources */,
+				66BB146C9FEA2CA0268A9C18 /* EtubuBrandMark.swift in Sources */,
+				19E162CAFC694B98B7AE6496 /* EtubuAppSummary.swift in Sources */,
+				A91E0C44B2D74F1A9C6E8F01 /* EtubuOnboardScreenshots.swift in Sources */,
+				E7A1B2C3D4E5F60718293A4B /* EtubuLegalAcceptanceView.swift in Sources */,
+				E8B2C3D4E5F60718293A4B5C /* EtubuOsmSpeedLimit.swift in Sources */,
+				E9C3D4E5F60718293A4B5C6D /* EtubuTurkeySpeedTableView.swift in Sources */,
+				EA04D5E6F708293A4B5C6D7E /* EtubuOsmAttribution.swift in Sources */,
+				7CF0CEB29FF140A0914F3177 /* EtubuDemoDrive.swift in Sources */,
+				D1C76F24C56DB05F3C96562B /* EtubuSoundVoice.swift in Sources */,
+				79BDDD2ABB97108F5CAECFA4 /* EtubuTrafikAPI.swift in Sources */,
 				AA267C628CDA70B2A92E7474 /* EtubuClusterVehiclePanels.swift in Sources */,
 				2885E5BB2F560C13FF43DD09 /* EtubuCutoutFX.swift in Sources */,
+				A1VFXTYPE00000000000001 /* EtubuVFXType.swift in Sources */,
+				A1VFXMGR000000000000002 /* EtubuVFXManager.swift in Sources */,
+				A1VFXFAC000000000000003 /* EtubuVFXParticleFactory.swift in Sources */,
+				A1VFXVIEW00000000000004 /* EtubuVFXCameraAnchorView.swift in Sources */,
+				A1VFXMETALFXBUILD0001 /* EtubuVFXMetalEffects.swift in Sources */,
+				A1VFXSHADERBUILD00001 /* EtubuVFXShaders.metal in Sources */,
 				12C3BE89B36CCB83DCE07087 /* EtubuDriveWarnings.swift in Sources */,
 				B656FE0267A236C301F8AE0C /* EtubuMapLocationHelper.swift in Sources */,
 				546E8129C6286160342984F8 /* EtubuNotchAuraView.swift in Sources */,
@@ -528,6 +608,7 @@
 			files = (
 				14F5D310989E7490549C7562 /* EtubuDriveAttributes.swift in Sources */,
 				C6711EBC19D2A50570FB0626 /* EtubuLiveActivityWidget.swift in Sources */,
+				A1STATUSWIDGETBUILD001 /* EtubuStatusWidget.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

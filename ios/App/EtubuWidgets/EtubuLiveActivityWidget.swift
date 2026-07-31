@@ -5,6 +5,7 @@ import ActivityKit
 @main
 struct EtubuWidgetsBundle: WidgetBundle {
     var body: some Widget {
+        EtubuStatusWidget()
         EtubuLiveActivityWidget()
     }
 }
@@ -20,7 +21,6 @@ struct EtubuLiveActivityWidget: Widget {
                         .resizable()
                         .scaledToFit()
                         .frame(width: 22, height: 22)
-                        .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
                     Spacer(minLength: 4)
                     Text("\(context.state.kmh)")
                         .font(.system(size: 26, weight: .bold, design: .rounded))
@@ -72,7 +72,6 @@ struct EtubuLiveActivityWidget: Widget {
                             .resizable()
                             .scaledToFit()
                             .frame(width: 28, height: 28)
-                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                         Text(context.state.gear)
                             .font(.system(size: 16, weight: .bold))
                     }
@@ -128,7 +127,6 @@ struct EtubuLiveActivityWidget: Widget {
                     .resizable()
                     .scaledToFit()
                     .frame(width: 18, height: 18)
-                    .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
             } compactTrailing: {
                 if context.state.routeActive, !context.state.primaryWarn.isEmpty {
                     Text(shortWarn(context.state.primaryWarn))
@@ -156,7 +154,6 @@ struct EtubuLiveActivityWidget: Widget {
                     .resizable()
                     .scaledToFit()
                     .frame(width: 14, height: 14)
-                    .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
             }
             .widgetURL(URL(string: "com.etubu.app://drive"))
         }

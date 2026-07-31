@@ -43,12 +43,57 @@ struct EtubuSpotlightHole: Shape {
     }
 }
 
+/// Pair rozeti çevresinde dönen / genişleyen pulse — dikey ve yatayda hotspot’a kilitli.
+struct EtubuPairSpotlightPulse: View {
+    var hole: CGRect
+    var color: Color
+    @State private var phase = false
+
+    var body: some View {
+        let w = hole.width + 18
+        let h = hole.height + 18
+        let radius = min(22, h * 0.45)
+        ZStack {
+            ForEach(0..<3, id: \.self) { i in
+                RoundedRectangle(cornerRadius: radius + CGFloat(i) * 2, style: .continuous)
+                    .stroke(color.opacity(0.7 - Double(i) * 0.18), lineWidth: 2.2 - CGFloat(i) * 0.3)
+                    .frame(width: w + CGFloat(i) * 10, height: h + CGFloat(i) * 10)
+                    .scaleEffect(phase ? 1.12 + CGFloat(i) * 0.08 : 1.0)
+                    .opacity(phase ? 0.08 : 0.85)
+            }
+            RoundedRectangle(cornerRadius: radius, style: .continuous)
+                .stroke(
+                    AngularGradient(
+                        colors: [
+                            color.opacity(0.25),
+                            color,
+                            Color.white.opacity(0.95),
+                            color.opacity(0.25)
+                        ],
+                        center: .center
+                    ),
+                    lineWidth: 2.6
+                )
+                .frame(width: w, height: h)
+                .shadow(color: color.opacity(0.55), radius: 14)
+        }
+        .position(x: hole.midX, y: hole.midY)
+        .onAppear {
+            withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: false)) {
+                phase = true
+            }
+        }
+    }
+}
+
 /// Pair / connection control with living glow while pairing, solid green when linked.
 struct EtubuPairConnectionBadge: View {
     let connectionState: EtubuVehicleConnectionState
     let theme: ClusterTheme
     var label: String? = nil
     var compact: Bool = false
+    /// Rehber kartındaki kopyada pulse kapalı — asıl rozette kalsın.
+    var showPulse: Bool = true
 
     @State private var pulse = false
 
@@ -79,23 +124,23 @@ struct EtubuPairConnectionBadge: View {
                 iconOnlyBadge
             }
         }
-        .onAppear {
-            guard isPairing else { return }
-            withAnimation(.easeInOut(duration: 1.05).repeatForever(autoreverses: false)) {
-                pulse = true
-            }
-        }
+        .onAppear { startPulseIfNeeded() }
         .onChange(of: isPairing) { _, pairing in
-            if pairing {
-                pulse = false
-                withAnimation(.easeInOut(duration: 1.05).repeatForever(autoreverses: false)) {
-                    pulse = true
-                }
-            } else {
-                pulse = false
-            }
+            if pairing { startPulseIfNeeded() }
+            else { pulse = false }
         }
         .animation(.easeInOut(duration: 0.35), value: connectionState)
+    }
+
+    private func startPulseIfNeeded() {
+        guard showPulse, isPairing else {
+            pulse = false
+            return
+        }
+        pulse = false
+        withAnimation(.easeInOut(duration: 1.05).repeatForever(autoreverses: false)) {
+            pulse = true
+        }
     }
 
     private func labeledBadge(_ label: String) -> some View {
@@ -110,11 +155,23 @@ struct EtubuPairConnectionBadge: View {
         .padding(.horizontal, compact ? 10 : 12)
         .padding(.vertical, compact ? 6 : 7)
         .background(capsuleChrome)
+        .overlay {
+            if showPulse, isPairing {
+                Capsule()
+                    .stroke(glow.opacity(pulse ? 0.15 : 0.85), lineWidth: 2)
+                    .scaleEffect(pulse ? 1.18 : 1.0)
+                    .opacity(pulse ? 0.05 : 0.9)
+                Capsule()
+                    .stroke(glow.opacity(0.45), lineWidth: 1.4)
+                    .scaleEffect(pulse ? 1.32 : 1.0)
+                    .opacity(pulse ? 0.05 : 0.7)
+            }
+        }
     }
 
     private var iconOnlyBadge: some View {
         ZStack {
-            if isPairing {
+            if showPulse, isPairing {
                 ForEach(0..<3, id: \.self) { i in
                     Circle()
                         .stroke(glow.opacity(0.55 - Double(i) * 0.15), lineWidth: 1.6)
@@ -136,7 +193,7 @@ struct EtubuPairConnectionBadge: View {
 
     private var pulseDot: some View {
         ZStack {
-            if isPairing {
+            if showPulse, isPairing {
                 ForEach(0..<3, id: \.self) { i in
                     Circle()
                         .stroke(glow.opacity(0.55 - Double(i) * 0.15), lineWidth: 1.5)

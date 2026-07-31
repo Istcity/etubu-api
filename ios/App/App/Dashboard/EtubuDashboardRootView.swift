@@ -19,10 +19,8 @@ struct EtubuDashboardRootView: View {
             .ignoresSafeArea()
 
             VStack(spacing: 16) {
-                HStack {
-                    Text("ETUBU")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(.cyan)
+                HStack(spacing: 8) {
+                    EtubuBrandMark(size: 22, showGlow: true)
                     Text("Dashboard")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.white.opacity(0.55))
@@ -78,24 +76,7 @@ struct EtubuDashboardRootView: View {
     }
 
     private func startLiveActivityIfNeeded() {
-        guard #available(iOS 16.2, *) else { return }
-        guard telemetry.isConnected else { return }
-        let tires = EtubuVehicleTelemetry.shared
-        Task {
-            EtubuLiveActivityController.ensureAudioSession(mixWithOthers: true)
-            EtubuLiveActivityController.startSilentKeepalive()
-            _ = await EtubuLiveActivityController.start(
-                voice: "OBD",
-                kmh: telemetry.kmh,
-                gear: "D",
-                rpm: telemetry.rpm,
-                source: "obd",
-                tpmsFL: tires.tpmsFL.psi.map { Int($0.rounded()) },
-                tpmsFR: tires.tpmsFR.psi.map { Int($0.rounded()) },
-                tpmsRL: tires.tpmsRL.psi.map { Int($0.rounded()) },
-                tpmsRR: tires.tpmsRR.psi.map { Int($0.rounded()) }
-            )
-        }
+        // LA yalnızca arka planda (AppDelegate) — ön planda başlatma.
     }
 
     private func pushLiveActivity() {

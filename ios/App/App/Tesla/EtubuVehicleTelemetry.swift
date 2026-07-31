@@ -234,6 +234,12 @@ final class EtubuVehicleTelemetry: ObservableObject {
         if let heading { headingDeg = heading }
     }
 
+    func clearMapLocation() {
+        latitude = nil
+        longitude = nil
+        headingDeg = nil
+    }
+
     func applyObdFallback(kmh: Int, rpm: Int, coolant: Int?, voltage: Double?) {
         guard !isLiveTesla else { return }
         self.kmh = max(0, kmh)
