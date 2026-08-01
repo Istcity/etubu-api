@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		A77FC1B2277D4CD98E8C4CC7 /* EtubuWarnVoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C2E36FD196C4AD9BAA20D2F /* EtubuWarnVoice.swift */; };
+		D8E4A91F2C7B4E0A9F31C6D2 /* EtubuNativeDriveAudio.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9F5B02A3D8C4F1B0A42D7E3 /* EtubuNativeDriveAudio.swift */; };
 		D4BCDAD7890A45CEAB9D3E08 /* EtubuClusterHotspots.swift in Sources */ = {isa = PBXBuildFile; fileRef = B67E1884622C423EA48A68EA /* EtubuClusterHotspots.swift */; };
 		66BB146C9FEA2CA0268A9C18 /* EtubuBrandMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC7496DCE28D2B084DE2D7BB /* EtubuBrandMark.swift */; };
 		19E162CAFC694B98B7AE6496 /* EtubuAppSummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFD2F4DDF4A94910B67BE762 /* EtubuAppSummary.swift */; };
@@ -171,6 +172,7 @@ A1STATUSWIDGETBUILD001 /* EtubuStatusWidget.swift in Sources */ = {isa = PBXBuil
 		BA92EF270AF486BADBF59F74 /* EtubuDriveWarnings.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuDriveWarnings.swift; sourceTree = "<group>"; };
 		BC02A2736F949FCA6F5F5FF2 /* EtubuCameraCutout.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuCameraCutout.swift; sourceTree = "<group>"; };
 		0C2E36FD196C4AD9BAA20D2F /* EtubuWarnVoice.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuWarnVoice.swift; sourceTree = "<group>"; };
+		E9F5B02A3D8C4F1B0A42D7E3 /* EtubuNativeDriveAudio.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuNativeDriveAudio.swift; sourceTree = "<group>"; };
 		C443B8E3778DF080402CB890 /* EtubuGaugeClusterView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuGaugeClusterView.swift; sourceTree = "<group>"; };
 		C4B6FDAD8C8638F913C05149 /* ClusterTheme.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ClusterTheme.swift; sourceTree = "<group>"; };
 		C551AB7D23ABA4483D1A333F /* EtubuAppLanguage.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuAppLanguage.swift; sourceTree = "<group>"; };
@@ -259,6 +261,7 @@ A1STATUSWIDGETFILEREF01 /* EtubuStatusWidget.swift */ = {isa = PBXFileReference;
 				A2EVPLANREF00000000001 /* EtubuEvRoutePlanner.swift */,
 				BC02A2736F949FCA6F5F5FF2 /* EtubuCameraCutout.swift */,
 				0C2E36FD196C4AD9BAA20D2F /* EtubuWarnVoice.swift */,
+				E9F5B02A3D8C4F1B0A42D7E3 /* EtubuNativeDriveAudio.swift */,
 				FE46C929135374CA2FCB40FF /* EtubuClusterAudioBridge.swift */,
 				FF992E9F8FF9FD1410C7C698 /* EtubuClusterComponents.swift */,
 				626F3BFA180A5A546CC8690F /* EtubuClusterFonts.swift */,
@@ -587,6 +590,7 @@ A1STATUSWIDGETFILEREF01 /* EtubuStatusWidget.swift */ = {isa = PBXFileReference;
 				286BE84892964F86BC603F69 /* EtubuVehicleLaunchNotifier.swift in Sources */,
 				40DF6C464F21BA45B10E0277 /* EtubuCameraCutout.swift in Sources */,
 				A77FC1B2277D4CD98E8C4CC7 /* EtubuWarnVoice.swift in Sources */,
+				D8E4A91F2C7B4E0A9F31C6D2 /* EtubuNativeDriveAudio.swift in Sources */,
 				C52403B05251C8A6F439B2DD /* EtubuClusterAudioBridge.swift in Sources */,
 				F7B9E498C41B1DAD786CC501 /* EtubuClusterComponents.swift in Sources */,
 				685B9805251CFB3BBFD309C0 /* EtubuClusterFonts.swift in Sources */,

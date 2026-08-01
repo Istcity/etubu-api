@@ -395,9 +395,17 @@ final class EtubuTeslaBleSession: ObservableObject {
                     }
                     await MainActor.run {
                         self.telemetry.statusMessage = error.localizedDescription
-                        self.telemetry.connectionState = .failed
+                        self.telemetry.connectionState = .reconnecting
                     }
-                    // Poll öldü — otomatik reconnect yok (yalnızca açılış / kullanıcı).
+                    let vin = await MainActor.run { EtubuTeslaVinStore.vin }
+                    let auto = await MainActor.run { self.shouldAutoReconnect }
+                    if auto, let vin {
+                        await MainActor.run { self.scheduleReconnect(vin: vin, debounce: 1.5) }
+                    } else {
+                        await MainActor.run {
+                            self.telemetry.connectionState = .failed
+                        }
+                    }
                     return
                 }
                 // Moving: ~2 Hz drive; parked + extras ok: ~0.55 Hz
@@ -414,7 +422,10 @@ final class EtubuTeslaBleSession: ObservableObject {
                 }
                 try? await Task.sleep(nanoseconds: sleepNs)
             }
-            // Oturum düştüyse otomatik yeniden bağlanma yok.
+            let auto = await MainActor.run { self.shouldAutoReconnect }
+            if auto, let vin = EtubuTeslaVinStore.vin {
+                await MainActor.run { self.scheduleReconnect(vin: vin, debounce: 2.0) }
+            }
         }
     }
 
@@ -571,14 +582,15 @@ final class EtubuTeslaBleSession: ObservableObject {
                             if self.pairStep == .waitingForCard {
                                 self.telemetry.connectionState = .waitingForCard
                             } else if let until = self.ignoreDisconnectUntil, Date() < until {
-                                // Bağlantı sonrası kısa flicker — yok say, oturumu bozma
                                 break
                             } else if let last = self.telemetry.lastUpdateAt,
                                       Date().timeIntervalSince(last) < 4 {
-                                // Poll hâlâ veri alıyor — sahte disconnect
                                 break
+                            } else if self.shouldAutoReconnect, let vin = EtubuTeslaVinStore.vin {
+                                self.telemetry.connectionState = .reconnecting
+                                self.telemetry.statusMessage = "Yeniden bağlanıyor…"
+                                self.scheduleReconnect(vin: vin, debounce: 2.0)
                             } else {
-                                // Otomatik yeniden bağlanma yok — kullanıcı Ayarlar’dan bağlar.
                                 self.telemetry.connectionState = .idle
                                 self.telemetry.statusMessage = "Bağlantı kesildi"
                             }
@@ -591,10 +603,41 @@ final class EtubuTeslaBleSession: ObservableObject {
         }
     }
 
+    /// Sürüş / aktif rota varken kopunca yeniden dene; parkta sessiz kal.
+    private var shouldAutoReconnect: Bool {
+        guard !userStopped, !demoSuspended else { return false }
+        guard EtubuTeslaVinStore.vin != nil else { return false }
+        let t = telemetry
+        return t.kmh >= 3 || t.routeActive
+    }
+
     private func scheduleReconnect(vin: String, debounce: TimeInterval = 0) {
-        // Kullanıcı isteği: otomatik yeniden bağlanma yok (yalnızca uygulama açılışı).
-        _ = vin
-        _ = debounce
+        guard shouldAutoReconnect else { return }
+        guard EtubuTeslaVinStore.pairedConfirmed(for: vin) else { return }
+        if isSessionHealthy { return }
+        guard reconnectAttempt < 4 else {
+            telemetry.connectionState = .failed
+            telemetry.statusMessage = "Bağlantı kurulamadı"
+            return
+        }
+        reconnectTask?.cancel()
+        reconnectAttempt += 1
+        let delay = max(debounce, min(8.0, pow(2.0, Double(min(reconnectAttempt, 4) - 1))))
+        telemetry.connectionState = .reconnecting
+        telemetry.statusMessage = "Yeniden bağlanıyor (\(Int(delay))s)…"
+        reconnectTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            guard let self, !self.userStopped, !self.demoSuspended else { return }
+            guard self.shouldAutoReconnect else {
+                await MainActor.run {
+                    self.telemetry.connectionState = .idle
+                    self.telemetry.statusMessage = "Bağlantı kesildi"
+                }
+                return
+            }
+            if self.isSessionHealthy { return }
+            await self.connectNormal(vin: vin, allowPairFallback: false, maxRetries: 2)
+        }
     }
 
     /// SPM Charge/Climate mapper unset optional → 0; her iki temp de ~0 ise yok say.

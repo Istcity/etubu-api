@@ -90,6 +90,9 @@ enum EtubuClusterAudioBridge {
                 EtubuLiveActivityController.ensureAudioSession(mixWithOthers: true)
             }
             armPowerRegenHook()
+            // Native fallback — Cap soğukken de EV hum duyulsun.
+            EtubuNativeDriveAudio.shared.start(voice: resolved)
+            EtubuNativeDriveAudio.shared.setMuted(false)
             evalJS("""
             (function(){
               try {
@@ -108,15 +111,22 @@ enum EtubuClusterAudioBridge {
                 var same = window.AudioEngine._voiceKey === key;
                 if (running && same && window.AudioEngine.setMuted) {
                   window.AudioEngine.setMuted(false);
+                  window.__etubuCapAudioWarm = true;
                   return;
                 }
                 if (window.AudioEngine.start) window.AudioEngine.start(key);
                 if (window.AudioEngine.setMuted) window.AudioEngine.setMuted(false);
+                window.__etubuCapAudioWarm = true;
                 localStorage.setItem('etubu_voice', key);
               } catch (e) {}
             })();
             """)
+            // Cap ısındığında native'i kıs — çift ses olmasın.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                handoffNativeIfCapWarm()
+            }
         } else {
+            EtubuNativeDriveAudio.shared.setMuted(true)
             evalJS("""
             (function(){
               try {
@@ -133,6 +143,8 @@ enum EtubuClusterAudioBridge {
     static func startDrive(kmh: Int, gear: String, source: String, powerKw: Int? = nil) {
         let voice = storedVoice == "silent-mode" ? "calm-ev" : storedVoice
         setSoundEnabled(true, voice: voice)
+        EtubuNativeDriveAudio.shared.start(voice: voice)
+        EtubuNativeDriveAudio.shared.setSpeed(kmh: kmh, powerKw: powerKw)
         // Cap stub → index-app geçişi bitmeden AudioEngine yok; demoda agresif yeniden dene.
         ensureDriveEngine(voice: voice, retriesLeft: source == "demo" ? 18 : 6)
         pushDrive(kmh: kmh, powerKw: powerKw, source: source, forceImmediate: source == "demo")
@@ -203,7 +215,10 @@ enum EtubuClusterAudioBridge {
         })();
         """, timeout: 4) { result in
             let s = result ?? ""
-            if s == "ok" || s == "started" { return }
+            if s == "ok" || s == "started" {
+                handoffNativeIfCapWarm()
+                return
+            }
             guard retriesLeft > 0 else { return }
             engineRetryWork?.cancel()
             let work = DispatchWorkItem {
@@ -226,6 +241,13 @@ enum EtubuClusterAudioBridge {
             .replacingOccurrences(of: "\n", with: "")
         let voiceKey = (voice.isEmpty || voice == "silent-mode") ? "calm-ev" : voice
         let isDemo = src == "demo"
+
+        // Native always tracks speed — Cap cold olsa da motor hissi var.
+        if !EtubuNativeDriveAudio.shared.isRunning {
+            EtubuNativeDriveAudio.shared.start(voice: voiceKey)
+        }
+        EtubuNativeDriveAudio.shared.setSpeed(kmh: d.kmh, powerKw: d.powerKw)
+
         evalJS("""
         (function(){
           try {
@@ -260,11 +282,12 @@ enum EtubuClusterAudioBridge {
               }
             }
             window.__etubuPrevKmh = \(d.kmh);
+            if (AE._running) window.__etubuCapAudioWarm = true;
           } catch (e) {}
         })();
         """)
+        handoffNativeIfCapWarm()
         if isDemo {
-            // Cap henüz yüklenmediyse bir kez daha dene
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                 evalJS("""
                 (function(){
@@ -275,9 +298,28 @@ enum EtubuClusterAudioBridge {
                     if (AE.setMuted) AE.setMuted(false);
                     if (AE.snapSpeed) AE.snapSpeed(\(d.kmh));
                     if (AE.setSpeed) AE.setSpeed(\(d.kmh), { source: 'demo', powerKw: \(p), trend: 4 });
+                    if (AE._running) window.__etubuCapAudioWarm = true;
                   } catch (e) {}
                 })();
                 """)
+                handoffNativeIfCapWarm()
+            }
+        }
+    }
+
+    /// Cap AudioEngine ısındığında native loop'u kıs — çift motor sesi olmasın.
+    private static func handoffNativeIfCapWarm() {
+        evalJSReturning("""
+        (function(){
+          try {
+            var AE = window.AudioEngine;
+            if (AE && AE._running && !AE._muted) return 'warm';
+            return 'cold';
+          } catch (e) { return 'cold'; }
+        })();
+        """, timeout: 2) { result in
+            if result == "warm" {
+                EtubuNativeDriveAudio.shared.setMuted(true)
             }
         }
     }
@@ -442,6 +484,7 @@ enum EtubuClusterAudioBridge {
     }
 
     static func endDrive() {
+        EtubuNativeDriveAudio.shared.stop()
         // Cluster owns Live Activity — don't tear Island when Cap/web stops EV loop.
         evalJS("""
         (function(){
