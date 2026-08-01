@@ -2714,6 +2714,18 @@ const I18n = (() => {
       if (st.key === key && now - st.at < gap) return false;
       st.key = key;
       st.at = now;
+
+      // TR: ElevenLabs warn clips (WarnVoice) — TTS only as fallback.
+      try {
+        if (
+          window.WarnVoice &&
+          typeof window.WarnVoice.speak === "function" &&
+          window.WarnVoice.speak(msg, { ...opts, key })
+        ) {
+          return true;
+        }
+      } catch (_) {}
+
       try {
         const synth = window.speechSynthesis;
         if (!synth || typeof SpeechSynthesisUtterance === "undefined") return false;

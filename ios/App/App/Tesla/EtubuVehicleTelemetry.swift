@@ -125,12 +125,20 @@ final class EtubuVehicleTelemetry: ObservableObject {
             deviceLabel = "Tesla \(String(saved.suffix(6)))"
         }
         restoreLastChargeSnapshot()
+        scrubDemoChargeResidueIfNeeded()
     }
 
     private static let lastSocKey = "etubu.charge.lastSoc"
     private static let lastRangeKey = "etubu.charge.lastRangeKm"
     private static let lastLimitKey = "etubu.charge.lastLimit"
     private static let lastChargeAtKey = "etubu.charge.lastAt"
+    /// Yalnızca gerçek araç (`applyTeslaCharge`) — demo 42/180 cache’i kirletmesin.
+    private static let lastSourceKey = "etubu.charge.lastSource"
+    private static let vehicleSourceValue = "tesla"
+
+    /// Demo başlamadan önceki SoC/menzil (stop’ta geri yükle).
+    private var preDemoSoc: Int?
+    private var preDemoRangeKm: Int?
 
     /// Bağlı değilken UI’da gösterilen şarj (canlı veya son bilinen).
     var displaySocPercent: Int? { socPercent }
@@ -141,28 +149,113 @@ final class EtubuVehicleTelemetry: ObservableObject {
 
     private func restoreLastChargeSnapshot() {
         let ud = UserDefaults.standard
+        // Eski demo kalıntısı (42/180) veya sourcesuz cache — gösterme / temizle.
+        guard ud.string(forKey: Self.lastSourceKey) == Self.vehicleSourceValue else {
+            clearPersistedChargeIfDemoPollution()
+            return
+        }
         if let soc = ud.object(forKey: Self.lastSocKey) as? Int {
             socPercent = min(100, max(0, soc))
         }
-        if let range = ud.object(forKey: Self.lastRangeKey) as? Int {
-            rangeKm = max(0, range)
+        if let range = ud.object(forKey: Self.lastRangeKey) as? Int, range > 0 {
+            rangeKm = range
         }
         if let lim = ud.object(forKey: Self.lastLimitKey) as? Int {
             chargeLimitPercent = min(100, max(50, lim))
         }
     }
 
+    /// Demo bir kez 42/180 yazdıysa UserDefaults’tan sil; gerçek araç gelene kadar “—” kalsın.
+    private func clearPersistedChargeIfDemoPollution() {
+        let ud = UserDefaults.standard
+        let soc = ud.object(forKey: Self.lastSocKey) as? Int
+        let range = ud.object(forKey: Self.lastRangeKey) as? Int
+        if soc == 42, range == 180 {
+            ud.removeObject(forKey: Self.lastSocKey)
+            ud.removeObject(forKey: Self.lastRangeKey)
+            ud.removeObject(forKey: Self.lastLimitKey)
+            ud.removeObject(forKey: Self.lastChargeAtKey)
+            ud.removeObject(forKey: Self.lastSourceKey)
+            if socPercent == 42, rangeKm == 180 {
+                socPercent = nil
+                rangeKm = nil
+            }
+        } else if ud.string(forKey: Self.lastSourceKey) != Self.vehicleSourceValue {
+            // Kaynak belirsiz eski cache — UI’ya basma; anahtarları sil.
+            ud.removeObject(forKey: Self.lastSocKey)
+            ud.removeObject(forKey: Self.lastRangeKey)
+            ud.removeObject(forKey: Self.lastSourceKey)
+        }
+    }
+
     private func persistLastChargeSnapshot() {
         let ud = UserDefaults.standard
         if let soc = socPercent { ud.set(soc, forKey: Self.lastSocKey) }
-        if let range = rangeKm { ud.set(range, forKey: Self.lastRangeKey) }
+        if let range = rangeKm, range > 0 { ud.set(range, forKey: Self.lastRangeKey) }
         if let lim = chargeLimitPercent { ud.set(lim, forKey: Self.lastLimitKey) }
         ud.set(Date().timeIntervalSince1970, forKey: Self.lastChargeAtKey)
+        ud.set(Self.vehicleSourceValue, forKey: Self.lastSourceKey)
     }
 
-    /// Demo / harici yollar — SoC cache’i UI için sakla.
+    /// Demo SoC’yi araç cache’ine yazma — yalnızca bellek içi UI.
     func persistChargeCacheForUI() {
-        persistLastChargeSnapshot()
+        // no-op: demo 42/180 gerçek son şarjı ezmesin
+    }
+
+    /// Demo başlarken gerçek SoC/menzili sakla.
+    func beginDemoChargeOverlay(soc: Int = 42, rangeKm: Int = 180) {
+        preDemoSoc = socPercent
+        preDemoRangeKm = self.rangeKm
+        socPercent = soc
+        self.rangeKm = rangeKm
+    }
+
+    /// Demo bitince araç cache’ine / önceki değerlere dön.
+    func endDemoChargeOverlay() {
+        if let pre = preDemoSoc {
+            socPercent = pre
+        } else {
+            // Bellekte yoksa yalnızca tesla kaynaklı UserDefaults
+            let ud = UserDefaults.standard
+            if ud.string(forKey: Self.lastSourceKey) == Self.vehicleSourceValue,
+               let soc = ud.object(forKey: Self.lastSocKey) as? Int {
+                socPercent = min(100, max(0, soc))
+            } else if socPercent == 42 {
+                socPercent = nil
+            }
+        }
+        if let pre = preDemoRangeKm {
+            rangeKm = pre
+        } else {
+            let ud = UserDefaults.standard
+            if ud.string(forKey: Self.lastSourceKey) == Self.vehicleSourceValue,
+               let range = ud.object(forKey: Self.lastRangeKey) as? Int, range > 0 {
+                rangeKm = range
+            } else if rangeKm == 180 {
+                rangeKm = nil
+            }
+        }
+        preDemoSoc = nil
+        preDemoRangeKm = nil
+        // Hâlâ demo kalıntısıysa temizle
+        if socPercent == 42, rangeKm == 180,
+           UserDefaults.standard.string(forKey: Self.lastSourceKey) != Self.vehicleSourceValue {
+            socPercent = nil
+            rangeKm = nil
+        }
+    }
+
+    /// Demo 42/180 kalıntısını bellek + diskten temizle (araç verisi yoksa “—”).
+    func scrubDemoChargeResidueIfNeeded() {
+        let ud = UserDefaults.standard
+        let fromVehicle = ud.string(forKey: Self.lastSourceKey) == Self.vehicleSourceValue
+        if !fromVehicle, socPercent == 42, rangeKm == 180 {
+            socPercent = nil
+            rangeKm = nil
+            ud.removeObject(forKey: Self.lastSocKey)
+            ud.removeObject(forKey: Self.lastRangeKey)
+            ud.removeObject(forKey: Self.lastSourceKey)
+        }
     }
 
     var isLiveTesla: Bool { source == .tesla && connectionState == .connected }
@@ -204,12 +297,32 @@ final class EtubuVehicleTelemetry: ObservableObject {
         navEtaMinutes: Double?
     ) {
         guard !EtubuDemoDrive.isActive else { return }
-        self.kmh = max(0, kmh)
-        self.gear = gear
-        self.powerKw = powerKw
-        if let powerKw {
+        // Park / creep — kadran ve güç halkası hareketsizken kilitli kalsın.
+        let gearU = gear.uppercased()
+        let parked = gearU.hasPrefix("P") || gearU.hasPrefix("N")
+        let gatedKmh: Int = {
+            if parked { return 0 }
+            return kmh < 5 ? 0 : max(0, kmh)
+        }()
+        let gatedPower: Int? = {
+            guard let powerKw else { return nil }
+            // Dururken HVAC vb. kW gürültüsü halkayı oynatmasın.
+            if gatedKmh == 0 { return 0 }
+            if abs(powerKw) < 12 { return 0 }
+            return powerKw
+        }()
+
+        let kmhChanged = self.kmh != gatedKmh
+        let gearChanged = self.gear != gear
+        let powerChanged = self.powerKw != gatedPower
+        if kmhChanged { self.kmh = gatedKmh }
+        if gearChanged { self.gear = gear }
+        if powerChanged { self.powerKw = gatedPower }
+
+        // Sparkline yalnızca hareket varken — parkta history titreşimi yok.
+        if gatedKmh > 0, let gatedPower {
             var hist = powerHistory
-            hist.append(powerKw)
+            hist.append(gatedPower)
             if hist.count > 40 { hist.removeFirst(hist.count - 40) }
             powerHistory = hist
         }
@@ -220,14 +333,16 @@ final class EtubuVehicleTelemetry: ObservableObject {
         recomputeEnergyAtArrival()
         self.source = .tesla
         lastUpdateAt = Date()
-        publishWidgetSnapshot()
+        if kmhChanged || powerChanged || gearChanged {
+            publishWidgetSnapshot()
+        }
         let tripRoute = routeTo.isEmpty ? (navDestination ?? "") : routeTo
         Task { @MainActor in
             EtubuTripHistoryStore.shared.noteTelemetry(
-                kmh: kmh,
+                kmh: gatedKmh,
                 gear: gear,
                 odo: odometerKm,
-                powerKw: powerKw,
+                powerKw: gatedPower,
                 routeTo: tripRoute
             )
         }
@@ -245,8 +360,8 @@ final class EtubuVehicleTelemetry: ObservableObject {
         portOpen: Bool?
     ) {
         guard !EtubuDemoDrive.isActive else { return }
-        if let soc { socPercent = soc }
-        if let rangeKm { self.rangeKm = rangeKm }
+        if let soc { socPercent = min(100, max(0, soc)) }
+        if let rangeKm, rangeKm > 0 { self.rangeKm = rangeKm }
         self.chargeKw = chargeKw
         isCharging = charging
         if let limitPercent { chargeLimitPercent = limitPercent }
@@ -319,8 +434,8 @@ final class EtubuVehicleTelemetry: ObservableObject {
         if source == .tesla && connectionState == .connected && age < 1.8 { return }
         if source == .obd && age < 0.9 { return }
         let next = max(0, kmh)
-        // < 4 km/h → park / GPS noise — sıfırla
-        if next < 4 {
+        // < 5 km/h → park / GPS noise — sıfırla
+        if next < 5 {
             if source == .gps || source == .none {
                 if self.kmh != 0 { self.kmh = 0 }
                 if source == .gps {
@@ -350,7 +465,8 @@ final class EtubuVehicleTelemetry: ObservableObject {
     func applyObdFallback(kmh: Int, rpm: Int, coolant: Int?, voltage: Double?) {
         guard !EtubuDemoDrive.isActive else { return }
         guard !isLiveTesla else { return }
-        self.kmh = max(0, kmh)
+        let gated = kmh < 5 ? 0 : max(0, kmh)
+        if self.kmh != gated { self.kmh = gated }
         self.rpm = max(0, rpm)
         self.coolantC = coolant
         self.voltageV = voltage

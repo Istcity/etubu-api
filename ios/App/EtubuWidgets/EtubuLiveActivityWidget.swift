@@ -70,7 +70,7 @@ struct EtubuLiveActivityWidget: Widget {
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                 }
-                tpmsRow(context.state)
+                tpmsRow(context.state, compact: false)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -106,39 +106,36 @@ struct EtubuLiveActivityWidget: Widget {
                     }
                 }
                 DynamicIslandExpandedRegion(.center) {
-                    if !context.state.routeSummaryLine.isEmpty {
-                        Text(context.state.routeSummaryLine)
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(.cyan)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.65)
-                    }
-                }
-                DynamicIslandExpandedRegion(.bottom) {
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(spacing: 2) {
+                        if !context.state.routeSummaryLine.isEmpty {
+                            Text(context.state.routeSummaryLine)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(.cyan)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.65)
+                        }
                         if context.state.routeActive, context.state.hasRouteBrief {
                             routeBriefRow(context.state)
                         }
-                        if context.state.routeActive, context.state.remainingPoints > 0 {
-                            Text("Kalan \(context.state.remainingPoints) kritik nokta")
-                                .font(.system(size: 9, weight: .semibold))
-                                .foregroundStyle(.secondary)
-                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                DynamicIslandExpandedRegion(.bottom) {
+                    // Alt bant kısa — uyarı + lastik tek kompakt blokta kalsın (taşma yok).
+                    VStack(alignment: .leading, spacing: 3) {
                         if context.state.routeActive, !context.state.primaryWarn.isEmpty {
                             Text(context.state.primaryWarn)
                                 .font(.system(size: 10, weight: .semibold))
                                 .foregroundStyle(.orange)
                                 .lineLimit(1)
+                                .minimumScaleFactor(0.7)
                         }
-                        if context.state.routeActive, !context.state.aheadWarn2.isEmpty {
-                            Text(context.state.aheadWarn2)
-                                .font(.system(size: 9, weight: .medium))
-                                .foregroundStyle(.orange.opacity(0.75))
-                                .lineLimit(1)
-                        }
-                        tpmsRow(context.state)
+                        tpmsRow(context.state, compact: true)
                     }
-                    .padding(.top, 2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 4)
+                    .padding(.top, 1)
+                    .padding(.bottom, 2)
                 }
             } compactLeading: {
                 Image("EtubuLogo")
@@ -230,26 +227,50 @@ struct EtubuLiveActivityWidget: Widget {
     }
 
     @ViewBuilder
-    private func tpmsRow(_ state: EtubuDriveAttributes.ContentState) -> some View {
-        HStack(spacing: 6) {
-            tpmsCell("FL", state.tpmsFL)
-            tpmsCell("FR", state.tpmsFR)
-            Spacer(minLength: 2)
-            tpmsCell("RL", state.tpmsRL)
-            tpmsCell("RR", state.tpmsRR)
+    private func tpmsRow(_ state: EtubuDriveAttributes.ContentState, compact: Bool) -> some View {
+        // Compact: tek satır FL 32 FR 32 · RL 33 RR 33 — DI alt bandına sığar.
+        HStack(spacing: compact ? 5 : 8) {
+            tpmsCell("FL", state.tpmsFL, compact: compact)
+            tpmsCell("FR", state.tpmsFR, compact: compact)
+            if compact {
+                Text("·")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.25))
+            } else {
+                Spacer(minLength: 4)
+            }
+            tpmsCell("RL", state.tpmsRL, compact: compact)
+            tpmsCell("RR", state.tpmsRR, compact: compact)
+            if compact { Spacer(minLength: 0) }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func tpmsCell(_ label: String, _ psi: Int?) -> some View {
-        VStack(spacing: 1) {
-            Text(label)
-                .font(.system(size: 8, weight: .semibold))
-                .foregroundStyle(.secondary)
-            Text(psi.map { "\($0)" } ?? "—")
-                .font(.system(size: 11, weight: .bold).monospacedDigit())
-                .minimumScaleFactor(0.7)
-                .lineLimit(1)
+    private func tpmsCell(_ label: String, _ psi: Int?, compact: Bool) -> some View {
+        Group {
+            if compact {
+                HStack(spacing: 2) {
+                    Text(label)
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(.secondary)
+                    Text(psi.map { "\($0)" } ?? "—")
+                        .font(.system(size: 11, weight: .bold).monospacedDigit())
+                        .minimumScaleFactor(0.65)
+                        .lineLimit(1)
+                }
+                .fixedSize(horizontal: true, vertical: false)
+            } else {
+                VStack(spacing: 1) {
+                    Text(label)
+                        .font(.system(size: 8, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                    Text(psi.map { "\($0)" } ?? "—")
+                        .font(.system(size: 11, weight: .bold).monospacedDigit())
+                        .minimumScaleFactor(0.7)
+                        .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity)
+            }
         }
-        .frame(maxWidth: .infinity)
     }
 }

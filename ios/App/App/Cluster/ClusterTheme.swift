@@ -4,6 +4,8 @@ import SwiftUI
 enum ClusterTheme: String, CaseIterable, Identifiable {
     case tesla, aurora, plasma, redline, cyberLime, electricIce, solarFlare
     case neon, violetStorm, deepOcean, midnight, tunnel, warp
+    /// Model S Plaid 0–100 launch screen — yellow → red heat with acceleration.
+    case plaidBoost
 
     var id: String { rawValue }
 
@@ -27,6 +29,7 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
         case .midnight: return 210
         case .tunnel: return 165
         case .warp: return 255
+        case .plaidBoost: return 28
         }
     }
 
@@ -35,6 +38,7 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
     var accent: Color {
         switch self {
         case .tesla: return Color(red: 0.92, green: 0.22, blue: 0.22) // Tesla red
+        case .plaidBoost: return Color(red: 1.0, green: 0.42, blue: 0.05)
         default: return Color(hue: h, saturation: 0.85, brightness: 0.95)
         }
     }
@@ -42,6 +46,7 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
     var accentSoft: Color {
         switch self {
         case .tesla: return Color(white: 0.72)
+        case .plaidBoost: return Color(red: 1.0, green: 0.85, blue: 0.25)
         default: return Color(hue: h, saturation: 0.55, brightness: 0.7)
         }
     }
@@ -50,6 +55,7 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
     var canvas: Color {
         switch self {
         case .tesla: return Color(red: 0.04, green: 0.04, blue: 0.045)
+        case .plaidBoost: return Color(red: 0.06, green: 0.03, blue: 0.01)
         default: return Color(hue: h, saturation: 0.55, brightness: 0.07)
         }
     }
@@ -57,6 +63,7 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
     var canvasHigh: Color {
         switch self {
         case .tesla: return Color(red: 0.10, green: 0.10, blue: 0.11)
+        case .plaidBoost: return Color(red: 0.18, green: 0.08, blue: 0.02)
         default: return Color(hue: h, saturation: 0.5, brightness: 0.14)
         }
     }
@@ -64,6 +71,7 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
     var surface: Color {
         switch self {
         case .tesla: return Color.white.opacity(0.06)
+        case .plaidBoost: return Color(red: 1.0, green: 0.35, blue: 0.05).opacity(0.12)
         default: return Color(hue: h, saturation: 0.35, brightness: 0.16).opacity(0.72)
         }
     }
@@ -73,6 +81,7 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
     var secondaryText: Color {
         switch self {
         case .tesla: return Color.white.opacity(0.70)
+        case .plaidBoost: return Color(red: 1.0, green: 0.9, blue: 0.7).opacity(0.75)
         default: return Color(hue: h, saturation: 0.12, brightness: 0.78).opacity(0.72)
         }
     }
@@ -80,6 +89,7 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
     var mutedText: Color {
         switch self {
         case .tesla: return Color.white.opacity(0.42)
+        case .plaidBoost: return Color(red: 1.0, green: 0.75, blue: 0.4).opacity(0.45)
         default: return Color(hue: h, saturation: 0.1, brightness: 0.7).opacity(0.45)
         }
     }
@@ -87,6 +97,7 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
     var stroke: Color {
         switch self {
         case .tesla: return Color.white.opacity(0.18)
+        case .plaidBoost: return Color(red: 1.0, green: 0.55, blue: 0.1).opacity(0.35)
         default: return accent.opacity(0.28)
         }
     }
@@ -94,6 +105,7 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
     var glow: Color {
         switch self {
         case .tesla: return accent.opacity(0.28)
+        case .plaidBoost: return Color.orange.opacity(0.45)
         default: return accent.opacity(0.35)
         }
     }
@@ -106,6 +118,13 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
                 Color(red: 0.12, green: 0.12, blue: 0.13),
                 Color(red: 0.05, green: 0.05, blue: 0.055),
                 Color(red: 0.02, green: 0.02, blue: 0.025),
+                Color.black,
+            ]
+        case .plaidBoost:
+            return [
+                Color(red: 0.22, green: 0.10, blue: 0.02),
+                Color(red: 0.08, green: 0.03, blue: 0.01),
+                Color(red: 0.03, green: 0.01, blue: 0.0),
                 Color.black,
             ]
         default:
@@ -123,6 +142,12 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
         switch self {
         case .tesla:
             return [Color.white.opacity(0.12), accent.opacity(0.35)]
+        case .plaidBoost:
+            return [
+                Color(red: 1.0, green: 0.9, blue: 0.2),
+                Color(red: 1.0, green: 0.35, blue: 0.05),
+                Color(red: 0.85, green: 0.05, blue: 0.05),
+            ]
         case .solarFlare, .redline, .neon:
             return [
                 Color(hue: h, saturation: 0.85, brightness: 0.35),
@@ -143,7 +168,6 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
 
     var background: [Color] { canvasGradient }
 
-    /// Letter-spacing for gauge labels — slightly tighter on “hot” themes.
     /// Font family for speed gauge / numbers — PostScript names that resolve on iOS.
     var gaugeFont: String {
         switch self {
@@ -153,7 +177,7 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
         case .redline: return "DINCondensed-Bold"
         case .cyberLime: return "CourierNewPS-BoldMT"
         case .electricIce: return "AvenirNext-Bold"
-        case .solarFlare: return "DINAlternate-Bold"
+        case .solarFlare, .plaidBoost: return "DINAlternate-Bold"
         case .neon: return "AvenirNextCondensed-Bold"
         case .violetStorm: return "Futura-Bold"
         case .deepOcean: return "GillSans-Bold"
@@ -172,7 +196,7 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
         case .redline: return "AvenirNext-Medium"
         case .cyberLime: return "CourierNewPSMT"
         case .electricIce: return "AvenirNext-Regular"
-        case .solarFlare: return "AvenirNext-DemiBold"
+        case .solarFlare, .plaidBoost: return "AvenirNext-DemiBold"
         case .neon: return "AvenirNextCondensed-Medium"
         case .violetStorm: return "Futura-Medium"
         case .deepOcean: return "GillSans"
@@ -187,7 +211,7 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
         switch self {
         case .tesla, .aurora, .electricIce, .deepOcean: return .rounded
         case .plasma, .warp, .cyberLime, .tunnel: return .monospaced
-        case .redline, .solarFlare, .neon: return .default
+        case .redline, .solarFlare, .neon, .plaidBoost: return .default
         case .violetStorm, .midnight: return .serif
         }
     }
@@ -196,7 +220,7 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
         switch self {
         case .tesla, .aurora, .midnight, .electricIce: return .default
         case .plasma, .warp, .cyberLime, .tunnel: return .monospaced
-        case .redline, .solarFlare, .neon: return .rounded
+        case .redline, .solarFlare, .neon, .plaidBoost: return .rounded
         case .violetStorm, .deepOcean: return .serif
         }
     }
@@ -204,7 +228,7 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
     var gaugeWeight: Font.Weight {
         switch self {
         case .tesla: return .semibold
-        case .redline, .neon, .solarFlare: return .black
+        case .redline, .neon, .solarFlare, .plaidBoost: return .black
         case .cyberLime, .tunnel, .warp: return .bold
         case .plasma, .violetStorm: return .heavy
         default: return .bold
@@ -214,7 +238,7 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
     var gaugeTracking: CGFloat {
         switch self {
         case .tesla: return 0.15
-        case .redline, .solarFlare: return 0.4
+        case .redline, .solarFlare, .plaidBoost: return 0.4
         case .neon: return 0.2
         case .cyberLime, .tunnel: return 1.6
         case .plasma, .violetStorm, .warp: return 0.9
@@ -227,8 +251,8 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
     var gaugeScale: CGFloat {
         switch self {
         case .tesla: return 1.06
-        case .neon, .redline: return 1.08          // condensed tall
-        case .cyberLime, .tunnel: return 0.94      // mono compact
+        case .neon, .redline, .plaidBoost: return 1.08
+        case .cyberLime, .tunnel: return 0.94
         case .plasma, .warp: return 0.97
         case .solarFlare: return 1.05
         default: return 1.0
@@ -238,10 +262,11 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
     /// Landscape dial ring personality.
     enum DialRingStyle: Equatable {
         case thin
-        case neonSweep      // progressing neon bar
+        case neonSweep
         case dualGlow
         case dashed
         case plasmaRibbon
+        case plaidHeat
     }
 
     var dialRingStyle: DialRingStyle {
@@ -251,6 +276,7 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
         case .redline, .solarFlare: return .dualGlow
         case .plasma, .violetStorm: return .plasmaRibbon
         case .tunnel: return .dashed
+        case .plaidBoost: return .plaidHeat
         case .aurora, .electricIce, .deepOcean, .midnight: return .thin
         }
     }
@@ -259,7 +285,7 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
     func ringLineWidth(for dialSize: CGFloat) -> CGFloat {
         let base = max(2.4, dialSize * 0.020)
         switch dialRingStyle {
-        case .neonSweep, .plasmaRibbon: return base * 1.45
+        case .neonSweep, .plasmaRibbon, .plaidHeat: return base * 1.45
         case .dualGlow: return base * 1.55
         case .dashed: return base * 1.25
         case .thin: return base * 1.15
@@ -277,7 +303,7 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
         switch self {
         case .cyberLime: return "cyber-lime"
         case .electricIce: return "electric-ice"
-        case .solarFlare: return "solar-flare"
+        case .solarFlare, .plaidBoost: return "solar-flare"
         case .violetStorm: return "violet-storm"
         case .deepOcean: return "deep-ocean"
         case .midnight: return "aurora"
@@ -313,6 +339,19 @@ extension EnvironmentValues {
 struct ClusterThemeBackdrop: View {
     let theme: ClusterTheme
     var landscape: Bool = false
+    @ObservedObject private var telemetry = EtubuVehicleTelemetry.shared
+
+    /// 0…1 — Model S Plaid launch heat (power + speed toward 100).
+    private var plaidIntensity: CGFloat {
+        guard theme == .plaidBoost else { return 0 }
+        let kmh = CGFloat(max(0, telemetry.kmh))
+        let power = CGFloat(max(0, telemetry.powerKw ?? 0))
+        let speedHeat = min(1, kmh / 100)
+        let powerHeat = min(1, power / 220)
+        // Parked: stay dark. Moving / torque: yellow→red wash.
+        if kmh < 3, power < 20 { return 0 }
+        return min(1, max(speedHeat * 0.55, powerHeat * 0.9, speedHeat * powerHeat * 1.15))
+    }
 
     var body: some View {
         ZStack {
@@ -322,32 +361,79 @@ struct ClusterThemeBackdrop: View {
                 endPoint: .bottomTrailing
             )
 
-            RadialGradient(
-                colors: [theme.accent.opacity(0.32), .clear],
-                center: landscape ? .trailing : .topTrailing,
-                startRadius: 20,
-                endRadius: landscape ? 520 : 420
-            )
+            if theme == .plaidBoost {
+                plaidBoostWash
+            } else {
+                RadialGradient(
+                    colors: [theme.accent.opacity(0.32), .clear],
+                    center: landscape ? .trailing : .topTrailing,
+                    startRadius: 20,
+                    endRadius: landscape ? 520 : 420
+                )
 
+                RadialGradient(
+                    colors: [theme.washColors.last?.opacity(0.55) ?? theme.glow, .clear],
+                    center: landscape ? .leading : .bottom,
+                    startRadius: 10,
+                    endRadius: landscape ? 480 : 360
+                )
+
+                LinearGradient(
+                    colors: [
+                        theme.accent.opacity(0.12),
+                        .clear,
+                        theme.accentSoft.opacity(0.1),
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .blendMode(.plusLighter)
+            }
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+        .animation(.easeOut(duration: 0.18), value: plaidIntensity)
+    }
+
+    /// Tesla Model S Plaid 0–100: full-bleed heat that climbs yellow → orange → red.
+    private var plaidBoostWash: some View {
+        let i = plaidIntensity
+        return ZStack {
             RadialGradient(
-                colors: [theme.washColors.last?.opacity(0.55) ?? theme.glow, .clear],
-                center: landscape ? .leading : .bottom,
-                startRadius: 10,
-                endRadius: landscape ? 480 : 360
+                colors: [
+                    Color(red: 1.0, green: 0.55, blue: 0.08).opacity(0.12 + Double(i) * 0.28),
+                    .clear,
+                ],
+                center: .center,
+                startRadius: 40,
+                endRadius: landscape ? 580 : 480
             )
 
             LinearGradient(
                 colors: [
-                    theme.accent.opacity(0.12),
-                    .clear,
-                    theme.accentSoft.opacity(0.1),
+                    Color(red: 1.0, green: 0.92, blue: 0.22).opacity(0.08 + Double(i) * 0.55),
+                    Color(red: 1.0, green: 0.45, blue: 0.05).opacity(0.06 + Double(i) * 0.48),
+                    Color(red: 0.9, green: 0.05, blue: 0.05).opacity(0.04 + Double(i) * 0.62),
+                    Color.black.opacity(0.2),
                 ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
+                startPoint: landscape ? .leading : .bottom,
+                endPoint: landscape ? .trailing : .top
             )
             .blendMode(.plusLighter)
+            .opacity(0.35 + Double(i) * 0.65)
+
+            RadialGradient(
+                colors: [
+                    Color(red: 1.0, green: 0.95, blue: 0.35).opacity(Double(i) * 0.45),
+                    Color(red: 1.0, green: 0.2, blue: 0.05).opacity(Double(i) * 0.35),
+                    .clear,
+                ],
+                center: .center,
+                startRadius: 10,
+                endRadius: landscape ? 320 : 280
+            )
+            .blendMode(.screen)
+            .opacity(Double(i))
         }
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
     }
 }

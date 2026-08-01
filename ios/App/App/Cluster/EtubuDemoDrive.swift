@@ -98,10 +98,7 @@ final class EtubuDemoDrive: ObservableObject {
         t.navDestination = "İzmit, Kocaeli"
         t.outsideC = 18
         t.insideC = 21
-        if t.rangeKm == nil || (t.rangeKm ?? 0) >= 300 { t.rangeKm = 180 }
-        if t.socPercent == nil || (t.socPercent ?? 0) >= 70 { t.socPercent = 42 }
-        t.rangeKm = 180
-        t.socPercent = 42
+        t.beginDemoChargeOverlay(soc: 42, rangeKm: 180)
         t.powerHistory = []
         // İlk karede hemen hareket — UI / Maestro “D” + hız görsün.
         t.kmh = 28
@@ -119,6 +116,8 @@ final class EtubuDemoDrive: ObservableObject {
         EtubuDriveWarnings.shared.routeCoords = route
         injectHazardsAlongRoute()
         EtubuRouteBridge.primeWarningAudio()
+        // Cap www (AudioEngine) stub’dan çıkmış olsun — demoda EV ses şart.
+        EtubuCapBridgeViewController.armWebContent()
         // EV ses + uyarı beep context — silent-mode’dan çık.
         UserDefaults.standard.set("calm-ev", forKey: "etubu.cluster.voice")
         EtubuClusterAudioBridge.startDrive(kmh: 28, gear: "D", source: "demo", powerKw: 42)
@@ -169,6 +168,7 @@ final class EtubuDemoDrive: ObservableObject {
         t.kmh = 0
         t.gear = "P"
         t.powerKw = 0
+        t.endDemoChargeOverlay()
         displayKmh = 0
         displayGear = "P"
         displayPowerKw = 0
@@ -252,10 +252,22 @@ final class EtubuDemoDrive: ObservableObject {
 
         let t = EtubuVehicleTelemetry.shared
         let prev = Double(t.kmh)
-        let accelCap = 18.0 // km/h per tick (hızlandırılmış)
-        let delta = max(-22, min(accelCap, targetKmh - prev))
+        let accelCap = 14.0 // km/h per tick — daha yumuşak tırmanış
+        let delta = max(-18, min(accelCap, targetKmh - prev))
         let kmh = Int(max(0, (prev + delta).rounded()))
-        let power = Int(((Double(kmh) - prev) / tickSec * 2.2).rounded())
+        // Motor sesi için güç: hızlanma / cruise / regen net olsun
+        let accel = (Double(kmh) - prev) / max(0.05, tickSec)
+        let power: Int = {
+            if kmh < 3 { return 0 }
+            if accel > 0.8 {
+                return Int(min(260, 48 + accel * 14 + Double(kmh) * 0.4).rounded())
+            }
+            if accel < -1.2 {
+                return Int(max(-140, accel * 9 - Double(kmh) * 0.15).rounded())
+            }
+            // Cruise — motora hafif yük
+            return Int(max(12, 18 + Double(kmh) * 0.28).rounded())
+        }()
         let gear: String = kmh < 3 ? (progress > 0.98 ? "P" : "D") : "D"
 
         // Mesafeyi hız × zaman × scale ile ilerle
@@ -280,13 +292,12 @@ final class EtubuDemoDrive: ObservableObject {
         if hist.count > 40 { hist.removeFirst(hist.count - 40) }
         t.powerHistory = hist
         t.rpm = max(0, kmh * 28)
-        // Demo tick: Tesla poll SOC/rota’yı ezmesin.
+        // Demo tick: sabit demo SoC (araç cache’ine yazılmaz).
         t.socPercent = 42
         t.rangeKm = 180
         t.routeActive = true
         if t.routeTo.isEmpty { t.routeTo = "İzmit / Kocaeli" }
         if t.navDestination.isEmpty { t.navDestination = "İzmit, Kocaeli" }
-        t.persistChargeCacheForUI()
         t.latitude = coord.latitude
         t.longitude = coord.longitude
         t.headingDeg = heading

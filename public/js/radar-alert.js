@@ -313,6 +313,9 @@ const RadarAlert = (() => {
       if (ctx.state === "suspended") {
         ctx.resume().catch(() => {});
       }
+      try {
+        if (window.WarnVoice && window.WarnVoice.prime) window.WarnVoice.prime();
+      } catch (_) {}
       return true;
     } catch (_) {
       return false;

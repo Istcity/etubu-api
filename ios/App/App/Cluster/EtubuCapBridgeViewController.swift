@@ -10,8 +10,10 @@ final class EtubuCapBridgeViewController: CAPBridgeViewController {
     private var armRetryWork: DispatchWorkItem?
 
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
-        .allButUpsideDown
+        .all
     }
+
+    override var shouldAutorotate: Bool { true }
 
     override func viewDidLoad() {
         super.viewDidLoad()

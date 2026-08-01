@@ -843,21 +843,22 @@ class EtubuAudioEngine {
     this._throttleLoad = Math.max(fromLagUp, fromTrendUp);
     this._brakeLoad = Math.max(fromLagDown, fromTrendDown);
 
-    // Tesla / OBD power — negatif = regen, pozitif = gaz
+    // Tesla / OBD power — negatif = regen, pozitif = gaz (motor taklidi için kritik)
     const powerKw = Number(meta?.powerKw);
     if (Number.isFinite(powerKw)) {
       if (powerKw < -1) {
-        const regen = Math.min(1, Math.abs(powerKw) / 100);
+        const regen = Math.min(1, Math.abs(powerKw) / 90);
         this._brakeLoad = Math.max(this._brakeLoad, regen);
         this._throttleLoad = Math.min(this._throttleLoad, Math.max(0, 1 - regen));
-      } else if (powerKw > 4) {
-        this._throttleLoad = Math.max(this._throttleLoad, Math.min(1, powerKw / 180));
+      } else if (powerKw > 2) {
+        this._throttleLoad = Math.max(this._throttleLoad, Math.min(1, powerKw / 140));
       }
     }
 
-    // Her iki yönde de hedefi hemen yakala
+    // Her iki yönde de hedefi hemen yakala — motor sesi hızlanmaya yapışsın
     if (Math.abs(lag) > 0.08) {
-      this._smoothKmh += lag * 0.92;
+      const catchUp = meta?.source === "demo" || Math.abs(this._extTrend) > 2 ? 0.96 : 0.92;
+      this._smoothKmh += lag * catchUp;
     } else {
       this._smoothKmh = this._targetKmh;
     }

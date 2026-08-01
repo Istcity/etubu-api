@@ -39,6 +39,7 @@ enum EtubuVFXType: String, CaseIterable, Identifiable, Codable {
         case .solarFlare: return .havaFisek
         case .aurora: return .yildizKaymasi
         case .plasma: return .yanardag
+        case .plaidBoost: return .ates
         }
     }
 

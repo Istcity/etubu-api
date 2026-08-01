@@ -35,10 +35,22 @@ final class EtubuTeslaBleSession: ObservableObject {
     private var demoSuspended = false
     /// Pair / connect spam kilidi.
     private var pairInFlight = false
+    /// Uygulama açılışında bir kez otomatik bağlan; sonra yalnızca kullanıcı / demo dönüşü.
+    private var didAutoBootstrapThisProcess = false
+    private var connectInFlight = false
 
     private init() {}
 
-    func bootstrapIfPossible() {
+    enum BootstrapReason {
+        /// Soğuk açılış / onboarding sonrası — process başına bir kez.
+        case autoLaunch
+        /// Ayarlar / Pair sonrası kullanıcı isteği.
+        case userRequested
+        /// Demo bitince oturumu geri aç.
+        case afterDemo
+    }
+
+    func bootstrapIfPossible(reason: BootstrapReason = .autoLaunch) {
         guard !demoSuspended else { return }
         guard let vin = EtubuTeslaVinStore.vin else {
             telemetry.connectionState = .needsVIN
@@ -53,8 +65,23 @@ final class EtubuTeslaBleSession: ObservableObject {
             pairStep = .none
             return
         }
+        if reason == .autoLaunch {
+            guard !didAutoBootstrapThisProcess else { return }
+            didAutoBootstrapThisProcess = true
+        }
+        // Zaten sağlıklı oturum varsa koparıp yeniden bağlanma.
+        if isSessionHealthy {
+            if pollTask == nil, let client { startPolling(client) }
+            return
+        }
         userStopped = false
         Task { await connectNormal(vin: vin) }
+    }
+
+    private var isSessionHealthy: Bool {
+        guard client != nil, telemetry.connectionState == .connected else { return false }
+        guard let last = telemetry.lastUpdateAt else { return false }
+        return Date().timeIntervalSince(last) < 8
     }
 
     /// Demo drive telemetry çakışmasını önlemek için BLE poll'u durdur.
@@ -67,7 +94,7 @@ final class EtubuTeslaBleSession: ObservableObject {
         guard demoSuspended else { return }
         demoSuspended = false
         userStopped = false
-        bootstrapIfPossible()
+        bootstrapIfPossible(reason: .afterDemo)
     }
 
     func saveVINAndPair(_ raw: String) async {
@@ -96,6 +123,7 @@ final class EtubuTeslaBleSession: ObservableObject {
             return
         }
         userStopped = false
+        didAutoBootstrapThisProcess = true
         await connectNormal(vin: vin)
     }
 
@@ -229,6 +257,13 @@ final class EtubuTeslaBleSession: ObservableObject {
 
     private func connectNormal(vin: String, allowPairFallback: Bool = true, maxRetries: Int = 1) async {
         guard !demoSuspended else { return }
+        if isSessionHealthy {
+            if pollTask == nil, let client { startPolling(client) }
+            return
+        }
+        guard !connectInFlight else { return }
+        connectInFlight = true
+        defer { connectInFlight = false }
         cancelJobs()
         telemetry.connectionState = .connecting
         telemetry.statusMessage = "Bağlanıyor…"
@@ -252,12 +287,16 @@ final class EtubuTeslaBleSession: ObservableObject {
                 client = c
                 observeState(c)
                 try await c.connect(mode: .normal)
+                // Infotainment uykudaysa SoC/iklim/TPMS boş gelir — uyandır.
+                try? await c.send(.security(.wakeVehicle))
+                try? await Task.sleep(nanoseconds: 700_000_000)
                 reconnectAttempt = 0
                 connectedAt = Date()
                 ignoreDisconnectUntil = Date().addingTimeInterval(5)
                 telemetry.connectionState = .connected
                 telemetry.source = .tesla
                 telemetry.statusMessage = "Bağlandı"
+                EtubuVehicleTelemetry.shared.scrubDemoChargeResidueIfNeeded()
                 EtubuTeslaVinStore.setPairedConfirmed(true, for: vin)
                 activePairVIN = nil
                 pairStep = .none
@@ -274,9 +313,7 @@ final class EtubuTeslaBleSession: ObservableObject {
                 pairStep = allowPairFallback ? .none : .failed
                 telemetry.connectionState = .failed
                 telemetry.statusMessage = error.localizedDescription
-                if allowPairFallback {
-                    scheduleReconnect(vin: vin)
-                }
+                // Otomatik yeniden bağlanma yok — yalnızca uygulama açılışı / kullanıcı.
             }
         }
     }
@@ -320,9 +357,18 @@ final class EtubuTeslaBleSession: ObservableObject {
 
                     self.tick += 1
                     let parked = await MainActor.run { self.telemetry.kmh < 3 }
+                    let missingExtras = await MainActor.run {
+                        self.telemetry.socPercent == nil
+                            || self.telemetry.outsideC == nil
+                            || self.telemetry.insideC == nil
+                            || (self.telemetry.tpmsFL.psi == nil
+                                && self.telemetry.tpmsFR.psi == nil
+                                && self.telemetry.tpmsRL.psi == nil
+                                && self.telemetry.tpmsRR.psi == nil)
+                    }
 
-                    // At most ONE secondary category per cycle so drive cadence stays tight
-                    if self.tick % (parked ? 3 : 2) == 0 {
+                    // Eksik SoC/iklim/TPMS varken her döngüde zorla; yoksa seyrek tut.
+                    if missingExtras || self.tick % (parked ? 2 : 2) == 0 {
                         let snap = try await client.fetch(.categories([.charge, .climate, .tirePressure]))
                         await MainActor.run { self.applySnapshot(snap) }
                     } else if self.tick % (parked ? 5 : 4) == 0 {
@@ -346,9 +392,10 @@ final class EtubuTeslaBleSession: ObservableObject {
                     }
                     await MainActor.run {
                         self.telemetry.statusMessage = error.localizedDescription
-                        self.telemetry.connectionState = .reconnecting
+                        self.telemetry.connectionState = .failed
                     }
-                    break
+                    // Poll öldü — otomatik reconnect yok (yalnızca açılış / kullanıcı).
+                    return
                 }
                 // Moving: ~2 Hz drive; parked: ~0.8 Hz — critical cluster data stays snappy
                 let sleepNs: UInt64 = await MainActor.run {
@@ -356,10 +403,7 @@ final class EtubuTeslaBleSession: ObservableObject {
                 }
                 try? await Task.sleep(nanoseconds: sleepNs)
             }
-            let skipReconnect = await MainActor.run { self.userStopped || self.demoSuspended }
-            if !skipReconnect, let vin = EtubuTeslaVinStore.vin {
-                await MainActor.run { self.scheduleReconnect(vin: vin) }
-            }
+            // Oturum düştüyse otomatik yeniden bağlanma yok.
         }
     }
 
@@ -410,37 +454,49 @@ final class EtubuTeslaBleSession: ObservableObject {
     private func applySnapshot(_ snap: TeslaVehicleSnapshot) {
         if let charge = snap.charge {
             let rangeKm: Int? = {
-                if let mi = charge.estBatteryRangeMiles ?? charge.batteryRangeMiles {
+                if let mi = charge.estBatteryRangeMiles ?? charge.batteryRangeMiles, mi > 0.5 {
                     return Int((mi * 1.60934).rounded())
                 }
                 return nil
             }()
             let charging = charge.chargingStatus == .charging || charge.chargingStatus == .starting
+            // SPM mapper unset optional → 0; gerçek 0% yalnızca şarj/menzil kanıtı varsa.
+            let soc: Int? = {
+                guard let bl = charge.batteryLevel else { return nil }
+                if bl > 0 { return min(100, bl) }
+                if charging { return 0 }
+                if rangeKm != nil { return 0 }
+                return nil
+            }()
             telemetry.applyTeslaCharge(
-                soc: charge.batteryLevel,
+                soc: soc,
                 rangeKm: rangeKm,
-                chargeKw: charge.chargerPower,
+                chargeKw: charge.chargerPower.flatMap { $0 == 0 && !charging ? nil : $0 },
                 charging: charging,
-                limitPercent: charge.chargeLimitPercent,
-                amps: charge.chargerCurrent,
-                volts: charge.chargerVoltage,
-                minutesToFull: charge.minutesToFullCharge,
+                limitPercent: charge.chargeLimitPercent.flatMap { $0 > 0 ? $0 : nil },
+                amps: charge.chargerCurrent.flatMap { $0 == 0 && !charging ? nil : $0 },
+                volts: charge.chargerVoltage.flatMap { $0 == 0 && !charging ? nil : $0 },
+                minutesToFull: charge.minutesToFullCharge.flatMap { $0 > 0 ? $0 : nil },
                 portOpen: charge.chargePortOpen
             )
         }
         if let climate = snap.climate {
-            telemetry.applyTeslaClimate(
-                outsideC: climate.outsideTempCelsius,
-                insideC: climate.insideTempCelsius,
-                climateOn: climate.isClimateOn
-            )
+            let out = Self.sanitizeTempC(climate.outsideTempCelsius, other: climate.insideTempCelsius)
+            let inn = Self.sanitizeTempC(climate.insideTempCelsius, other: climate.outsideTempCelsius)
+            if out != nil || inn != nil || climate.isClimateOn != nil {
+                telemetry.applyTeslaClimate(
+                    outsideC: out,
+                    insideC: inn,
+                    climateOn: climate.isClimateOn
+                )
+            }
         }
         if let tires = snap.tirePressure {
             func reading(_ t: TirePressureState.Tire?) -> EtubuTireReading {
                 // Tesla reports bar; if value looks like psi already (> 8), keep as-is.
                 let raw = t?.pressureBar
                 let psi: Double? = {
-                    guard let raw else { return nil }
+                    guard let raw, raw > 0.2 else { return nil }
                     if raw > 8 { return raw }
                     return EtubuVehicleTelemetry.barToPsi(raw)
                 }()
@@ -510,14 +566,10 @@ final class EtubuTeslaBleSession: ObservableObject {
                                       Date().timeIntervalSince(last) < 4 {
                                 // Poll hâlâ veri alıyor — sahte disconnect
                                 break
-                            } else if let vin = EtubuTeslaVinStore.vin,
-                                      EtubuTeslaVinStore.pairedConfirmed(for: vin) {
-                                self.telemetry.connectionState = .reconnecting
-                                self.telemetry.statusMessage = "Yeniden bağlanıyor…"
-                                self.scheduleReconnect(vin: vin, debounce: 2.5)
                             } else {
-                                self.telemetry.connectionState = .reconnecting
-                                self.telemetry.statusMessage = "Yeniden bağlanıyor…"
+                                // Otomatik yeniden bağlanma yok — kullanıcı Ayarlar’dan bağlar.
+                                self.telemetry.connectionState = .idle
+                                self.telemetry.statusMessage = "Bağlantı kesildi"
                             }
                         }
                     @unknown default:
@@ -529,30 +581,19 @@ final class EtubuTeslaBleSession: ObservableObject {
     }
 
     private func scheduleReconnect(vin: String, debounce: TimeInterval = 0) {
-        guard !userStopped, !demoSuspended else { return }
-        guard EtubuTeslaVinStore.pairedConfirmed(for: vin) else { return }
-        // Zaten bağlı ve taze veri geliyorsa yeniden bağlanma başlatma
-        if telemetry.connectionState == .connected,
-           let last = telemetry.lastUpdateAt,
-           Date().timeIntervalSince(last) < 3 {
-            return
-        }
-        reconnectTask?.cancel()
-        reconnectAttempt += 1
-        let delay = max(debounce, min(8.0, pow(2.0, Double(min(reconnectAttempt, 4) - 1))))
-        telemetry.connectionState = .reconnecting
-        telemetry.statusMessage = "Yeniden bağlanıyor (\(Int(delay))s)…"
-        reconnectTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-            guard let self, !self.userStopped else { return }
-            // Beklerken tekrar bağlandıysa iptal
-            if self.telemetry.connectionState == .connected,
-               let last = self.telemetry.lastUpdateAt,
-               Date().timeIntervalSince(last) < 3 {
-                return
-            }
-            await self.connectNormal(vin: vin, allowPairFallback: false, maxRetries: 3)
-        }
+        // Kullanıcı isteği: otomatik yeniden bağlanma yok (yalnızca uygulama açılışı).
+        _ = vin
+        _ = debounce
+    }
+
+    /// SPM Charge/Climate mapper unset optional → 0; her iki temp de ~0 ise yok say.
+    private static func sanitizeTempC(_ value: Double?, other: Double?) -> Double? {
+        guard let value else { return nil }
+        let otherZ = other.map { abs($0) < 0.05 } ?? true
+        if abs(value) < 0.05, otherZ { return nil }
+        // Tesla kabin/dış için mantıklı aralık dışı → yok say
+        if value < -50 || value > 70 { return nil }
+        return value
     }
 
     private func cancelJobs() {

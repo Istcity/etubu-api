@@ -11,25 +11,37 @@ struct EtubuSpeedDialView: View {
     var chromeDiameter: CGFloat? = nil
     var powerKw: Int? = nil
     @ObservedObject private var warnings = EtubuDriveWarnings.shared
+    /// Soft display lerp — keskin sıçrama yok, yumuşak yükseliş.
+    @State private var displayKmh: Double = 0
 
-    /// Demo aktifken warnings aynası (Radar kartı ile aynı Combined publisher).
-    private var shownKmh: Int { warnings.demoActive ? warnings.demoKmh : kmh }
+    private var rawKmh: Int { warnings.demoActive ? warnings.demoKmh : kmh }
     private var shownGear: String {
         if warnings.demoActive {
             let g = warnings.demoGear
-            if (g.isEmpty || g == "P"), warnings.demoKmh >= 3 { return "D" }
+            if (g.isEmpty || g == "P"), warnings.demoKmh >= 5 { return "D" }
             return g.isEmpty ? "D" : g
         }
         return gear
     }
-    private var shownPowerKw: Int? { warnings.demoActive ? warnings.demoPowerKw : powerKw }
+    /// P/N veya <5 km/h → kadran kilitli 0.
+    private var isStationary: Bool {
+        let g = shownGear.uppercased()
+        if g.hasPrefix("P") || g.hasPrefix("N") { return true }
+        return rawKmh < 5
+    }
+    private var targetKmh: Int { isStationary ? 0 : rawKmh }
+    private var shownKmh: Int { Int(displayKmh.rounded()) }
+    private var shownPowerKw: Int? {
+        let raw = warnings.demoActive ? warnings.demoPowerKw : powerKw
+        guard let raw else { return nil }
+        if isStationary { return 0 }
+        if abs(raw) < 12 { return 0 }
+        return raw
+    }
 
     private var dialSize: CGFloat { diameter ?? (compact ? 200 : 280) }
     private var chromeSize: CGFloat { chromeDiameter ?? dialSize }
-
     private var textBoost: CGFloat { compact ? 1.22 * 1.15 : 1.22 }
-
-    /// 100+ km/h → 3 hane; fontu daralt ki "1…" kesilmesin
     private var tripleDigitFactor: CGFloat { shownKmh >= 100 ? 0.74 : (shownKmh >= 10 ? 0.92 : 1.0) }
 
     private var speedFont: CGFloat {
@@ -40,7 +52,6 @@ struct EtubuSpeedDialView: View {
     }
 
     private var gearFont: CGFloat {
-        // Tek harf (aktif vites) — çember içinde okunaklı, taşmasın
         let base: CGFloat = compact
             ? max(16, min(chromeSize * 0.09, 24))
             : max(18, min(chromeSize * 0.085, 28))
@@ -58,17 +69,10 @@ struct EtubuSpeedDialView: View {
         compact ? max(10, min(chromeSize * 0.045, 14)) : max(12, min(chromeSize * 0.048, 16))
     }
 
-    private var gearSpacing: CGFloat {
-        compact ? max(5, chromeSize * 0.026) : max(7, chromeSize * 0.034)
-    }
-    private var gearBarWidth: CGFloat {
-        compact ? max(6, chromeSize * 0.028) : max(8, chromeSize * 0.034)
-    }
     private var speedProgress: CGFloat { min(1, CGFloat(max(0, shownKmh)) / 180) }
     private var power: Int { shownPowerKw ?? 0 }
     private var powerFill: CGFloat { min(1, CGFloat(abs(power)) / 160) }
 
-    /// Clearance from the visible outer stroke only (no invisible clip circle).
     private var ringClearance: CGFloat {
         guard compact else { return dialSize * 0.05 }
         return theme.ringLineWidth(for: dialSize) * 1.8 + dialSize * 0.03
@@ -76,11 +80,8 @@ struct EtubuSpeedDialView: View {
 
     var body: some View {
         ZStack {
-            if compact {
-                dialRings
-            }
+            if compact { dialRings }
 
-            // Content is NOT circle-masked — only the drawn ring stroke defines the circle.
             VStack(spacing: compact ? max(1, dialSize * 0.008) : 5) {
                 gearRow
                 Text("\(shownKmh)")
@@ -88,12 +89,15 @@ struct EtubuSpeedDialView: View {
                     .monospacedDigit()
                     .tracking(shownKmh >= 100 ? 0 : min(theme.gaugeTracking, 0.8) * 0.06)
                     .foregroundStyle(theme.primaryText)
-                    .shadow(color: theme.accent.opacity(0.4), radius: compact ? 8 : 6)
+                    .shadow(
+                        color: isStationary ? .clear : theme.accent.opacity(0.4),
+                        radius: compact ? 8 : 6
+                    )
                     .minimumScaleFactor(0.38)
                     .lineLimit(1)
                     .frame(maxWidth: dialSize * (shownKmh >= 100 ? 0.78 : 0.70))
                     .accessibilityIdentifier("etubu.speed")
-                    // Instant digit — no numericText morph lag on critical speed
+                    .contentTransition(.identity)
                 Text("km/h")
                     .font(EtubuClusterFonts.ui(unitFont, weight: .semibold))
                     .foregroundStyle(theme.mutedText)
@@ -135,102 +139,142 @@ struct EtubuSpeedDialView: View {
             .frame(maxWidth: dialSize * 0.88, maxHeight: dialSize * 0.88)
         }
         .frame(width: dialSize, height: dialSize)
-        // No clipShape(Circle) — that was the invisible cutter
+        .transaction { txn in
+            if isStationary { txn.animation = nil }
+        }
+        .onAppear {
+            displayKmh = Double(targetKmh)
+        }
+        .onChange(of: targetKmh) { _, new in
+            if new == 0 || isStationary {
+                var t = Transaction()
+                t.animation = nil
+                withTransaction(t) { displayKmh = 0 }
+                return
+            }
+            // Yumuşak, kesik kesik yükseliş — sert sıçrama yok.
+            withAnimation(.easeOut(duration: 0.48)) {
+                displayKmh = Double(new)
+            }
+        }
+        .animation(nil, value: power)
     }
 
     @ViewBuilder
     private var dialRings: some View {
         let lw = theme.ringLineWidth(for: dialSize)
-        let moving = shownKmh >= 1
+        let moving = !isStationary
         ZStack {
-            // Single outer track
             Circle()
                 .strokeBorder(theme.stroke.opacity(0.40), lineWidth: lw)
 
-            switch theme.dialRingStyle {
-            case .neonSweep:
+            if moving {
+                movingRingFill(lineWidth: lw)
+                bipolarPowerRing(lineWidth: lw)
+            } else {
+                // Park: sabit ince halka — trim / shadow / power yok.
                 Circle()
-                    .trim(from: 0, to: moving ? max(0.02, speedProgress) : 0)
-                    .stroke(
-                        AngularGradient(
-                            colors: [
-                                theme.accent.opacity(0.15),
-                                theme.accent,
-                                Color.white.opacity(0.95),
-                                theme.accent,
-                            ],
-                            center: .center
-                        ),
-                        style: StrokeStyle(lineWidth: lw * 1.55, lineCap: .round)
-                    )
-                    .rotationEffect(.degrees(-90))
-                    .shadow(color: theme.accent.opacity(moving ? 0.85 : 0), radius: 10)
-                    .animation(.easeOut(duration: 0.08), value: speedProgress)
-
-            case .dualGlow:
-                // Thicker dual-glow — still ON the same outer ring (no inner concentric clip circle)
-                Circle()
-                    .strokeBorder(theme.accent.opacity(0.28), lineWidth: lw * 2.1)
-                Circle()
-                    .trim(from: 0, to: moving ? max(0.02, speedProgress) : 0)
-                    .stroke(theme.accent, style: StrokeStyle(lineWidth: lw * 1.45, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                    .shadow(color: theme.accent.opacity(moving ? 0.75 : 0), radius: 12)
-                    .animation(.easeOut(duration: 0.08), value: speedProgress)
-
-            case .dashed:
-                Circle()
-                    .strokeBorder(theme.accent.opacity(0.7), style: StrokeStyle(lineWidth: lw * 1.2, dash: [7, 5]))
-                Circle()
-                    .trim(from: 0, to: moving ? max(0.02, speedProgress) : 0)
-                    .stroke(Color.white.opacity(0.85), style: StrokeStyle(lineWidth: lw * 0.85, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-
-            case .plasmaRibbon:
-                Circle()
-                    .trim(from: 0, to: moving ? max(0.02, speedProgress) : 0)
-                    .stroke(
-                        AngularGradient(
-                            colors: [
-                                theme.accent.opacity(0.2),
-                                Color(hue: theme.hue / 360, saturation: 0.9, brightness: 1),
-                                Color(hue: ((theme.hue + 40).truncatingRemainder(dividingBy: 360)) / 360, saturation: 0.85, brightness: 1),
-                                theme.accent.opacity(0.2),
-                            ],
-                            center: .center
-                        ),
-                        style: StrokeStyle(lineWidth: lw * 1.75, lineCap: .round)
-                    )
-                    .rotationEffect(.degrees(-90 + Double(max(0, shownKmh)) * 0.15))
-                    .shadow(color: theme.glow.opacity(moving ? 1 : 0.15), radius: 12)
-
-            case .thin:
-                Circle()
-                    .strokeBorder(theme.accent.opacity(moving ? (0.55 + 0.25 * speedProgress) : 0.35), lineWidth: lw * 1.15)
-                    .shadow(color: theme.glow.opacity(moving ? 1 : 0.2), radius: 8)
+                    .strokeBorder(theme.accent.opacity(0.28), lineWidth: lw * 1.05)
             }
-
-            // Bipolar regen / drive meter on the ring (power-bar behaviour)
-            bipolarPowerRing(lineWidth: lw)
         }
         .frame(width: dialSize, height: dialSize)
         .allowsHitTesting(false)
+        .animation(.easeOut(duration: 0.48), value: shownKmh)
+        .animation(nil, value: power)
     }
 
-    /// Mirrors `EtubuPowerRegenBarView`: green = regen (left), warm = drive (right).
+    @ViewBuilder
+    private func movingRingFill(lineWidth lw: CGFloat) -> some View {
+        switch theme.dialRingStyle {
+        case .neonSweep:
+            Circle()
+                .trim(from: 0, to: max(0.02, speedProgress))
+                .stroke(
+                    AngularGradient(
+                        colors: [
+                            theme.accent.opacity(0.15),
+                            theme.accent,
+                            Color.white.opacity(0.95),
+                            theme.accent,
+                        ],
+                        center: .center
+                    ),
+                    style: StrokeStyle(lineWidth: lw * 1.55, lineCap: .round)
+                )
+                .rotationEffect(.degrees(-90))
+                .shadow(color: theme.accent.opacity(0.85), radius: 10)
+
+        case .dualGlow:
+            Circle()
+                .strokeBorder(theme.accent.opacity(0.28), lineWidth: lw * 2.1)
+            Circle()
+                .trim(from: 0, to: max(0.02, speedProgress))
+                .stroke(theme.accent, style: StrokeStyle(lineWidth: lw * 1.45, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+                .shadow(color: theme.accent.opacity(0.75), radius: 12)
+
+        case .dashed:
+            Circle()
+                .strokeBorder(theme.accent.opacity(0.7), style: StrokeStyle(lineWidth: lw * 1.2, dash: [7, 5]))
+            Circle()
+                .trim(from: 0, to: max(0.02, speedProgress))
+                .stroke(Color.white.opacity(0.85), style: StrokeStyle(lineWidth: lw * 0.85, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+
+        case .plasmaRibbon:
+            Circle()
+                .trim(from: 0, to: max(0.02, speedProgress))
+                .stroke(
+                    AngularGradient(
+                        colors: [
+                            theme.accent.opacity(0.2),
+                            Color(hue: theme.hue / 360, saturation: 0.9, brightness: 1),
+                            Color(hue: ((theme.hue + 40).truncatingRemainder(dividingBy: 360)) / 360, saturation: 0.85, brightness: 1),
+                            theme.accent.opacity(0.2),
+                        ],
+                        center: .center
+                    ),
+                    style: StrokeStyle(lineWidth: lw * 1.75, lineCap: .round)
+                )
+                .rotationEffect(.degrees(-90 + Double(shownKmh) * 0.15))
+                .shadow(color: theme.glow.opacity(1), radius: 12)
+
+        case .plaidHeat:
+            Circle()
+                .trim(from: 0, to: max(0.02, speedProgress))
+                .stroke(
+                    AngularGradient(
+                        colors: [
+                            Color(red: 1.0, green: 0.92, blue: 0.25),
+                            Color(red: 1.0, green: 0.55, blue: 0.08),
+                            Color(red: 0.95, green: 0.12, blue: 0.08),
+                            Color(red: 0.75, green: 0.02, blue: 0.05),
+                        ],
+                        center: .center
+                    ),
+                    style: StrokeStyle(lineWidth: lw * 1.85, lineCap: .round)
+                )
+                .rotationEffect(.degrees(-90))
+                .shadow(color: Color.orange.opacity(0.9), radius: 14)
+
+        case .thin:
+            Circle()
+                .strokeBorder(theme.accent.opacity(0.55 + 0.25 * speedProgress), lineWidth: lw * 1.15)
+                .shadow(color: theme.glow.opacity(1), radius: 8)
+        }
+    }
+
     private func bipolarPowerRing(lineWidth: CGFloat) -> some View {
         let regen = power < -1
         let drive = power > 1
         let fill = powerFill
         let track = lineWidth * 1.35
         return ZStack {
-            // Neutral track along lower half
             Circle()
                 .trim(from: 0.12, to: 0.88)
                 .stroke(Color.white.opacity(0.10), style: StrokeStyle(lineWidth: track, lineCap: .round))
                 .rotationEffect(.degrees(90))
 
-            // Regen fills left side of lower arc (toward 0.12 ← mid)
             if regen {
                 Circle()
                     .trim(from: 0.50 - 0.38 * fill, to: 0.50)
@@ -248,7 +292,6 @@ struct EtubuSpeedDialView: View {
                     .shadow(color: Color.green.opacity(0.6), radius: 8)
             }
 
-            // Drive fills right side of lower arc (mid → 0.88)
             if drive {
                 Circle()
                     .trim(from: 0.50, to: 0.50 + 0.38 * fill)
@@ -267,11 +310,10 @@ struct EtubuSpeedDialView: View {
                     .shadow(color: Color.orange.opacity(0.55), radius: 8)
             }
         }
-        .animation(.easeOut(duration: 0.1), value: power)
+        .animation(nil, value: power)
     }
 
     private var gearRow: some View {
-        // Tek aktif vites harfi — PRND dizisi taşırıyordu
         Text(shownGear.isEmpty ? "P" : String(shownGear.prefix(1)))
             .font(EtubuClusterFonts.gauge(gearFont, weight: .bold))
             .foregroundStyle(theme.accent)
@@ -791,12 +833,12 @@ struct EtubuCorridorChipView: View {
                 .buttonStyle(.plain)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .modifier(EtubuTwinCardChrome(
             theme: theme,
-            stroke: isOver ? Color.red.opacity(0.65) : (isCorridor ? Color.orange.opacity(0.55) : theme.accent.opacity(0.38)),
+            stroke: isOver ? Color.red.opacity(0.75) : (isCorridor ? Color.orange.opacity(0.65) : theme.accent.opacity(0.55)),
             warmFill: isCorridor,
             shadowColor: isOver ? Color.red.opacity(0.35) : (isCorridor ? Color.orange.opacity(0.2) : Color.black.opacity(0.32))
         ))
@@ -816,14 +858,15 @@ struct EtubuRoadWarnTwinView: View {
     }
 
     var body: some View {
-        let secondary = Array(warnings.queue.dropFirst().prefix(compact ? 1 : 2))
-        VStack(alignment: .center, spacing: compact ? 3 : 4) {
+        let secondary = Array(warnings.queue.dropFirst().prefix(compact ? 0 : 1))
+        VStack(alignment: .center, spacing: compact ? 2 : 3) {
             Text(EtubuClusterL10n.roadWarnings.uppercased())
                 .font(EtubuClusterFonts.ui(9 * contentScale, weight: .heavy))
                 .tracking(0.6)
                 .foregroundStyle(theme.mutedText)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
+                .layoutPriority(2)
 
             if let item = warnings.primary {
                 let tint = EtubuHazardChrome.tint(item.kind, urgent: urgent, theme: theme)
@@ -831,20 +874,22 @@ struct EtubuRoadWarnTwinView: View {
                     .font(EtubuClusterFonts.ui(11 * contentScale, weight: .bold))
                     .foregroundStyle(tint)
                     .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.65)
+                    .lineLimit(compact ? 1 : 2)
+                    .minimumScaleFactor(0.55)
+                    .layoutPriority(1)
                 Text(item.distanceLabel.isEmpty ? "—" : item.distanceLabel)
-                    .font(EtubuClusterFonts.gauge((compact ? 20 : 24) * contentScale))
+                    .font(EtubuClusterFonts.gauge((compact ? 18 : 22) * contentScale))
                     .monospacedDigit()
                     .foregroundStyle(theme.primaryText)
-                    .minimumScaleFactor(0.55)
+                    .minimumScaleFactor(0.5)
                     .lineLimit(1)
-                if !item.meta.isEmpty {
+                    .layoutPriority(3)
+                if !compact, !item.meta.isEmpty {
                     Text(item.meta)
                         .font(EtubuClusterFonts.ui(9 * contentScale, weight: .medium))
                         .foregroundStyle(theme.secondaryText)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.7)
+                        .minimumScaleFactor(0.65)
                 }
                 ForEach(Array(secondary.enumerated()), id: \.element.id) { _, next in
                     HStack(spacing: 4) {
@@ -860,20 +905,21 @@ struct EtubuRoadWarnTwinView: View {
                                 .lineLimit(1)
                         }
                     }
-                    .minimumScaleFactor(0.65)
+                    .minimumScaleFactor(0.6)
                 }
             } else {
                 Text("—")
                     .font(EtubuClusterFonts.gauge(18 * contentScale))
                     .foregroundStyle(theme.mutedText.opacity(0.4))
             }
+            Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .modifier(EtubuTwinCardChrome(
             theme: theme,
-            stroke: urgent ? Color.orange.opacity(0.55) : theme.accent.opacity(0.38),
+            stroke: urgent ? Color.orange.opacity(0.7) : theme.accent.opacity(0.55),
             warmFill: false,
             shadowColor: urgent ? Color.orange.opacity(0.22) : Color.black.opacity(0.32)
         ))
@@ -881,6 +927,7 @@ struct EtubuRoadWarnTwinView: View {
 }
 
 /// Shared Jul 29 twin-panel chrome — identical frame language for avg + road warnings.
+/// Stroke stays outside content clip so full cards never lose top/bottom borders.
 private struct EtubuTwinCardChrome: ViewModifier {
     var theme: ClusterTheme
     var stroke: Color
@@ -888,35 +935,36 @@ private struct EtubuTwinCardChrome: ViewModifier {
     var shadowColor: Color
 
     func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
         content
+            // İçerik taşarsa kes; çerçeve çizgisi overlay’de kalır.
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .clipped()
             .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(
-                        warmFill
-                        ? LinearGradient(
-                            colors: [
-                                Color(red: 0.22, green: 0.14, blue: 0.02).opacity(0.72),
-                                Color(red: 0.11, green: 0.06, blue: 0.01).opacity(0.62),
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                          )
-                        : LinearGradient(
-                            colors: [
-                                theme.surface.opacity(0.92),
-                                Color.black.opacity(0.34),
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                          )
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .strokeBorder(stroke, lineWidth: 1)
-                    )
+                shape.fill(
+                    warmFill
+                    ? LinearGradient(
+                        colors: [
+                            Color(red: 0.22, green: 0.14, blue: 0.02).opacity(0.72),
+                            Color(red: 0.11, green: 0.06, blue: 0.01).opacity(0.62),
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                      )
+                    : LinearGradient(
+                        colors: [
+                            theme.surface.opacity(0.92),
+                            Color.black.opacity(0.34),
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                      )
+                )
+            )
+            .overlay(
+                shape.strokeBorder(stroke, lineWidth: 1.25)
             )
             .shadow(color: shadowColor, radius: 8)
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
 
@@ -927,7 +975,11 @@ struct EtubuPowerRegenBarView: View {
     var compact: Bool = false
     var theme: ClusterTheme = .aurora
 
-    private var power: Int { powerKw ?? 0 }
+    private var power: Int {
+        let raw = powerKw ?? 0
+        // Idle noise — bar titremesin.
+        return abs(raw) < 12 ? 0 : raw
+    }
     private var regenerating: Bool { power < -1 }
     private var accelerating: Bool { power > 1 }
 

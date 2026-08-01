@@ -133,7 +133,9 @@ enum EtubuClusterAudioBridge {
     static func startDrive(kmh: Int, gear: String, source: String, powerKw: Int? = nil) {
         let voice = storedVoice == "silent-mode" ? "calm-ev" : storedVoice
         setSoundEnabled(true, voice: voice)
-        pushDrive(kmh: kmh, powerKw: powerKw, source: source)
+        // Cap stub → index-app geçişi bitmeden AudioEngine yok; demoda agresif yeniden dene.
+        ensureDriveEngine(voice: voice, retriesLeft: source == "demo" ? 18 : 6)
+        pushDrive(kmh: kmh, powerKw: powerKw, source: source, forceImmediate: source == "demo")
         if #available(iOS 16.2, *) {
             Task {
                 let t = EtubuVehicleTelemetry.shared
@@ -149,13 +151,20 @@ enum EtubuClusterAudioBridge {
     }
 
     /// Feed live speed + Tesla power (negative = regen) into Cap AudioEngine.
-    /// Coalesced ~120ms to avoid audible flutter from BLE poll.
+    /// Coalesced ~120ms to avoid audible flutter from BLE poll; demo ~50ms + snap.
     private static var pendingDrive: (kmh: Int, powerKw: Int?, source: String)?
     private static var driveFlushWork: DispatchWorkItem?
     private static let driveThrottleSec: Double = 0.12
+    private static var engineRetryWork: DispatchWorkItem?
 
-    static func pushDrive(kmh: Int, powerKw: Int?, source: String) {
+    static func pushDrive(kmh: Int, powerKw: Int?, source: String, forceImmediate: Bool = false) {
         pendingDrive = (kmh, powerKw, source)
+        if forceImmediate || source == "demo" {
+            driveFlushWork?.cancel()
+            driveFlushWork = nil
+            flushDrive()
+            return
+        }
         if driveFlushWork != nil { return }
         let work = DispatchWorkItem {
             driveFlushWork = nil
@@ -163,6 +172,46 @@ enum EtubuClusterAudioBridge {
         }
         driveFlushWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + driveThrottleSec, execute: work)
+    }
+
+    private static func ensureDriveEngine(voice: String, retriesLeft: Int) {
+        let safe = voice
+            .replacingOccurrences(of: "'", with: "")
+            .replacingOccurrences(of: "\n", with: "")
+        let key = (safe.isEmpty || safe == "silent-mode") ? "calm-ev" : safe
+        AppDelegate.activateDriveAudioSession()
+        EtubuCapBridgeViewController.armWebContent()
+        evalJSReturning("""
+        (function(){
+          try {
+            var Ctx = window.AudioContext || window.webkitAudioContext;
+            if (Ctx) {
+              if (!window.__etubuBeepCtx) window.__etubuBeepCtx = new Ctx();
+              if (window.__etubuBeepCtx.state === 'suspended') window.__etubuBeepCtx.resume();
+            }
+            var AE = window.AudioEngine;
+            if (!AE) return 'missing';
+            if (AE.setQuality) AE.setQuality('high');
+            if (AE.resume) AE.resume();
+            var want = '\(key)';
+            if (AE.start && (!AE._running || AE._voiceKey !== want)) {
+              AE.start(want);
+            }
+            if (AE.setMuted) AE.setMuted(false);
+            return AE._running ? 'ok' : 'started';
+          } catch (e) { return 'err'; }
+        })();
+        """, timeout: 4) { result in
+            let s = result ?? ""
+            if s == "ok" || s == "started" { return }
+            guard retriesLeft > 0 else { return }
+            engineRetryWork?.cancel()
+            let work = DispatchWorkItem {
+                ensureDriveEngine(voice: key, retriesLeft: retriesLeft - 1)
+            }
+            engineRetryWork = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: work)
+        }
     }
 
     private static func flushDrive() {
@@ -176,13 +225,17 @@ enum EtubuClusterAudioBridge {
             .replacingOccurrences(of: "'", with: "")
             .replacingOccurrences(of: "\n", with: "")
         let voiceKey = (voice.isEmpty || voice == "silent-mode") ? "calm-ev" : voice
+        let isDemo = src == "demo"
         evalJS("""
         (function(){
           try {
             window.__etubuDrivePowerKw = \(p);
             window.__etubuDriveKmh = \(d.kmh);
             var AE = window.AudioEngine;
-            if (!AE) return;
+            if (!AE) {
+              window.__etubuDrivePending = { kmh: \(d.kmh), powerKw: \(p), source: '\(src)' };
+              return;
+            }
             if (AE.setQuality) { try { AE.setQuality('high'); } catch (e0) {} }
             if (AE.resume) { try { AE.resume(); } catch (e1) {} }
             var want = '\(voiceKey)';
@@ -190,22 +243,43 @@ enum EtubuClusterAudioBridge {
               try { AE.start(want); } catch (e2) {}
               if (AE.setMuted) AE.setMuted(false);
             }
+            if (AE.setMuted) AE.setMuted(false);
+            var prev = (typeof window.__etubuPrevKmh === 'number') ? window.__etubuPrevKmh : \(d.kmh);
+            var trend = \(d.kmh) - prev;
+            if (\(isDemo ? "true" : "false") && AE.snapSpeed) {
+              try { AE.snapSpeed(\(d.kmh)); } catch (eS) {}
+            }
             if (AE.setSpeed) {
-              var prev = (typeof window.__etubuPrevKmh === 'number') ? window.__etubuPrevKmh : \(d.kmh);
-              var trend = \(d.kmh) - prev;
               AE.setSpeed(\(d.kmh), {
                 source: '\(src)',
                 powerKw: \(p),
                 trend: trend
               });
               if (AE._running && AE._applyParams) {
-                try { AE._applyParams(AE._smoothKmh != null ? AE._smoothKmh : \(d.kmh), false); } catch (e3) {}
+                try { AE._applyParams(AE._smoothKmh != null ? AE._smoothKmh : \(d.kmh), \(isDemo ? "true" : "false")); } catch (e3) {}
               }
             }
             window.__etubuPrevKmh = \(d.kmh);
           } catch (e) {}
         })();
         """)
+        if isDemo {
+            // Cap henüz yüklenmediyse bir kez daha dene
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                evalJS("""
+                (function(){
+                  try {
+                    var AE = window.AudioEngine;
+                    if (!AE || AE._running) return;
+                    if (AE.start) AE.start('\(voiceKey)');
+                    if (AE.setMuted) AE.setMuted(false);
+                    if (AE.snapSpeed) AE.snapSpeed(\(d.kmh));
+                    if (AE.setSpeed) AE.setSpeed(\(d.kmh), { source: 'demo', powerKw: \(p), trend: 4 });
+                  } catch (e) {}
+                })();
+                """)
+            }
+        }
     }
 
     /// Kept for older Cap sessions — AudioEngine.setSpeed now handles powerKw natively.
@@ -280,6 +354,43 @@ enum EtubuClusterAudioBridge {
             .replacingOccurrences(of: "'", with: "\\'")
             .replacingOccurrences(of: "\n", with: " ")
         AppDelegate.activateDriveAudioSession()
+
+        // Prefer native ElevenLabs clips (demo works even if Cap WKWebView isn't ready).
+        if ttsOn, EtubuWarnVoice.speak(phrase, key: key, urgent: urgent) {
+            // Still fire beeps via JS if Cap is up; voice already handled natively.
+            if beeps > 0 {
+                evalJS("""
+                (function(){
+                  try {
+                    if (window.RadarAlert && window.RadarAlert.primeAudio) window.RadarAlert.primeAudio();
+                    var Ctx = window.AudioContext || window.webkitAudioContext;
+                    if (!Ctx) return;
+                    if (!window.__etubuBeepCtx) window.__etubuBeepCtx = new Ctx();
+                    var ctx = window.__etubuBeepCtx;
+                    if (ctx.state === 'suspended') ctx.resume();
+                    var now = ctx.currentTime;
+                    var freq = \(urgent ? 1180 : 880);
+                    for (var i = 0; i < \(beeps); i++) {
+                      var o = ctx.createOscillator();
+                      var g = ctx.createGain();
+                      o.type = 'sine';
+                      o.frequency.value = freq;
+                      var t0 = now + i * \(urgent ? 0.16 : 0.2);
+                      g.gain.setValueAtTime(0.0001, t0);
+                      g.gain.exponentialRampToValueAtTime(\(urgent ? 0.22 : 0.16), t0 + 0.02);
+                      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.11);
+                      o.connect(g);
+                      g.connect(ctx.destination);
+                      o.start(t0);
+                      o.stop(t0 + 0.13);
+                    }
+                  } catch (e) {}
+                })();
+                """)
+            }
+            return
+        }
+
         evalJS("""
         (function(){
           try {
@@ -307,13 +418,22 @@ enum EtubuClusterAudioBridge {
               }
             }
             var phrase = '\(safePhrase)';
-            if (\(ttsOn ? "true" : "false") && phrase && window.speechSynthesis && typeof SpeechSynthesisUtterance !== 'undefined') {
+            if (\(ttsOn ? "true" : "false") && phrase) {
               try {
-                window.speechSynthesis.cancel();
-                var u = new SpeechSynthesisUtterance(phrase);
-                u.lang = 'tr-TR';
-                u.rate = \(urgent ? 1.08 : 1.02);
-                window.speechSynthesis.speak(u);
+                if (window.WarnVoice && window.WarnVoice.prime) window.WarnVoice.prime();
+                if (window.WarnVoice && window.WarnVoice.speak &&
+                    window.WarnVoice.speak(phrase, { urgent: \(urgent ? "true" : "false"), key: '\(key.replacingOccurrences(of: "'", with: ""))' })) {
+                  return;
+                }
+              } catch (e0) {}
+              try {
+                if (window.speechSynthesis && typeof SpeechSynthesisUtterance !== 'undefined') {
+                  window.speechSynthesis.cancel();
+                  var u = new SpeechSynthesisUtterance(phrase);
+                  u.lang = 'tr-TR';
+                  u.rate = \(urgent ? 1.08 : 1.02);
+                  window.speechSynthesis.speak(u);
+                }
               } catch (e1) {}
             }
           } catch (e) {}

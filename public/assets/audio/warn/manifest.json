@@ -1,0 +1,441 @@
+{
+  "version": 1,
+  "voice": "SINAN_ivc",
+  "clips": {
+    "yavasla": {
+      "file": "yavasla.mp3",
+      "label": "Yavaşla",
+      "durationSec": 0.757,
+      "sourceStamp": "11_10_48",
+      "md5": "bb552c4c7469b3096d4e14f044134c3d"
+    },
+    "radar": {
+      "file": "radar.mp3",
+      "label": "Radar",
+      "durationSec": 0.679,
+      "sourceStamp": "11_11_23",
+      "md5": "b718573e47976188cbaf8f00eaef3b47"
+    },
+    "radar_yakin": {
+      "file": "radar_yakin.mp3",
+      "label": "Radar yakın",
+      "durationSec": 0.993,
+      "sourceStamp": "11_11_48",
+      "md5": "6d18d46989e9094b2a6941c1ab910039"
+    },
+    "koridor_giris": {
+      "file": "koridor_giris.mp3",
+      "label": "Koridor giriş",
+      "durationSec": 1.071,
+      "sourceStamp": "11_12_36",
+      "md5": "00dd35e52c5d9fac608d5eeec529b94a"
+    },
+    "koridor_bitti": {
+      "file": "koridor_bitti.mp3",
+      "label": "Koridor bitti",
+      "durationSec": 0.993,
+      "sourceStamp": "11_13_23",
+      "md5": "29c5c31ddd2d486d5f0d601568b3de76"
+    },
+    "hiz_koridoru": {
+      "file": "hiz_koridoru.mp3",
+      "label": "Hız koridoru",
+      "durationSec": 1.071,
+      "sourceStamp": "11_13_50",
+      "md5": "3d9385fd56392edafb5dbf8706daef0f"
+    },
+    "sarj_istasyonu": {
+      "file": "sarj_istasyonu.mp3",
+      "label": "Şarj istasyonu",
+      "durationSec": 0.993,
+      "sourceStamp": "11_14_28",
+      "md5": "f130c5dcd7919462eff348d30181550f"
+    },
+    "siddetli_hava": {
+      "file": "siddetli_hava.mp3",
+      "label": "Şiddetli hava",
+      "durationSec": 1.149,
+      "sourceStamp": "11_14_52",
+      "md5": "8bcc7f00a3253d1cc32f4dd6e212d695"
+    },
+    "hava_olayi": {
+      "file": "hava_olayi.mp3",
+      "label": "Hava olayı",
+      "durationSec": 0.914,
+      "sourceStamp": "11_15_16",
+      "md5": "a66a20c3dc247be9b97da0e5f71c8cc7"
+    },
+    "kontrol": {
+      "file": "kontrol.mp3",
+      "label": "Kontrol",
+      "durationSec": 0.757,
+      "sourceStamp": "11_15_34",
+      "md5": "dbc4a93f97c91526de928449897fa361"
+    },
+    "rota_hazir": {
+      "file": "rota_hazir.mp3",
+      "label": "Rota hazır",
+      "durationSec": 0.993,
+      "sourceStamp": "11_16_13",
+      "md5": "ad4a66d641145bf76b3c26aa14cfac2f"
+    },
+    "guzergahta_kritik_nokta_var": {
+      "file": "guzergahta_kritik_nokta_var.mp3",
+      "label": "Güzergahta kritik nokta var",
+      "durationSec": 1.881,
+      "sourceStamp": "11_16_39",
+      "md5": "0df0333945b17a8f642d38cc7b71874a"
+    },
+    "n50": {
+      "file": "n50.mp3",
+      "label": "50",
+      "durationSec": 0.757,
+      "sourceStamp": "11_17_00",
+      "md5": "849173b00f44d5aa556831bb86d0887f"
+    },
+    "n70": {
+      "file": "n70.mp3",
+      "label": "70",
+      "durationSec": 0.679,
+      "sourceStamp": "11_17_13",
+      "md5": "7649ca2893781712bfad93d06e564299"
+    },
+    "n82": {
+      "file": "n82.mp3",
+      "label": "82",
+      "durationSec": 0.993,
+      "sourceStamp": "11_18_49",
+      "md5": "743894e50c11fbe70613f0b5e859538b"
+    },
+    "n90": {
+      "file": "n90.mp3",
+      "label": "90",
+      "durationSec": 0.601,
+      "sourceStamp": "11_19_10",
+      "md5": "7b0aacd1a45d54cbce13cf53b547557f"
+    },
+    "n100": {
+      "file": "n100.mp3",
+      "label": "100",
+      "durationSec": 0.679,
+      "sourceStamp": "11_19_58",
+      "md5": "3af60235ce888575eb6007bd87ead6f1"
+    },
+    "n110": {
+      "file": "n110.mp3",
+      "label": "110",
+      "durationSec": 0.836,
+      "sourceStamp": "11_21_38",
+      "md5": "8aa03173157db03d87600b8aea920f7d"
+    },
+    "n120": {
+      "file": "n120.mp3",
+      "label": "120",
+      "durationSec": 0.967,
+      "sourceStamp": "11_22_49",
+      "md5": "a91a86b2da830e6488aba2f591b6659c"
+    },
+    "n130": {
+      "file": "n130.mp3",
+      "label": "130",
+      "durationSec": 0.862,
+      "sourceStamp": "11_22_58",
+      "md5": "f737c8564c493ce2b3d32b005aa27f1f"
+    },
+    "n140": {
+      "file": "n140.mp3",
+      "label": "140",
+      "durationSec": 1.019,
+      "sourceStamp": "11_39_30",
+      "md5": "27f8417895667de9a88064ace4b0ab47"
+    },
+    "d_50m": {
+      "file": "d_50m.mp3",
+      "label": "elli metre",
+      "durationSec": 1.202,
+      "sourceStamp": "11_23_40",
+      "md5": "7334ede1034fe96794c81e843155da3b"
+    },
+    "d_100m": {
+      "file": "d_100m.mp3",
+      "label": "yüz metre",
+      "durationSec": 1.149,
+      "sourceStamp": "11_23_54",
+      "md5": "5102dd04e08968ed7fdd4a8a38fa5db0"
+    },
+    "d_150m": {
+      "file": "d_150m.mp3",
+      "label": "yüz elli metre",
+      "durationSec": 1.254,
+      "sourceStamp": "11_24_53",
+      "md5": "df910ec40dedfd8aecd6a1edece5e044"
+    },
+    "d_200m": {
+      "file": "d_200m.mp3",
+      "label": "iki yüz metre",
+      "durationSec": 1.202,
+      "sourceStamp": "11_25_08",
+      "md5": "5b6d5b3bd34ad22dc6def5ed7378aed1"
+    },
+    "d_250m": {
+      "file": "d_250m.mp3",
+      "label": "iki yüz elli metre",
+      "durationSec": 1.384,
+      "sourceStamp": "11_25_32",
+      "md5": "4db24c777ebead3790cbd23215b201ff"
+    },
+    "d_300m": {
+      "file": "d_300m.mp3",
+      "label": "üç yüz metre",
+      "durationSec": 1.202,
+      "sourceStamp": "11_25_40",
+      "md5": "8224d0e8a0a3d06de3e61b8a985768d1"
+    },
+    "d_350m": {
+      "file": "d_350m.mp3",
+      "label": "üç yüz elli metre",
+      "durationSec": 1.384,
+      "sourceStamp": "11_25_56",
+      "md5": "29e7a0da1a5f5e6b51f601974b32d704"
+    },
+    "d_500m": {
+      "file": "d_500m.mp3",
+      "label": "beş yüz metre",
+      "durationSec": 1.254,
+      "sourceStamp": "11_26_18",
+      "md5": "7fb2753c238a77b8d6bc2568638042a5"
+    },
+    "d_600m": {
+      "file": "d_600m.mp3",
+      "label": "altı yüz metre",
+      "durationSec": 1.28,
+      "sourceStamp": "11_26_38",
+      "md5": "824ac8a589f651ef392157ce8a839333"
+    },
+    "d_650m": {
+      "file": "d_650m.mp3",
+      "label": "altı yüz elli metre",
+      "durationSec": 1.437,
+      "sourceStamp": "11_26_51",
+      "md5": "034ff4944bd93e6c30087de69788b7b5"
+    },
+    "d_700m": {
+      "file": "d_700m.mp3",
+      "label": "yedi yüz metre",
+      "durationSec": 1.202,
+      "sourceStamp": "11_27_04",
+      "md5": "66929f0ce5ff41688974130e2f94a84c"
+    },
+    "d_750m": {
+      "file": "d_750m.mp3",
+      "label": "yedi yüz elli metre",
+      "durationSec": 1.332,
+      "sourceStamp": "11_27_14",
+      "md5": "5233a533674db93cfc6ef3ecd4def2d9"
+    },
+    "d_800m": {
+      "file": "d_800m.mp3",
+      "label": "sekiz yüz metre",
+      "durationSec": 1.332,
+      "sourceStamp": "11_27_24",
+      "md5": "0bc71350f607496e5e549fdfbb90a5ec"
+    },
+    "d_850m": {
+      "file": "d_850m.mp3",
+      "label": "sekiz yüz elli metre",
+      "durationSec": 1.437,
+      "sourceStamp": "11_27_31",
+      "md5": "1c66a1ff762c6f17b0b926bb96a328e1"
+    },
+    "d_900m": {
+      "file": "d_900m.mp3",
+      "label": "dokuz yüz metre",
+      "durationSec": 1.254,
+      "sourceStamp": "11_27_47",
+      "md5": "687f9babefb8c6a1765a57130a1d64a0"
+    },
+    "d_950m": {
+      "file": "d_950m.mp3",
+      "label": "dokuz yüz elli metre",
+      "durationSec": 1.384,
+      "sourceStamp": "11_28_22",
+      "md5": "bffd9c60d47ef489d922ca6209840351"
+    },
+    "d_1km": {
+      "file": "d_1km.mp3",
+      "label": "bir kilometre",
+      "durationSec": 1.149,
+      "sourceStamp": "11_28_33",
+      "md5": "a912bccb2e93a0198a25b4bf3a8b1a4b"
+    },
+    "d_2km": {
+      "file": "d_2km.mp3",
+      "label": "iki kilometre",
+      "durationSec": 1.384,
+      "sourceStamp": "11_28_42",
+      "md5": "b1dd1d9bfdf1d229c4117a5e47153dd0"
+    },
+    "d_3km": {
+      "file": "d_3km.mp3",
+      "label": "üç kilometre",
+      "durationSec": 1.254,
+      "sourceStamp": "11_28_50",
+      "md5": "447a665648df927903220ee9a198df1e"
+    },
+    "d_4km": {
+      "file": "d_4km.mp3",
+      "label": "dört kilometre",
+      "durationSec": 1.332,
+      "sourceStamp": "11_29_10",
+      "md5": "5409916f69075fb09b2aef23635fa7ef"
+    },
+    "d_5km": {
+      "file": "d_5km.mp3",
+      "label": "beş kilometre",
+      "durationSec": 1.28,
+      "sourceStamp": "11_29_20",
+      "md5": "1e16c7fae21def75bf5f33a8b4fd07dd"
+    },
+    "d_10km": {
+      "file": "d_10km.mp3",
+      "label": "on kilometre",
+      "durationSec": 1.071,
+      "sourceStamp": "17_02_23",
+      "md5": "509e3a6d218738b76fa1203e8c0b583a"
+    },
+    "w_bir": {
+      "file": "w_bir.mp3",
+      "label": "bir",
+      "durationSec": 0.784,
+      "sourceStamp": "11_30_45",
+      "md5": "aca31eb131fbf0bc16b66ce5c379d52a"
+    },
+    "w_iki": {
+      "file": "w_iki.mp3",
+      "label": "iki",
+      "durationSec": 0.862,
+      "sourceStamp": "11_30_53",
+      "md5": "35e432d384effe0e950a4b7379fec63c"
+    },
+    "w_uc": {
+      "file": "w_uc.mp3",
+      "label": "üç",
+      "durationSec": 0.731,
+      "sourceStamp": "11_31_01",
+      "md5": "d3b7ad015425f499fd3b97c65f8b3fee"
+    },
+    "w_dort": {
+      "file": "w_dort.mp3",
+      "label": "dört",
+      "durationSec": 0.836,
+      "sourceStamp": "11_31_10",
+      "md5": "9f57d418d1a98940f59fb68d267bb4e5"
+    },
+    "w_bes": {
+      "file": "w_bes.mp3",
+      "label": "beş",
+      "durationSec": 0.836,
+      "sourceStamp": "11_31_17",
+      "md5": "f89598c94dfe39bf98314635c9fdd7e8"
+    },
+    "w_alti": {
+      "file": "w_alti.mp3",
+      "label": "altı",
+      "durationSec": 0.862,
+      "sourceStamp": "11_31_24",
+      "md5": "d87c116b8292c945c1f2b6653db4d10d"
+    },
+    "w_yedi": {
+      "file": "w_yedi.mp3",
+      "label": "yedi",
+      "durationSec": 0.914,
+      "sourceStamp": "11_31_32",
+      "md5": "eb06120d6dc4267617be1018b9fcbbb6"
+    },
+    "w_sekiz": {
+      "file": "w_sekiz.mp3",
+      "label": "sekiz",
+      "durationSec": 0.862,
+      "sourceStamp": "11_31_39",
+      "md5": "6814059e1443c7326c7622bd0c25e5ed"
+    },
+    "w_dokuz": {
+      "file": "w_dokuz.mp3",
+      "label": "dokuz",
+      "durationSec": 0.862,
+      "sourceStamp": "11_31_47",
+      "md5": "131737da1475089573091e2bc983266e"
+    },
+    "koridor": {
+      "file": "koridor.mp3",
+      "label": "Koridor",
+      "durationSec": 1.071,
+      "sourceStamp": "11_36_23",
+      "md5": "3b2cba8192301f44decee35303cd617e"
+    },
+    "hiz_siniri": {
+      "file": "hiz_siniri.mp3",
+      "label": "Hız sınırı",
+      "durationSec": 1.202,
+      "sourceStamp": "11_36_33",
+      "md5": "7aa25ef0d52ce5a97e93209d8a6f3b3b"
+    },
+    "d_400m": {
+      "file": "d_400m.mp3",
+      "label": "dört yüz metre",
+      "durationSec": 1.202,
+      "sourceStamp": "11_39_01",
+      "md5": "a3125d28c52c918712fb57c8f13c5fea"
+    },
+    "d_550m": {
+      "file": "d_550m.mp3",
+      "label": "beş yüz elli metre",
+      "durationSec": 1.384,
+      "sourceStamp": "11_39_19",
+      "md5": "16715cbb75c00c8cd61e2515d8d08a84"
+    }
+  },
+  "compose": {
+    "radar_dist": [
+      "radar",
+      "{dist}"
+    ],
+    "radar_yakin_dist": [
+      "radar_yakin",
+      "{dist}"
+    ],
+    "radar_limit": [
+      "radar",
+      "{dist}",
+      "hiz_siniri",
+      "{limit}"
+    ],
+    "koridor_giris_limit": [
+      "koridor_giris",
+      "hiz_siniri",
+      "{limit}"
+    ],
+    "koridor_dist": [
+      "koridor",
+      "{dist}"
+    ],
+    "sarj_dist": [
+      "sarj_istasyonu",
+      "{dist}"
+    ],
+    "hava_dist": [
+      "siddetli_hava",
+      "{dist}"
+    ],
+    "kontrol_dist": [
+      "kontrol",
+      "{dist}"
+    ],
+    "yavasla": [
+      "yavasla"
+    ],
+    "koridor_bitti": [
+      "koridor_bitti"
+    ]
+  }
+}

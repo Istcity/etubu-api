@@ -152,6 +152,7 @@ struct EtubuClusterLayoutMetrics {
         let style = cutout?.style ?? .none
         let topIns = max(0, insets.top)
         let botIns = max(0, insets.bottom)
+        let cutoutAtBottom = cutout?.anchor == .bottom
 
         let compactH = size.height < 720
         let compactW = size.width < 390
@@ -159,35 +160,39 @@ struct EtubuClusterLayoutMetrics {
         var scale = min(size.width / 402, size.height / 874)
         scale = min(1.10, max(0.72, scale))
 
-        // Top chrome: real cutout clearance only — SE must not reserve DI-sized space.
-        let topChrome: CGFloat = {
+        // Camera band clearance — top for upright, bottom for upside-down.
+        let cameraChrome: CGFloat = {
             switch style {
             case .dynamicIsland:
-                let pillBottom = cutout.map { $0.pill.maxY + 6 } ?? (topIns + 4)
-                return max(topIns + 4, pillBottom, 28)
+                if let cutout {
+                    if cutoutAtBottom {
+                        return max(botIns + 4, size.height - cutout.pill.minY + 6, 28)
+                    }
+                    return max(topIns + 4, cutout.pill.maxY + 6, 28)
+                }
+                return max((cutoutAtBottom ? botIns : topIns) + 4, 28)
             case .notch:
-                return max(topIns + 2, 22)
+                return max((cutoutAtBottom ? botIns : topIns) + 2, 22)
             case .none:
-                return max(topIns + 6, 12)
+                return max((cutoutAtBottom ? botIns : topIns) + 6, 12)
             }
         }()
 
-        let usableH = max(280, size.height - topChrome - botIns - 8)
+        let topChrome = cutoutAtBottom ? max(topIns + 4, 12) : cameraChrome
+        let bottomChrome = cutoutAtBottom ? cameraChrome : botIns
+        let usableH = max(280, size.height - topChrome - bottomChrome - 8)
         let usableW = max(280, size.width - 16)
 
         var dialFrac: CGFloat = compactW ? 0.46 : 0.52
         var dialCap: CGFloat = compactH ? 220 : 300
-        // Tall Max: allow a bit larger dial using height budget.
         if !compactH, size.height >= 900 { dialCap = 310 }
         if compactH, size.height < 680 { dialCap = 200; dialFrac = 0.44 }
 
         var dialSize = min(dialCap, usableW * dialFrac) * scale
-        // Leave room for twin cards beside dial.
         let twinShare = min(126, usableW * 0.27) * scale
         if dialSize + twinShare + 20 > usableW {
             dialSize = max(120, usableW - twinShare - 20)
         }
-        // Height budget: chrome + power + media + bottom strip.
         let bottomReserve: CGFloat = compactH ? 210 : 280
         let dialHBudget = max(130, usableH - bottomReserve)
         if dialSize > dialHBudget {

@@ -57,13 +57,16 @@ struct EtubuClusterRootView: View {
     private var shouldShowPairGuide: Bool { tesla.pairStep != .none }
 
     private var dialKmh: Int {
-        if warnings.demoActive { return warnings.demoKmh }
+        if warnings.demoActive { return warnings.demoKmh < 5 ? 0 : warnings.demoKmh }
         let _ = telemetry.demoUIEpoch
         if EtubuDemoDrive.isActive || UserDefaults.standard.bool(forKey: "etubu.demo.running") {
             let v = UserDefaults.standard.integer(forKey: "etubu.demo.kmh")
-            return v > 0 ? v : max(demo.displayKmh, demoKmhUD)
+            let raw = v > 0 ? v : max(demo.displayKmh, demoKmhUD)
+            return raw < 5 ? 0 : raw
         }
-        return telemetry.kmh
+        let g = telemetry.gear.uppercased()
+        if g.hasPrefix("P") || g.hasPrefix("N") { return 0 }
+        return telemetry.kmh < 5 ? 0 : telemetry.kmh
     }
     private var dialGear: String {
         if warnings.demoActive {
@@ -113,7 +116,8 @@ struct EtubuClusterRootView: View {
                 bottom: max(geo.safeAreaInsets.bottom, win.bottom),
                 trailing: max(geo.safeAreaInsets.trailing, win.trailing)
             )
-            let cutout = notchAuraEnabled && !showLegal && !showSim
+            // Portrait: çentik / DI aura kapalı — yalnızca yatayda.
+            let cutout = notchAuraEnabled && landscape && !showLegal && !showSim
                 ? EtubuCameraCutout.resolve(size: geo.size, insets: insets, landscape: landscape)
                 : nil
             let layout = EtubuClusterLayoutMetrics.make(
@@ -156,8 +160,8 @@ struct EtubuClusterRootView: View {
                 // Capture all taps in the chrome layer (Map backdrop must not steal Simulator clicks).
                 .contentShape(Rectangle())
                 // Portrait: content already pads island; avoid double-push on top chrome.
-                .padding(.top, landscape ? max(insets.top, 4) : 4)
-                .padding(.bottom, max(insets.bottom, 4))
+                .padding(.top, landscape ? max(insets.top, 4) : (cutout?.anchor == .bottom ? max(insets.top, 4) : 4))
+                .padding(.bottom, max(insets.bottom, cutout?.anchor == .bottom ? 4 : 4))
                 .padding(.leading, landscape ? 0 : layout.leadPad)
                 .padding(.trailing, landscape ? 0 : layout.trailPad)
                 .scaleEffect(x: demo.mirrorEnabled ? -1 : 1, y: 1)
@@ -165,7 +169,8 @@ struct EtubuClusterRootView: View {
                 if let cutout {
                     EtubuNotchAuraView(kmh: telemetry.kmh, theme: theme, cutout: cutout)
                         .frame(width: cutout.aura.width, height: cutout.aura.height)
-                        // Aura is centered on pill → place by aura mid (same as pill mid).
+                        // Aura rect is built around the hardware pill; mid matches pill mid
+                        // when spill is symmetric (portrait DI + landscape).
                         .position(x: cutout.aura.midX, y: cutout.aura.midY)
                         .allowsHitTesting(false)
                         .zIndex(5)
@@ -324,6 +329,7 @@ struct EtubuClusterRootView: View {
         // Process-lifetime once — double legal accept / sim finish must not re-arm Cap.
         guard !Self.didStartCore else { return }
         Self.didStartCore = true
+        EtubuVehicleTelemetry.shared.scrubDemoChargeResidueIfNeeded()
         EtubuClusterPresenter.shared.armCapGeolocation()
         EtubuCapBridgeViewController.armWebContent()
         // Konum + Bluetooth izinlerini hemen iste; Tesla bağlanmayı BT diyaloguna bağlama.
@@ -331,7 +337,7 @@ struct EtubuClusterRootView: View {
         Task { @MainActor in
             _ = await EtubuBluetoothGate.shared.waitUntilReady(timeoutSeconds: 14)
         }
-        tesla.bootstrapIfPossible()
+        tesla.bootstrapIfPossible(reason: .autoLaunch)
         warnings.startPolling()
         EtubuRouteBridge.primeWarningAudio()
         EtubuClusterAudioBridge.armPowerRegenHook()
@@ -723,7 +729,6 @@ struct EtubuClusterRootView: View {
             contentScale: contentScale
         )
         .frame(width: width, height: height)
-        .clipped()
     }
 
     /// Twin of avg — same chrome / size; content only under road-warnings title.
@@ -736,7 +741,6 @@ struct EtubuClusterRootView: View {
             contentScale: contentScale
         )
         .frame(width: width, height: height)
-        .clipped()
     }
 
     private func speedDialWithThemeGesture(

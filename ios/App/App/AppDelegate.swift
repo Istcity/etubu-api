@@ -159,11 +159,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         configureAudioSession(quality: true)
         EtubuRuntimeProfile.hideLingeringSplashOverlays()
         EtubuClusterPresenter.shared.installOverCapacitor()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-            Task { @MainActor in
-                EtubuTeslaBleSession.shared.bootstrapIfPossible()
-            }
-        }
+        // Araç bağlantısı yalnızca uygulama açılışında (startCore → bootstrap).
+        // becomeActive’de yeniden bağlanma / koparma yok.
         if #available(iOS 16.2, *) {
             Task { await EtubuLiveActivityController.publishCurrent() }
         }
@@ -173,6 +170,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         if #available(iOS 16.2, *) {
             EtubuLiveActivityController.endAllNow()
         }
+    }
+
+    func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
+        // Cluster + Cap: all four edges so the UI always faces the user.
+        .all
     }
 
     func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {

@@ -532,6 +532,9 @@ final class EtubuClusterPresenter: NSObject {
 
 /// Hosting VC that keeps SwiftUI sized to the overlay and forwards rotation.
 final class EtubuClusterHostingController: UIHostingController<EtubuClusterRootView> {
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .all }
+    override var shouldAutorotate: Bool { true }
+
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         if let parentBounds = view.superview?.bounds,
