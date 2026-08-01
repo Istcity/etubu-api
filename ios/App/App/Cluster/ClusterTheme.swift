@@ -339,6 +339,7 @@ extension EnvironmentValues {
 struct ClusterThemeBackdrop: View {
     let theme: ClusterTheme
     var landscape: Bool = false
+    var wallpaper: EtubuWallpaperStyle = EtubuWallpaperStyle.stored
     @ObservedObject private var telemetry = EtubuVehicleTelemetry.shared
 
     /// 0…1 — Model S Plaid launch heat (power + speed toward 100).
@@ -363,7 +364,7 @@ struct ClusterThemeBackdrop: View {
 
             if theme == .plaidBoost {
                 plaidBoostWash
-            } else {
+            } else if wallpaper != .minimal {
                 RadialGradient(
                     colors: [theme.accent.opacity(0.32), .clear],
                     center: landscape ? .trailing : .topTrailing,
@@ -389,10 +390,13 @@ struct ClusterThemeBackdrop: View {
                 )
                 .blendMode(.plusLighter)
             }
+
+            EtubuWallpaperOverlay(theme: theme, style: wallpaper, landscape: landscape)
         }
         .ignoresSafeArea()
         .allowsHitTesting(false)
         .animation(.easeOut(duration: 0.18), value: plaidIntensity)
+        .animation(.easeInOut(duration: 0.25), value: wallpaper)
     }
 
     /// Tesla Model S Plaid 0–100: full-bleed heat that climbs yellow → orange → red.

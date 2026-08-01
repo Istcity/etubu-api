@@ -12,6 +12,7 @@ struct EtubuClusterRootView: View {
     @ObservedObject private var trips = EtubuTripHistoryStore.shared
 
     @State private var theme: ClusterTheme = ClusterTheme.stored
+    @State private var wallpaper: EtubuWallpaperStyle = EtubuWallpaperStyle.stored
     @State private var vinDraft: String = ""
     @State private var showVINEditor = false
     @State private var showSettings = false
@@ -155,7 +156,7 @@ struct EtubuClusterRootView: View {
                 if !showLegal && !showSim {
                     backgroundLayer(landscape: landscape, mapWashHeight: layout.mapWashHeight)
                 } else {
-                    ClusterThemeBackdrop(theme: theme, landscape: landscape)
+                    ClusterThemeBackdrop(theme: theme, landscape: landscape, wallpaper: wallpaper)
                 }
 
                 Group {
@@ -269,6 +270,7 @@ struct EtubuClusterRootView: View {
             }
             vinDraft = telemetry.vin.isEmpty ? (EtubuTeslaVinStore.vin ?? "") : telemetry.vin
             theme = ClusterTheme.stored
+            wallpaper = EtubuWallpaperStyle.stored
             EtubuClusterFonts.setTheme(theme)
             EtubuClusterAudioBridge.setLanguage(appLanguage.rawValue)
             EtubuClusterAudioBridge.setTheme(theme.webKey)
@@ -305,6 +307,9 @@ struct EtubuClusterRootView: View {
             ClusterTheme.stored = newValue
             EtubuClusterFonts.setTheme(newValue)
             EtubuClusterAudioBridge.setTheme(newValue.webKey)
+        }
+        .onChange(of: wallpaper) { _, newValue in
+            EtubuWallpaperStyle.stored = newValue
         }
         .onChange(of: appLanguage) { _, newValue in
             EtubuAppLanguage.current = newValue
@@ -417,7 +422,7 @@ struct EtubuClusterRootView: View {
     @ViewBuilder
     private func backgroundLayer(landscape: Bool, mapWashHeight: CGFloat) -> some View {
         ZStack {
-            ClusterThemeBackdrop(theme: theme, landscape: landscape)
+            ClusterThemeBackdrop(theme: theme, landscape: landscape, wallpaper: wallpaper)
 
             if landscape {
                 HStack(spacing: 0) {
@@ -1803,14 +1808,8 @@ struct EtubuClusterRootView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Section(EtubuClusterL10n.theme) {
-                    Picker(EtubuClusterL10n.theme, selection: $theme) {
-                        ForEach(ClusterTheme.allCases) { t in
-                            Text("\(t.title) · \(EtubuCutoutFX.forTheme(t).title)")
-                                .tag(t)
-                        }
-                    }
-                    .pickerStyle(.menu)
+                Section(EtubuClusterL10n.t("themeStoreSection")) {
+                    EtubuThemeStoreView(theme: $theme, wallpaper: $wallpaper)
                 }
                 Section(EtubuClusterL10n.t("cameraEffect")) {
                     Toggle(EtubuClusterL10n.t("notchAuraToggle"), isOn: $notchAuraEnabled)

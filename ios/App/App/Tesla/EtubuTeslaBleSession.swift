@@ -772,6 +772,7 @@ final class EtubuTeslaBleSession: ObservableObject {
                 lastCommandMessage = nearbyChargers.isEmpty
                     ? "Yakında Supercharger yok"
                     : "\(nearbyChargers.count) Supercharger"
+                NotificationCenter.default.post(name: .etubuCarPlayNeedsRefresh, object: nil)
             }
         } catch {
             lastCommandMessage = "Şarj araması başarısız: \(error.localizedDescription)"

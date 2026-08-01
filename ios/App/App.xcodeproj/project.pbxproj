@@ -41,6 +41,8 @@
 		A2TRIPHIST000000000001 /* EtubuTripHistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2TRIPHISTREF000000001 /* EtubuTripHistoryStore.swift */; };
 		A2TRIPANAL000000000001 /* EtubuTripAnalyticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2TRIPANALREF000000001 /* EtubuTripAnalyticsView.swift */; };
 		A2REMCMD00000000000001 /* EtubuRemoteCommandCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2REMCMDREF00000000001 /* EtubuRemoteCommandCards.swift */; };
+		A2THEMESTORE0000000001 /* EtubuThemeStoreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2THEMESTOREREF0000001 /* EtubuThemeStoreView.swift */; };
+		A2CARPLAY0000000000001 /* EtubuCarPlaySceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2CARPLAYREF0000000001 /* EtubuCarPlaySceneDelegate.swift */; };
 		A2EVPLAN00000000000001 /* EtubuEvRoutePlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2EVPLANREF00000000001 /* EtubuEvRoutePlanner.swift */; };
 		1D563AC35F394ECB87FFC3F8 /* EtubuAppIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4C3FFA1A56D45ED8CD1C4FA /* EtubuAppIntents.swift */; };
 		286BE84892964F86BC603F69 /* EtubuVehicleLaunchNotifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF7B17E283CD4709A2743A80 /* EtubuVehicleLaunchNotifier.swift */; };
@@ -185,6 +187,8 @@ A1STATUSWIDGETBUILD001 /* EtubuStatusWidget.swift in Sources */ = {isa = PBXBuil
 		A2TRIPHISTREF000000001 /* EtubuTripHistoryStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuTripHistoryStore.swift; sourceTree = "<group>"; };
 		A2TRIPANALREF000000001 /* EtubuTripAnalyticsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuTripAnalyticsView.swift; sourceTree = "<group>"; };
 		A2REMCMDREF00000000001 /* EtubuRemoteCommandCards.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuRemoteCommandCards.swift; sourceTree = "<group>"; };
+		A2THEMESTOREREF0000001 /* EtubuThemeStoreView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuThemeStoreView.swift; sourceTree = "<group>"; };
+		A2CARPLAYREF0000000001 /* EtubuCarPlaySceneDelegate.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuCarPlaySceneDelegate.swift; sourceTree = "<group>"; };
 		A2EVPLANREF00000000001 /* EtubuEvRoutePlanner.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuEvRoutePlanner.swift; sourceTree = "<group>"; };
 		B4C3FFA1A56D45ED8CD1C4FA /* EtubuAppIntents.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuAppIntents.swift; sourceTree = "<group>"; };
 		CF7B17E283CD4709A2743A80 /* EtubuVehicleLaunchNotifier.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuVehicleLaunchNotifier.swift; sourceTree = "<group>"; };
@@ -264,6 +268,8 @@ A1STATUSWIDGETFILEREF01 /* EtubuStatusWidget.swift */ = {isa = PBXFileReference;
 				A2TRIPHISTREF000000001 /* EtubuTripHistoryStore.swift */,
 				A2TRIPANALREF000000001 /* EtubuTripAnalyticsView.swift */,
 				A2REMCMDREF00000000001 /* EtubuRemoteCommandCards.swift */,
+				A2THEMESTOREREF0000001 /* EtubuThemeStoreView.swift */,
+				A2CARPLAYREF0000000001 /* EtubuCarPlaySceneDelegate.swift */,
 				A2EVPLANREF00000000001 /* EtubuEvRoutePlanner.swift */,
 				BC02A2736F949FCA6F5F5FF2 /* EtubuCameraCutout.swift */,
 				0C2E36FD196C4AD9BAA20D2F /* EtubuWarnVoice.swift */,
@@ -593,6 +599,8 @@ A1STATUSWIDGETFILEREF01 /* EtubuStatusWidget.swift */ = {isa = PBXFileReference;
 				A2TRIPHIST000000000001 /* EtubuTripHistoryStore.swift in Sources */,
 				A2TRIPANAL000000000001 /* EtubuTripAnalyticsView.swift in Sources */,
 				A2REMCMD00000000000001 /* EtubuRemoteCommandCards.swift in Sources */,
+				A2THEMESTORE0000000001 /* EtubuThemeStoreView.swift in Sources */,
+				A2CARPLAY0000000000001 /* EtubuCarPlaySceneDelegate.swift in Sources */,
 				A2EVPLAN00000000000001 /* EtubuEvRoutePlanner.swift in Sources */,
 				1D563AC35F394ECB87FFC3F8 /* EtubuAppIntents.swift in Sources */,
 				286BE84892964F86BC603F69 /* EtubuVehicleLaunchNotifier.swift in Sources */,
