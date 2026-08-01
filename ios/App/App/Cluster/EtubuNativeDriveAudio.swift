@@ -3,10 +3,10 @@ import AVFoundation
 
 /// Cap-independent EV drive hum — loops from Cap www `public/assets/audio/loops/`.
 /// Cap AudioEngine remains preferred when warm; this covers demo / cold Cap.
+/// All AVAudioPlayer work stays on the main queue (AVFoundation requirement).
 final class EtubuNativeDriveAudio {
     static let shared = EtubuNativeDriveAudio()
 
-    private let q = DispatchQueue(label: "com.etubu.nativeDriveAudio", qos: .userInitiated)
     private var bodyPlayer: AVAudioPlayer?
     private var humPlayer: AVAudioPlayer?
     private var running = false
@@ -17,36 +17,49 @@ final class EtubuNativeDriveAudio {
 
     private init() {}
 
-    var isRunning: Bool {
-        q.sync { running && !muted }
-    }
+    /// Engine loaded (may be muted). Used so flushDrive doesn't restart/unmute.
+    var isEngineAlive: Bool { running }
+
+    /// Audible output (running and not muted).
+    var isAudible: Bool { running && !muted }
+
+    /// Legacy alias — means engine alive, not necessarily unmuted.
+    var isRunning: Bool { isEngineAlive }
 
     func start(voice: String = "calm-ev") {
-        q.async { [weak self] in
+        let work = { [weak self] in
             guard let self else { return }
             let key = (voice.isEmpty || voice == "silent-mode") ? "calm-ev" : voice
-            if self.running, self.currentVoice == key, !self.muted {
-                self.applyParams(kmh: self.lastKmh, powerKw: self.lastPower)
+            if self.running, self.currentVoice == key {
+                if !self.muted {
+                    self.applyParams(kmh: self.lastKmh, powerKw: self.lastPower)
+                }
                 return
             }
             self.stopPlayers()
             self.currentVoice = key
-            self.muted = false
-            DispatchQueue.main.async {
-                AppDelegate.activateDriveAudioSession()
-            }
+            // Do not clear mute here — caller decides via setMuted.
+            AppDelegate.activateDriveAudioSession()
             let files = self.loopFiles(for: key)
             self.bodyPlayer = self.makeLoopPlayer(file: files.body, volume: 0.55)
             self.humPlayer = self.makeLoopPlayer(file: files.hum, volume: 0.28)
-            self.bodyPlayer?.play()
-            self.humPlayer?.play()
             self.running = self.bodyPlayer != nil || self.humPlayer != nil
-            self.applyParams(kmh: max(self.lastKmh, 28), powerKw: self.lastPower)
+            if self.muted {
+                self.bodyPlayer?.volume = 0
+                self.humPlayer?.volume = 0
+                self.bodyPlayer?.pause()
+                self.humPlayer?.pause()
+            } else {
+                self.bodyPlayer?.play()
+                self.humPlayer?.play()
+                self.applyParams(kmh: max(self.lastKmh, 28), powerKw: self.lastPower)
+            }
         }
+        if Thread.isMainThread { work() } else { DispatchQueue.main.async(execute: work) }
     }
 
     func setMuted(_ on: Bool) {
-        q.async { [weak self] in
+        let work = { [weak self] in
             guard let self else { return }
             self.muted = on
             if on {
@@ -60,20 +73,22 @@ final class EtubuNativeDriveAudio {
                 self.applyParams(kmh: self.lastKmh, powerKw: self.lastPower)
             }
         }
+        if Thread.isMainThread { work() } else { DispatchQueue.main.async(execute: work) }
     }
 
     func setSpeed(kmh: Int, powerKw: Int?) {
-        q.async { [weak self] in
+        let work = { [weak self] in
             guard let self else { return }
             self.lastKmh = Double(max(0, kmh))
             if let powerKw { self.lastPower = Double(powerKw) }
             guard self.running, !self.muted else { return }
             self.applyParams(kmh: self.lastKmh, powerKw: self.lastPower)
         }
+        if Thread.isMainThread { work() } else { DispatchQueue.main.async(execute: work) }
     }
 
     func stop() {
-        q.async { [weak self] in
+        let work = { [weak self] in
             guard let self else { return }
             self.stopPlayers()
             self.running = false
@@ -81,9 +96,10 @@ final class EtubuNativeDriveAudio {
             self.lastKmh = 0
             self.lastPower = 0
         }
+        if Thread.isMainThread { work() } else { DispatchQueue.main.async(execute: work) }
     }
 
-    // MARK: - Internals (queue)
+    // MARK: - Internals
 
     private func stopPlayers() {
         bodyPlayer?.stop()

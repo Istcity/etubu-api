@@ -45,6 +45,15 @@ enum EtubuWarnVoice {
         return true
     }
 
+    /// Stop in-flight warn clips (demo end / mute path).
+    static func stopAll() {
+        playToken &+= 1
+        players.forEach { $0.stop() }
+        players.removeAll()
+        lastKey = ""
+        lastAt = Date.distantPast
+    }
+
     private static func playSequence(urls: [URL], index: Int, token: Int, volume: Float) {
         guard token == playToken, index < urls.count else { return }
         do {

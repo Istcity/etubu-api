@@ -119,6 +119,7 @@ struct EtubuThemeStoreView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(t.title)
+        .accessibilityIdentifier("etubu.theme.\(t.rawValue)")
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
@@ -146,6 +147,8 @@ struct EtubuThemeStoreView: View {
             )
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("etubu.wallpaper.\(style.rawValue)")
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 

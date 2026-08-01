@@ -7,27 +7,22 @@ appId: com.etubu.app
       notifications: deny
     arguments:
       etubuSkipOnboarding: true
+- runFlow: dismiss-permissions.yaml
 - extendedWaitUntil:
-    visible: "Okudum, anladım.*"
-    timeout: 15000
+    visible:
+      id: "etubu.legal.checkbox"
+    timeout: 20000
 - tapOn:
     id: "etubu.legal.checkbox"
 - tapOn:
+    id: "etubu.legal.accept"
+    optional: true
+- tapOn:
     point: "50%,92%"
+    optional: true
 - waitForAnimationToEnd:
     timeout: 2000
-- tapOn:
-    text: "Uygulamayı Kullanırken İzin Ver"
-    optional: true
-- tapOn:
-    text: "Allow While Using App"
-    optional: true
-- tapOn:
-    text: "İzin Ver"
-    optional: true
-- waitForAnimationToEnd:
-    timeout: 1500
-# skipOnboarding arg → sim yok; yine de Atla varsa geç
+- runFlow: dismiss-permissions.yaml
 - runFlow:
     when:
       visible:
@@ -50,12 +45,14 @@ appId: com.etubu.app
     element:
       id: "etubu.demo.toggle"
     direction: DOWN
-    timeout: 12000
+    timeout: 16000
 - tapOn:
     id: "etubu.demo.toggle"
 - waitForAnimationToEnd:
     timeout: 1500
-# Settings sheet kapat — portrait EV şeridi görünsün
+- tapOn:
+    id: "etubu.settings.done"
+    optional: true
 - tapOn:
     text: "Tamam"
     optional: true
@@ -88,14 +85,16 @@ appId: com.etubu.app
     timeout: 10000
     optional: true
 - takeScreenshot: ev-plan-demo-portrait
-# Settings’te EV planı bölümü
 - tapOn:
     id: "etubu.settings.open"
 - scrollUntilVisible:
     element: "EV rota planı"
     direction: DOWN
-    timeout: 10000
+    timeout: 12000
 - assertVisible: "EV rota planı"
+- tapOn:
+    id: "etubu.settings.done"
+    optional: true
 - tapOn:
     text: "Tamam"
     optional: true
@@ -110,4 +109,6 @@ appId: com.etubu.app
     timeout: 1500
 - assertNotVisible:
     id: "etubu.demo.stop"
+- assertVisible:
+    id: "etubu.sound.off"
 - takeScreenshot: ev-plan-demo-stopped

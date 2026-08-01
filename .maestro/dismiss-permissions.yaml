@@ -1,0 +1,28 @@
+appId: com.etubu.app
+---
+# Ortak: sistem izin diyaloglarını kapat (widget konum vs legal UI)
+- runFlow:
+    when:
+      visible: "İzin Ver"
+    commands:
+      - tapOn: "İzin Verme"
+- runFlow:
+    when:
+      visible: "Don't Allow"
+    commands:
+      - tapOn: "Don't Allow"
+- runFlow:
+    when:
+      visible: "Allow While Using App"
+    commands:
+      - tapOn: "Allow While Using App"
+- runFlow:
+    when:
+      visible: "Uygulamayı Kullanırken İzin Ver"
+    commands:
+      - tapOn: "Uygulamayı Kullanırken İzin Ver"
+- runFlow:
+    when:
+      visible: "İzin Ver"
+    commands:
+      - tapOn: "İzin Ver"

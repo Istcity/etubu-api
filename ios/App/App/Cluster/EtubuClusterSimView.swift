@@ -1,5 +1,10 @@
 import SwiftUI
+import UIKit
 import CoreLocation
+
+extension Notification.Name {
+    static let etubuSimFinished = Notification.Name("etubu.sim.finished")
+}
 
 /// Klasik swipe onboarding — 4 ekran, altta dots, Atla + son ekranda Başla.
 /// İzinler (konum + Bluetooth) ilk ekranda istenir.
@@ -47,25 +52,28 @@ struct EtubuClusterSimView: View {
 
             VStack(spacing: 0) {
                 HStack {
-                    Button {
-                        finish(requestRemainder: false)
-                    } label: {
-                        Text("Atla")
-                            .font(EtubuClusterFonts.ui(15, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.8))
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 10)
-                            .background(Capsule().fill(Color.white.opacity(0.12)))
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Atla")
-                    .accessibilityIdentifier("etubu.sim.skip")
+                    Text("Atla")
+                        .font(EtubuClusterFonts.ui(15, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.8))
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 12)
+                        .frame(minWidth: 72, minHeight: 44)
+                        .background(Capsule().fill(Color.white.opacity(0.14)))
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            finish(requestRemainder: false)
+                        }
+                        .accessibilityLabel("Atla")
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityIdentifier("etubu.sim.skip")
+                        .accessibilityAction {
+                            finish(requestRemainder: false)
+                        }
                     Spacer()
                 }
                 .padding(.horizontal, 20)
-                // Dynamic Island / status bar altında kalsın — Maestro tap’leri status bara düşmesin.
-                .padding(.top, 56)
+                .padding(.top, 12)
+                .safeAreaPadding(.top, 8)
                 .zIndex(20)
 
                 TabView(selection: $page) {
@@ -87,8 +95,10 @@ struct EtubuClusterSimView: View {
                 bottomCTA
                     .padding(.horizontal, 24)
                     .padding(.bottom, 28)
-                    .zIndex(20)
-                    .background(Color.black.opacity(0.001)) // hit-test band
+                    .padding(.top, 8)
+                    .frame(maxWidth: .infinity)
+                    .background(theme.canvas.opacity(0.97))
+                    .zIndex(40)
             }
         }
         .onAppear {
@@ -202,26 +212,24 @@ struct EtubuClusterSimView: View {
 
     private var bottomCTA: some View {
         let isLast = page >= pages.count - 1
-        return Button {
+        return EtubuSimUIKitButton(
+            title: isLast ? "Başla" : "Devam",
+            accessibilityId: isLast ? "etubu.sim.start" : "etubu.sim.continue",
+            accent: UIColor(theme.accent)
+        ) {
             if isLast {
                 finish(requestRemainder: false)
             } else {
                 withAnimation { page += 1 }
             }
-        } label: {
-            Text(isLast ? "Başla" : "Devam")
-                .font(EtubuClusterFonts.ui(17, weight: .bold))
-                .foregroundStyle(.black)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 15)
-                .background(theme.accent, in: Capsule())
-                .contentShape(Rectangle())
         }
-        .accessibilityIdentifier(isLast ? "etubu.sim.start" : "etubu.sim.continue")
+        .frame(height: 52)
     }
 
     private func finish(requestRemainder: Bool) {
         UserDefaults.standard.set(true, forKey: Self.doneKey)
+        UserDefaults.standard.synchronize()
+        NotificationCenter.default.post(name: .etubuSimFinished, object: nil)
         if requestRemainder {
             if !permissions.locationReady {
                 permissions.requestLocation(completion: nil)
@@ -238,6 +246,57 @@ struct EtubuClusterSimView: View {
     /// v4 — gerçek ekran görüntüleri + işaretlemeler
     static let doneKey = "etubu.cluster.simDone.v4"
     static var isDone: Bool { UserDefaults.standard.bool(forKey: doneKey) }
+}
+
+/// Maestro/XCTest güvenilir hit — `accessibilityActivate` (touchUpInside değil) kullanır.
+private struct EtubuSimUIKitButton: UIViewRepresentable {
+    var title: String
+    var accessibilityId: String
+    var accent: UIColor
+    var action: () -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(action: action) }
+
+    func makeUIView(context: Context) -> EtubuA11yButton {
+        let b = EtubuA11yButton(type: .system)
+        b.titleLabel?.font = .systemFont(ofSize: 17, weight: .bold)
+        b.setTitleColor(.black, for: .normal)
+        b.backgroundColor = accent
+        b.layer.cornerRadius = 26
+        b.clipsToBounds = true
+        b.addTarget(context.coordinator, action: #selector(Coordinator.tap), for: .touchUpInside)
+        b.onActivate = { [weak coordinator = context.coordinator] in
+            coordinator?.tap()
+        }
+        b.accessibilityTraits = .button
+        b.isAccessibilityElement = true
+        return b
+    }
+
+    func updateUIView(_ uiView: EtubuA11yButton, context: Context) {
+        uiView.setTitle(title, for: .normal)
+        uiView.accessibilityIdentifier = accessibilityId
+        uiView.accessibilityLabel = title
+        uiView.backgroundColor = accent
+        context.coordinator.action = action
+        uiView.onActivate = { [weak coordinator = context.coordinator] in
+            coordinator?.tap()
+        }
+    }
+
+    final class Coordinator: NSObject {
+        var action: () -> Void
+        init(action: @escaping () -> Void) { self.action = action }
+        @objc func tap() { action() }
+    }
+}
+
+private final class EtubuA11yButton: UIButton {
+    var onActivate: (() -> Void)?
+    override func accessibilityActivate() -> Bool {
+        onActivate?()
+        return true
+    }
 }
 
 private struct OnboardPage {

@@ -4,6 +4,7 @@ import Combine
 
 extension Notification.Name {
     static let etubuDemoSoundArmed = Notification.Name("etubuDemoSoundArmed")
+    static let etubuDemoSoundDisarmed = Notification.Name("etubuDemoSoundDisarmed")
 }
 
 /// Demo: İstanbul Küçükçekmece → İzmit (Kocaeli), hızlandırılmış gerçek rota simülasyonu.
@@ -166,6 +167,8 @@ final class EtubuDemoDrive: ObservableObject {
         t.kmh = 0
         t.gear = "P"
         t.powerKw = 0
+        t.rpm = 0
+        t.powerHistory = []
         t.endDemoChargeOverlay()
         displayKmh = 0
         displayGear = "P"
@@ -178,6 +181,8 @@ final class EtubuDemoDrive: ObservableObject {
         EtubuDriveWarnings.shared.routeCoords = []
         EtubuOsmSpeedLimit.shared.clearDemoOverride()
         EtubuClusterAudioBridge.endDrive()
+        UserDefaults.standard.set("silent-mode", forKey: "etubu.cluster.voice")
+        NotificationCenter.default.post(name: .etubuDemoSoundDisarmed, object: nil)
         if #available(iOS 16.2, *) {
             Task { await EtubuLiveActivityController.end() }
         }

@@ -2,25 +2,26 @@ appId: com.etubu.app
 ---
 - launchApp:
     clearState: true
+    permissions:
+      all: allow
+      notifications: deny
     arguments:
       etubuSkipOnboarding: true
+- runFlow: dismiss-permissions.yaml
 - extendedWaitUntil:
-    visible: "Okudum, anladım.*"
-    timeout: 15000
+    visible:
+      id: "etubu.legal.checkbox"
+    timeout: 20000
 - tapOn:
     id: "etubu.legal.checkbox"
     optional: true
 - tapOn:
+    id: "etubu.legal.accept"
+    optional: true
+- tapOn:
     point: "50%,90%"
-- tapOn:
-    text: "Uygulamayı Kullanırken İzin Ver"
     optional: true
-- tapOn:
-    text: "Allow While Using App"
-    optional: true
-- tapOn:
-    text: "İzin Ver"
-    optional: true
+- runFlow: dismiss-permissions.yaml
 - extendedWaitUntil:
     visible: "km/h"
     timeout: 25000
@@ -33,7 +34,7 @@ appId: com.etubu.app
     element:
       id: "etubu.demo.toggle"
     direction: DOWN
-    timeout: 12000
+    timeout: 16000
 - tapOn:
     id: "etubu.demo.toggle"
 - waitForAnimationToEnd:
@@ -56,3 +57,10 @@ appId: com.etubu.app
 - assertVisible:
     id: "etubu.sound.on"
 - takeScreenshot: demo-drive-live
+- tapOn:
+    id: "etubu.sound.on"
+- waitForAnimationToEnd:
+    timeout: 2000
+- assertVisible:
+    id: "etubu.sound.off"
+- takeScreenshot: demo-drive-muted

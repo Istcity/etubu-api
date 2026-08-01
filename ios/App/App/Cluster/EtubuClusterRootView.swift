@@ -35,7 +35,9 @@ struct EtubuClusterRootView: View {
         }
         return false
     }()
-    private var showSim: Bool { !simDone }
+    /// AppStorage mirror — finish() UserDefaults yazınca SwiftUI mutlaka yeniden çizsin (Maestro tap).
+    @AppStorage(EtubuClusterSimView.doneKey) private var simDoneStored = false
+    private var showSim: Bool { !simDone && !simDoneStored }
     @State private var remoteChargeLimit: Double = 80
     @State private var leftCardPage: LeftCardPage = .tpms
     @State private var l10nTick = 0
@@ -220,6 +222,7 @@ struct EtubuClusterRootView: View {
                 if !showLegal && showSim {
                     EtubuClusterSimView(theme: theme, hotspots: hotspotFrames, canvasSize: geo.size) {
                         simDone = true
+                        simDoneStored = true
                         startCoreIfNeeded()
                     }
                     .zIndex(45)
@@ -285,13 +288,25 @@ struct EtubuClusterRootView: View {
         .onChange(of: warnings.routeCoords.count) { _, _ in syncThrottledMapCamera(force: true) }
         .onChange(of: demo.isRunning) { _, running in
             if running {
-                selectedVoice = "calm-ev"
+                selectedVoice = EtubuClusterAudioBridge.defaultDriveVoice
                 soundOn = true
+            } else {
+                soundOn = false
+                selectedVoice = "silent-mode"
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .etubuDemoSoundArmed)) { _ in
-            selectedVoice = "calm-ev"
+            selectedVoice = EtubuClusterAudioBridge.defaultDriveVoice
             soundOn = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .etubuDemoSoundDisarmed)) { _ in
+            soundOn = false
+            selectedVoice = "silent-mode"
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .etubuSimFinished)) { _ in
+            simDone = true
+            simDoneStored = true
+            if !showLegal { startCoreIfNeeded() }
         }
         .onReceive(NotificationCenter.default.publisher(for: .etubuLegalAccepted)) { _ in
             legalGate.accepted = true
@@ -1774,7 +1789,7 @@ struct EtubuClusterRootView: View {
                             demo.stop()
                         } else {
                             demo.start()
-                            selectedVoice = "calm-ev"
+                            selectedVoice = EtubuClusterAudioBridge.defaultDriveVoice
                             soundOn = true
                             DispatchQueue.main.async {
                                 showSettings = false
@@ -1916,6 +1931,7 @@ struct EtubuClusterRootView: View {
                 }
                 ToolbarItem(placement: .cancellationAction) {
                     Button(EtubuClusterL10n.done) { showSettings = false }
+                        .accessibilityIdentifier("etubu.settings.done")
                 }
             }
         }
@@ -1998,7 +2014,7 @@ struct EtubuClusterRootView: View {
 
     private func toggleSound(_ on: Bool) {
         if on {
-            let voice = selectedVoice == "silent-mode" ? "asphalt-roar" : selectedVoice
+            let voice = selectedVoice == "silent-mode" ? EtubuClusterAudioBridge.defaultDriveVoice : selectedVoice
             if selectedVoice == "silent-mode" {
                 selectedVoice = voice
             }
@@ -2072,6 +2088,7 @@ private struct EtubuSoundIconControl: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("etubu.sound.profile")
             .accessibilityLabel("Ses profili")
             .accessibilityHint("Dokunarak değiştir")
         }

@@ -78,11 +78,23 @@ enum EtubuClusterAudioBridge {
     }
 
     /// Fast on/off — prefers `AudioEngine.setMuted` so the icon responds immediately.
+    private static let soundOnKey = "etubu.cluster.evSoundOn"
+    static let defaultDriveVoice = "calm-ev"
+
+    static var isSoundWanted: Bool {
+        get { UserDefaults.standard.object(forKey: soundOnKey) as? Bool ?? false }
+        set { UserDefaults.standard.set(newValue, forKey: soundOnKey) }
+    }
+
+    /// Bumped on endDrive so late Cap retries / demo asyncAfter no-op.
+    private static var driveGeneration: UInt64 = 0
+
     static func setSoundEnabled(_ on: Bool, voice: String? = nil) {
         let key = (voice ?? storedVoice)
             .replacingOccurrences(of: "'", with: "")
             .replacingOccurrences(of: "\n", with: "")
-        let resolved = (key.isEmpty || key == "silent-mode") ? "calm-ev" : key
+        let resolved = (key.isEmpty || key == "silent-mode") ? defaultDriveVoice : key
+        isSoundWanted = on
         if on {
             UserDefaults.standard.set(resolved, forKey: "etubu.cluster.voice")
             AppDelegate.activateDriveAudioSession()
@@ -122,7 +134,9 @@ enum EtubuClusterAudioBridge {
             })();
             """)
             // Cap ısındığında native'i kıs — çift ses olmasın.
+            let gen = driveGeneration
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                guard gen == driveGeneration, isSoundWanted else { return }
                 handoffNativeIfCapWarm()
             }
         } else {
@@ -141,7 +155,7 @@ enum EtubuClusterAudioBridge {
     }
 
     static func startDrive(kmh: Int, gear: String, source: String, powerKw: Int? = nil) {
-        let voice = storedVoice == "silent-mode" ? "calm-ev" : storedVoice
+        let voice = storedVoice == "silent-mode" ? defaultDriveVoice : storedVoice
         setSoundEnabled(true, voice: voice)
         EtubuNativeDriveAudio.shared.start(voice: voice)
         EtubuNativeDriveAudio.shared.setSpeed(kmh: kmh, powerKw: powerKw)
@@ -187,10 +201,12 @@ enum EtubuClusterAudioBridge {
     }
 
     private static func ensureDriveEngine(voice: String, retriesLeft: Int) {
+        let gen = driveGeneration
+        guard isSoundWanted else { return }
         let safe = voice
             .replacingOccurrences(of: "'", with: "")
             .replacingOccurrences(of: "\n", with: "")
-        let key = (safe.isEmpty || safe == "silent-mode") ? "calm-ev" : safe
+        let key = (safe.isEmpty || safe == "silent-mode") ? defaultDriveVoice : safe
         AppDelegate.activateDriveAudioSession()
         EtubuCapBridgeViewController.armWebContent()
         evalJSReturning("""
@@ -214,6 +230,7 @@ enum EtubuClusterAudioBridge {
           } catch (e) { return 'err'; }
         })();
         """, timeout: 4) { result in
+            guard gen == driveGeneration, isSoundWanted else { return }
             let s = result ?? ""
             if s == "ok" || s == "started" {
                 handoffNativeIfCapWarm()
@@ -222,6 +239,7 @@ enum EtubuClusterAudioBridge {
             guard retriesLeft > 0 else { return }
             engineRetryWork?.cancel()
             let work = DispatchWorkItem {
+                guard gen == driveGeneration, isSoundWanted else { return }
                 ensureDriveEngine(voice: key, retriesLeft: retriesLeft - 1)
             }
             engineRetryWork = work
@@ -232,6 +250,7 @@ enum EtubuClusterAudioBridge {
     private static func flushDrive() {
         guard let d = pendingDrive else { return }
         pendingDrive = nil
+        let soundOn = isSoundWanted
         let p = d.powerKw.map(String.init) ?? "null"
         let src = d.source
             .replacingOccurrences(of: "'", with: "")
@@ -239,15 +258,22 @@ enum EtubuClusterAudioBridge {
         let voice = storedVoice
             .replacingOccurrences(of: "'", with: "")
             .replacingOccurrences(of: "\n", with: "")
-        let voiceKey = (voice.isEmpty || voice == "silent-mode") ? "calm-ev" : voice
+        let voiceKey = (voice.isEmpty || voice == "silent-mode") ? defaultDriveVoice : voice
         let isDemo = src == "demo"
+        let gen = driveGeneration
 
-        // Native always tracks speed — Cap cold olsa da motor hissi var.
-        if !EtubuNativeDriveAudio.shared.isRunning {
-            EtubuNativeDriveAudio.shared.start(voice: voiceKey)
+        // Native: keep engine alive for speed params, but never unmute while UI mute is on.
+        if soundOn {
+            if !EtubuNativeDriveAudio.shared.isEngineAlive {
+                EtubuNativeDriveAudio.shared.start(voice: voiceKey)
+                EtubuNativeDriveAudio.shared.setMuted(false)
+            }
+            EtubuNativeDriveAudio.shared.setSpeed(kmh: d.kmh, powerKw: d.powerKw)
+        } else if EtubuNativeDriveAudio.shared.isEngineAlive {
+            EtubuNativeDriveAudio.shared.setMuted(true)
         }
-        EtubuNativeDriveAudio.shared.setSpeed(kmh: d.kmh, powerKw: d.powerKw)
 
+        let muteJS = soundOn ? "false" : "true"
         evalJS("""
         (function(){
           try {
@@ -258,14 +284,17 @@ enum EtubuClusterAudioBridge {
               window.__etubuDrivePending = { kmh: \(d.kmh), powerKw: \(p), source: '\(src)' };
               return;
             }
+            if (!\(soundOn ? "true" : "false")) {
+              if (AE.setMuted) AE.setMuted(true);
+              return;
+            }
             if (AE.setQuality) { try { AE.setQuality('high'); } catch (e0) {} }
             if (AE.resume) { try { AE.resume(); } catch (e1) {} }
             var want = '\(voiceKey)';
             if (want && AE.start && (!AE._running || (AE._voiceKey && AE._voiceKey !== want))) {
               try { AE.start(want); } catch (e2) {}
-              if (AE.setMuted) AE.setMuted(false);
             }
-            if (AE.setMuted) AE.setMuted(false);
+            if (AE.setMuted) AE.setMuted(\(muteJS));
             var prev = (typeof window.__etubuPrevKmh === 'number') ? window.__etubuPrevKmh : \(d.kmh);
             var trend = \(d.kmh) - prev;
             if (\(isDemo ? "true" : "false") && AE.snapSpeed) {
@@ -286,9 +315,12 @@ enum EtubuClusterAudioBridge {
           } catch (e) {}
         })();
         """)
-        handoffNativeIfCapWarm()
-        if isDemo {
+        if soundOn {
+            handoffNativeIfCapWarm()
+        }
+        if isDemo, soundOn {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                guard gen == driveGeneration, isSoundWanted else { return }
                 evalJS("""
                 (function(){
                   try {
@@ -309,15 +341,20 @@ enum EtubuClusterAudioBridge {
 
     /// Cap AudioEngine ısındığında native loop'u kıs — çift motor sesi olmasın.
     private static func handoffNativeIfCapWarm() {
+        guard isSoundWanted else { return }
+        let gen = driveGeneration
         evalJSReturning("""
         (function(){
           try {
             var AE = window.AudioEngine;
-            if (AE && AE._running && !AE._muted) return 'warm';
-            return 'cold';
+            if (!AE || !AE._running || AE._muted) return 'cold';
+            var ctx = AE._ctx || AE.ctx || AE._audioContext || AE.audioContext;
+            if (ctx && ctx.state && ctx.state !== 'running') return 'cold';
+            return 'warm';
           } catch (e) { return 'cold'; }
         })();
         """, timeout: 2) { result in
+            guard gen == driveGeneration, isSoundWanted else { return }
             if result == "warm" {
                 EtubuNativeDriveAudio.shared.setMuted(true)
             }
@@ -484,13 +521,22 @@ enum EtubuClusterAudioBridge {
     }
 
     static func endDrive() {
+        driveGeneration &+= 1
+        isSoundWanted = false
+        engineRetryWork?.cancel()
+        engineRetryWork = nil
+        driveFlushWork?.cancel()
+        driveFlushWork = nil
+        pendingDrive = nil
         EtubuNativeDriveAudio.shared.stop()
+        EtubuWarnVoice.stopAll()
         // Cluster owns Live Activity — don't tear Island when Cap/web stops EV loop.
         evalJS("""
         (function(){
           try {
             if (window.AudioEngine && window.AudioEngine.stop) window.AudioEngine.stop();
             if (window.RadarAlert && window.RadarAlert.clear) window.RadarAlert.clear();
+            try { if (window.speechSynthesis) window.speechSynthesis.cancel(); } catch (e0) {}
           } catch (e) {}
         })();
         """)

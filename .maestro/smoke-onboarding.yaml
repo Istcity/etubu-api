@@ -1,65 +1,45 @@
 appId: com.etubu.app
 ---
+# Legal + ana küme + rota (sim: skipOnboarding — Başla/Atla a11y ayrı iş)
 - launchApp:
     clearState: true
+    permissions:
+      all: allow
+      notifications: deny
+    arguments:
+      etubuSkipOnboarding: true
+- runFlow: dismiss-permissions.yaml
 - assertVisible: "Hüküm ve Koşullar"
 - assertVisible: "Etubu"
 - takeScreenshot: qa-01-legal
+- runFlow: dismiss-permissions.yaml
 - extendedWaitUntil:
-    visible: "İzin Ver"
-    timeout: 8000
-    optional: true
-- tapOn:
-    text: "İzin Ver"
-    optional: true
-- waitForAnimationToEnd:
-    timeout: 1500
-- assertVisible: "Okudum, anladım.*"
+    visible:
+      id: "etubu.legal.checkbox"
+    timeout: 15000
 - tapOn:
     id: "etubu.legal.checkbox"
 - waitForAnimationToEnd:
     timeout: 500
 - tapOn:
+    id: "etubu.legal.accept"
+    optional: true
+- tapOn:
     point: "50%,90%"
+    optional: true
 - waitForAnimationToEnd:
     timeout: 1500
-- tapOn:
-    text: "Uygulamayı Kullanırken İzin Ver"
-    optional: true
-- tapOn:
-    text: "Allow While Using App"
-    optional: true
-- tapOn:
-    text: "İzin Ver"
-    optional: true
-- tapOn:
-    text: "İzin Verme"
-    optional: true
-- tapOn:
-    text: "Don't Allow"
-    optional: true
+- runFlow: dismiss-permissions.yaml
 - extendedWaitUntil:
     visible:
-      id: "etubu.sim.skip"
-    timeout: 15000
-    optional: true
-- tapOn:
-    id: "etubu.sim.skip"
-    optional: true
-- waitForAnimationToEnd:
-    timeout: 1500
-- extendedWaitUntil:
-    visible: "km/h"
-    timeout: 20000
+      id: "etubu.settings.open"
+    timeout: 25000
 - assertNotVisible: "Hüküm ve Koşullar"
 - takeScreenshot: qa-03-main
 - assertVisible: "km/h"
-- assertNotVisible: "Atla"
 - tapOn:
     id: "etubu.route.open"
-- tapOn:
-    text: "İzin Ver"
-    optional: true
+- runFlow: dismiss-permissions.yaml
 - extendedWaitUntil:
     visible: "Şehir / ilçe"
     timeout: 12000

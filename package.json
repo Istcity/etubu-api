@@ -7,7 +7,8 @@
     "sync": "cap sync ios",
     "open:ios": "cap open ios",
     "build:ios": "xcodebuild -workspace ios/App/App.xcworkspace -scheme Etubu -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' build",
-    "test:maestro": "maestro test --device 'iPhone 17 Pro' .maestro/smoke-onboarding.yaml"
+    "test:maestro": "export PATH=\"/opt/homebrew/opt/openjdk@17/bin:$HOME/.maestro/bin:$PATH\" JAVA_HOME=\"/opt/homebrew/opt/openjdk@17\" && maestro test --device 'iPhone 17 Pro' .maestro/smoke-onboarding.yaml .maestro/demo-stop-sound-check.yaml .maestro/demo-drive-check.yaml .maestro/ev-plan-demo-check.yaml",
+    "test:maestro:sound": "export PATH=\"/opt/homebrew/opt/openjdk@17/bin:$HOME/.maestro/bin:$PATH\" JAVA_HOME=\"/opt/homebrew/opt/openjdk@17\" && maestro test --device 'iPhone 17 Pro' .maestro/demo-stop-sound-check.yaml"
   },
   "dependencies": {
     "@capacitor/app": "^8.1.1",
