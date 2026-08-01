@@ -37,6 +37,9 @@ final class EtubuVehicleTelemetry: ObservableObject {
     @Published var vin: String = ""
     @Published var lastUpdateAt: Date?
 
+    /// Demo tick — RootView dial’ının SwiftUI yenilemesi için.
+    @Published var demoUIEpoch: Int = 0
+
     // Drive
     @Published var kmh: Int = 0
     @Published var gear: String = "P"
@@ -65,11 +68,20 @@ final class EtubuVehicleTelemetry: ObservableObject {
     @Published var navRemainKm: Double?
     @Published var navEtaMinutes: Double?
     @Published var energyAtArrivalPercent: Int?
+    /// Hedef varış SoC altına düşülecekse true (EV plan).
+    @Published var needsChargeStop: Bool = false
+    @Published var suggestedChargeCount: Int = 0
+    @Published var nextChargeAlongKm: Double?
 
     // Cap RouteGuard trip
     @Published var routeActive: Bool = false
     @Published var routeFrom: String = ""
     @Published var routeTo: String = ""
+    /// Cap RouteGuard kalan mesafe (Tesla navRemainKm yokken EV plan için).
+    @Published var capRouteRemainKm: Double?
+    /// Son planlanan hedef koordinat (Maps handoff).
+    @Published var routeDestLat: Double?
+    @Published var routeDestLng: Double?
 
     // TPMS (psi)
     @Published var tpmsFL = EtubuTireReading(psi: nil, warning: false)
@@ -112,6 +124,45 @@ final class EtubuVehicleTelemetry: ObservableObject {
             statusMessage = "Ready · \(String(saved.suffix(6)))"
             deviceLabel = "Tesla \(String(saved.suffix(6)))"
         }
+        restoreLastChargeSnapshot()
+    }
+
+    private static let lastSocKey = "etubu.charge.lastSoc"
+    private static let lastRangeKey = "etubu.charge.lastRangeKm"
+    private static let lastLimitKey = "etubu.charge.lastLimit"
+    private static let lastChargeAtKey = "etubu.charge.lastAt"
+
+    /// Bağlı değilken UI’da gösterilen şarj (canlı veya son bilinen).
+    var displaySocPercent: Int? { socPercent }
+    var displayRangeKm: Int? { rangeKm }
+    var isShowingCachedCharge: Bool {
+        !isLiveTesla && socPercent != nil
+    }
+
+    private func restoreLastChargeSnapshot() {
+        let ud = UserDefaults.standard
+        if let soc = ud.object(forKey: Self.lastSocKey) as? Int {
+            socPercent = min(100, max(0, soc))
+        }
+        if let range = ud.object(forKey: Self.lastRangeKey) as? Int {
+            rangeKm = max(0, range)
+        }
+        if let lim = ud.object(forKey: Self.lastLimitKey) as? Int {
+            chargeLimitPercent = min(100, max(50, lim))
+        }
+    }
+
+    private func persistLastChargeSnapshot() {
+        let ud = UserDefaults.standard
+        if let soc = socPercent { ud.set(soc, forKey: Self.lastSocKey) }
+        if let range = rangeKm { ud.set(range, forKey: Self.lastRangeKey) }
+        if let lim = chargeLimitPercent { ud.set(lim, forKey: Self.lastLimitKey) }
+        ud.set(Date().timeIntervalSince1970, forKey: Self.lastChargeAtKey)
+    }
+
+    /// Demo / harici yollar — SoC cache’i UI için sakla.
+    func persistChargeCacheForUI() {
+        persistLastChargeSnapshot()
     }
 
     var isLiveTesla: Bool { source == .tesla && connectionState == .connected }
@@ -127,12 +178,20 @@ final class EtubuVehicleTelemetry: ObservableObject {
     }
 
     var connectionQualityLabel: String {
-        guard connectionState == .connected else { return connectionState.rawValue }
-        guard let s = connectionFreshnessSeconds else { return "Bağlı" }
-        if s < 3 { return "Canlı" }
-        if s < 8 { return "İyi" }
-        if s < 20 { return "Gecikmeli" }
-        return "Zayıf"
+        switch connectionState {
+        case .connected:
+            guard let s = connectionFreshnessSeconds else { return "Bağlı" }
+            if s < 3 { return "Canlı" }
+            if s < 8 { return "İyi" }
+            if s < 20 { return "Gecikmeli" }
+            return "Zayıf"
+        case .needsVIN: return "VIN gerekli"
+        case .pairing, .waitingForCard: return "Eşleşiyor"
+        case .connecting: return "Bağlanıyor"
+        case .reconnecting: return "Yeniden bağlanıyor"
+        case .failed: return "Bağlantı yok"
+        case .disconnected, .idle: return "Bağlı değil"
+        }
     }
 
     func applyTeslaDrive(
@@ -144,6 +203,7 @@ final class EtubuVehicleTelemetry: ObservableObject {
         navRemainKm: Double?,
         navEtaMinutes: Double?
     ) {
+        guard !EtubuDemoDrive.isActive else { return }
         self.kmh = max(0, kmh)
         self.gear = gear
         self.powerKw = powerKw
@@ -160,6 +220,17 @@ final class EtubuVehicleTelemetry: ObservableObject {
         recomputeEnergyAtArrival()
         self.source = .tesla
         lastUpdateAt = Date()
+        publishWidgetSnapshot()
+        let tripRoute = routeTo.isEmpty ? (navDestination ?? "") : routeTo
+        Task { @MainActor in
+            EtubuTripHistoryStore.shared.noteTelemetry(
+                kmh: kmh,
+                gear: gear,
+                odo: odometerKm,
+                powerKw: powerKw,
+                routeTo: tripRoute
+            )
+        }
     }
 
     func applyTeslaCharge(
@@ -173,6 +244,7 @@ final class EtubuVehicleTelemetry: ObservableObject {
         minutesToFull: Int?,
         portOpen: Bool?
     ) {
+        guard !EtubuDemoDrive.isActive else { return }
         if let soc { socPercent = soc }
         if let rangeKm { self.rangeKm = rangeKm }
         self.chargeKw = chargeKw
@@ -182,8 +254,10 @@ final class EtubuVehicleTelemetry: ObservableObject {
         if let volts { chargerVolts = volts }
         if let minutesToFull { minutesToFullCharge = minutesToFull }
         if let portOpen { chargePortOpen = portOpen }
+        persistLastChargeSnapshot()
         recomputeEnergyAtArrival()
         lastUpdateAt = Date()
+        publishWidgetSnapshot()
     }
 
     func applyTeslaClimate(outsideC: Double?, insideC: Double?, climateOn: Bool?) {
@@ -194,10 +268,12 @@ final class EtubuVehicleTelemetry: ObservableObject {
     }
 
     func applyTeslaTPMS(fl: EtubuTireReading, fr: EtubuTireReading, rl: EtubuTireReading, rr: EtubuTireReading) {
-        tpmsFL = fl
-        tpmsFR = fr
-        tpmsRL = rl
-        tpmsRR = rr
+        // Keep last good psi when a snapshot has the tirePressure category but nil corners
+        // (partial/empty frames were wiping the grid back to "—").
+        if fl.psi != nil || fl.warning { tpmsFL = fl }
+        if fr.psi != nil || fr.warning { tpmsFR = fr }
+        if rl.psi != nil || rl.warning { tpmsRL = rl }
+        if rr.psi != nil || rr.warning { tpmsRR = rr }
         lastUpdateAt = Date()
     }
 
@@ -234,6 +310,37 @@ final class EtubuVehicleTelemetry: ObservableObject {
         if let heading { headingDeg = heading }
     }
 
+    /// Phone GPS speed bridge when Tesla/OBD drive sample is stale — never overrides fresh vehicle data.
+    /// Dururken hayalet hız üretmez (sim/park gürültüsü).
+    func applyGpsSpeedBridge(kmh: Int) {
+        // Demo sürüşü telemetrisi GPS ile ezilmesin (sim park = 0 km/h).
+        if EtubuDemoDrive.isActive { return }
+        let age = connectionFreshnessSeconds ?? 999
+        if source == .tesla && connectionState == .connected && age < 1.8 { return }
+        if source == .obd && age < 0.9 { return }
+        let next = max(0, kmh)
+        // < 4 km/h → park / GPS noise — sıfırla
+        if next < 4 {
+            if source == .gps || source == .none {
+                if self.kmh != 0 { self.kmh = 0 }
+                if source == .gps {
+                    source = .gps
+                    lastUpdateAt = Date()
+                }
+            }
+            return
+        }
+        self.kmh = next
+        if source == .none || source == .gps {
+            source = .gps
+            lastUpdateAt = Date()
+            if connectionState == .idle || connectionState == .needsVIN || connectionState == .disconnected {
+                statusMessage = "GPS hız"
+            }
+        }
+        publishWidgetSnapshot()
+    }
+
     func clearMapLocation() {
         latitude = nil
         longitude = nil
@@ -241,6 +348,7 @@ final class EtubuVehicleTelemetry: ObservableObject {
     }
 
     func applyObdFallback(kmh: Int, rpm: Int, coolant: Int?, voltage: Double?) {
+        guard !EtubuDemoDrive.isActive else { return }
         guard !isLiveTesla else { return }
         self.kmh = max(0, kmh)
         self.rpm = max(0, rpm)
@@ -253,18 +361,55 @@ final class EtubuVehicleTelemetry: ObservableObject {
             deviceLabel = "OBD"
             statusMessage = "OBD fallback"
         }
+        publishWidgetSnapshot()
+    }
+
+    func publishWidgetSnapshot(primaryWarn: String? = nil) {
+        // nil = uyarıyı silme (DriveWarnings ayrı yazar); boş string = temizle.
+        EtubuSharedDriveSnapshot.publish(
+            kmh: kmh,
+            soc: socPercent,
+            gear: gear,
+            rangeKm: rangeKm,
+            primaryWarn: primaryWarn,
+            clearWarnIfNil: false
+        )
+    }
+
+    /// Cap / demo / Tesla sonrası varış SoC + şarj planını yenile.
+    func refreshEnergyPlan() {
+        recomputeEnergyAtArrival()
+    }
+
+    /// Cap RouteGuard kalan km (EV plan girdisi).
+    func applyCapRouteRemain(active: Bool, remainKm: Double?) {
+        if active, let remainKm, remainKm > 0 {
+            capRouteRemainKm = remainKm
+        } else if !active {
+            capRouteRemainKm = nil
+        }
+        recomputeEnergyAtArrival()
     }
 
     private func recomputeEnergyAtArrival() {
-        guard let soc = socPercent, let range = rangeKm, range > 0, let rem = navRemainKm, rem > 0 else {
-            // Fallback: show current SOC when no nav remain
-            if navRemainKm == nil || (navRemainKm ?? 0) <= 0 {
+        guard let soc = socPercent, let range = rangeKm, range > 0,
+              let rem = effectiveRemainKm, rem > 0 else {
+            if effectiveRemainKm == nil || (effectiveRemainKm ?? 0) <= 0 {
                 energyAtArrivalPercent = socPercent
             }
+            Task { @MainActor in EtubuEvRoutePlanner.shared.refreshFromLiveState() }
             return
         }
         let used = min(1.0, rem / Double(range))
         energyAtArrivalPercent = max(0, Int((Double(soc) * (1.0 - used)).rounded()))
+        Task { @MainActor in EtubuEvRoutePlanner.shared.refreshFromLiveState() }
+    }
+
+    /// Tesla nav veya Cap rota kalanı.
+    var effectiveRemainKm: Double? {
+        if let n = navRemainKm, n > 0 { return n }
+        if let c = capRouteRemainKm, c > 0 { return c }
+        return nil
     }
 
     static func barToPsi(_ bar: Double?) -> Double? {
@@ -281,7 +426,7 @@ final class EtubuVehicleTelemetry: ObservableObject {
     }
 
     var navRemainLabel: String {
-        guard let km = navRemainKm else { return "—" }
+        guard let km = effectiveRemainKm else { return "—" }
         if km >= 10 { return String(format: "%.0f km", km) }
         return String(format: "%.1f km", km)
     }

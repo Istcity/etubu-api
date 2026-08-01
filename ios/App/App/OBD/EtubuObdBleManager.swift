@@ -18,6 +18,18 @@ final class EtubuObdBleManager: NSObject, CBCentralManagerDelegate, CBPeripheral
             case .load: return "0104\r"
             }
         }
+
+        /// Speed/RPM dominate — other PIDs every few slots so dial stays fresh (~5–8 Hz intent).
+        static let drivePrioritySchedule: [Pid] = [
+            .speed, .rpm, .speed, .rpm, .speed,
+            .coolant,
+            .speed, .rpm, .speed, .rpm, .speed,
+            .voltage,
+            .speed, .rpm, .speed, .rpm, .speed,
+            .throttle,
+            .speed, .rpm, .speed, .rpm, .speed,
+            .load,
+        ]
     }
 
     private let knownUartServiceUUIDs: [CBUUID] = [
@@ -418,6 +430,9 @@ final class EtubuObdBleManager: NSObject, CBCentralManagerDelegate, CBPeripheral
         emitStatus("connected", extra: ["name": name])
         bootstrapElm()
         startPolling()
+        Task { @MainActor in
+            EtubuVehicleLaunchNotifier.shared.notifyVehicleConnected(source: "obd")
+        }
     }
 
     private func bootstrapElm() {
@@ -434,10 +449,11 @@ final class EtubuObdBleManager: NSObject, CBCentralManagerDelegate, CBPeripheral
     private func startPolling() {
         stopPolling()
         pidIndex = 0
-        pollTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+        // Slightly tighter than 0.1s — speed answers still need ELM round-trip room
+        pollTimer = Timer.scheduledTimer(withTimeInterval: 0.08, repeats: true) { [weak self] _ in
             guard let self = self, self.isConnected else { return }
-            let pids = Pid.allCases
-            let pid = pids[self.pidIndex % pids.count]
+            let schedule = Pid.drivePrioritySchedule
+            let pid = schedule[self.pidIndex % schedule.count]
             self.pidIndex += 1
             self.send(pid.command)
         }

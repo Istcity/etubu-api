@@ -12,6 +12,6 @@ struct EtubuBrandMark: View {
             .scaledToFit()
             .frame(width: size, height: size)
             .shadow(color: showGlow ? Color.cyan.opacity(0.35) : .clear, radius: showGlow ? 6 : 0)
-            .accessibilityLabel("ETUBU")
+            .accessibilityLabel("Etubu")
     }
 }

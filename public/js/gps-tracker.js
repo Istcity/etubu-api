@@ -526,6 +526,10 @@ const GpsTracker = (() => {
       callbacks.onError?.("GPS desteklenmiyor");
       return false;
     }
+    if (window.__ETUBU_NATIVE_CLUSTER__ && window.__ETUBU_GPS_ARMED__ !== true) {
+      // Native SwiftUI owns GPS; Cap shell waits silently (no user-facing GPS uyarısı).
+      return false;
+    }
 
     let prevLat = null;
     let prevLng = null;

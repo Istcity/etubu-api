@@ -1,15 +1,20 @@
 import SwiftUI
 
 /// Gidilen yolun hız limiti — yalnızca TR tarzı yuvarlak levha ikonu (Tesla tarzı).
-/// Metin / tablo yok; OSM’den gelen limit gösterilir.
+/// Metin / tablo yok; OSM’den gelen limit gösterilir. Dururken gizlenir.
 struct EtubuRoadSpeedLimitSign: View {
     var size: CGFloat = 36
     @ObservedObject private var osm = EtubuOsmSpeedLimit.shared
+    @ObservedObject private var telemetry = EtubuVehicleTelemetry.shared
+    @ObservedObject private var demo = EtubuDemoDrive.shared
 
     /// Yaygın TR limitleri + ara değerler (ör. 82).
     private static let knownLimits = [20, 30, 40, 50, 60, 70, 80, 82, 90, 100, 110, 120, 130, 140]
 
     private var displayLimit: Int? {
+        // Araç hareket etmeden levha gösterme (demo + canlı).
+        let speed = demo.isRunning ? demo.displayKmh : telemetry.kmh
+        guard speed >= EtubuOsmSpeedLimit.movingKmhThreshold else { return nil }
         guard let lim = osm.limitKmh, lim > 0 else { return nil }
         // Bilinen levhaya ±2 km yakınsa o levha; değilse olduğu gibi
         if let near = Self.knownLimits.first(where: { abs($0 - lim) <= 2 }) {

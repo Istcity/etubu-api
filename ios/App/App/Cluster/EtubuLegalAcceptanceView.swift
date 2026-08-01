@@ -1,10 +1,33 @@
 import SwiftUI
 
+extension Notification.Name {
+    static let etubuLegalAccepted = Notification.Name("etubuLegalAccepted")
+}
+
 /// İlk açılışta hüküm ve koşullar — metin sonunda “Okudum, anladım” olmadan giriş yok.
 enum EtubuLegalAcceptance {
     static let acceptedKey = "etubu.legal.accepted.v1"
     static var isAccepted: Bool { UserDefaults.standard.bool(forKey: acceptedKey) }
-    static func accept() { UserDefaults.standard.set(true, forKey: acceptedKey) }
+    static func accept() {
+        UserDefaults.standard.set(true, forKey: acceptedKey)
+        EtubuLegalGate.shared.accepted = true
+        NotificationCenter.default.post(name: .etubuLegalAccepted, object: nil)
+    }
+}
+
+/// Single source of truth for legal dismiss (survives hosting / layout thrash better than @State alone).
+final class EtubuLegalGate: ObservableObject {
+    static let shared = EtubuLegalGate()
+    @Published var accepted: Bool
+
+    private init() {
+        accepted = EtubuLegalAcceptance.isAccepted
+    }
+
+    func accept() {
+        UserDefaults.standard.set(true, forKey: EtubuLegalAcceptance.acceptedKey)
+        accepted = true
+    }
 }
 
 struct EtubuLegalAcceptanceView: View {
@@ -12,6 +35,7 @@ struct EtubuLegalAcceptanceView: View {
     var onAccepted: () -> Void
 
     @State private var checked = false
+    @State private var accepting = false
 
     var body: some View {
         GeometryReader { geo in
@@ -20,7 +44,11 @@ struct EtubuLegalAcceptanceView: View {
 
             ZStack {
                 LinearGradient(
-                    colors: theme.canvasGradient,
+                    colors: [
+                        Color(hue: theme.hue / 360, saturation: 0.55, brightness: 0.38),
+                        Color(hue: theme.hue / 360, saturation: 0.4, brightness: 0.18),
+                        theme.canvas,
+                    ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
@@ -29,13 +57,17 @@ struct EtubuLegalAcceptanceView: View {
                 VStack(spacing: 0) {
                     // Başlık — güvenli alanın içinde
                     VStack(spacing: 6) {
+                        Text("Etubu")
+                            .font(EtubuClusterFonts.ui(14, weight: .bold))
+                            .tracking(4)
+                            .foregroundStyle(theme.accent)
                         Text("Hüküm ve Koşullar")
-                            .font(EtubuClusterFonts.ui(22, weight: .bold))
+                            .font(EtubuClusterFonts.ui(24, weight: .bold))
                             .foregroundStyle(.white)
                             .multilineTextAlignment(.center)
-                        Text("Devam için metni okuyun, sonda kutuyu işaretleyin")
-                            .font(EtubuClusterFonts.ui(12, weight: .medium))
-                            .foregroundStyle(theme.mutedText)
+                        Text("Metni okuyun, ardından onaylayın")
+                            .font(EtubuClusterFonts.ui(13, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.75))
                             .multilineTextAlignment(.center)
                     }
                     .frame(maxWidth: .infinity)
@@ -46,70 +78,86 @@ struct EtubuLegalAcceptanceView: View {
                     ScrollView(.vertical, showsIndicators: true) {
                         VStack(alignment: .leading, spacing: 14) {
                             legalBody
-
-                            Divider().overlay(Color.white.opacity(0.15))
-                                .padding(.vertical, 6)
-
-                            // Onay kutusu metnin SONUNDA — kaydırmadan görünmez
-                            Button {
-                                checked.toggle()
-                            } label: {
-                                HStack(alignment: .top, spacing: 12) {
-                                    Image(systemName: checked ? "checkmark.square.fill" : "square")
-                                        .font(.system(size: 24, weight: .semibold))
-                                        .foregroundStyle(checked ? theme.accent : .white.opacity(0.9))
-                                    Text("Okudum, anladım. Sürüş ve yasal sorumluluğun bana ait olduğunu kabul ediyorum.")
-                                        .font(EtubuClusterFonts.ui(14, weight: .semibold))
-                                        .foregroundStyle(.white)
-                                        .multilineTextAlignment(.leading)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                }
-                                .padding(14)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                        .fill(checked ? theme.accent.opacity(0.16) : Color.white.opacity(0.08))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                                .strokeBorder(
-                                                    checked ? theme.accent.opacity(0.7) : Color.white.opacity(0.2),
-                                                    lineWidth: 1.2
-                                                )
-                                        )
-                                )
-                            }
-                            .buttonStyle(.plain)
-                            .padding(.top, 4)
-
-                            Button {
-                                guard checked else { return }
-                                EtubuLegalAcceptance.accept()
-                                onAccepted()
-                            } label: {
-                                Text("Kabul et ve devam et")
-                                    .font(EtubuClusterFonts.ui(17, weight: .bold))
-                                    .foregroundStyle(checked ? .black : .white.opacity(0.45))
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 15)
-                                    .background(
-                                        (checked ? theme.accent : Color.white.opacity(0.12)),
-                                        in: Capsule()
-                                    )
-                            }
-                            .disabled(!checked)
-                            .padding(.top, 8)
-                            .padding(.bottom, 20)
                         }
                         .padding(.horizontal, 18)
                         .padding(.top, 8)
-                        .padding(.bottom, bottomInset + 8)
+                        .padding(.bottom, 16)
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     .background(
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(Color.white.opacity(0.05))
+                            .fill(Color.white.opacity(0.10))
                     )
                     .padding(.horizontal, 12)
-                    .padding(.bottom, max(8, bottomInset - 4))
+                    .padding(.bottom, 8)
+                }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    // Sabit onay — ScrollView altına itilmez
+                    VStack(spacing: 10) {
+                        Button {
+                            guard !accepting else { return }
+                            checked.toggle()
+                        } label: {
+                            HStack(alignment: .top, spacing: 12) {
+                                Image(systemName: checked ? "checkmark.square.fill" : "square")
+                                    .font(.system(size: 24, weight: .semibold))
+                                    .foregroundStyle(checked ? theme.accent : .white.opacity(0.9))
+                                Text("Okudum, anladım. Sürüş ve yasal sorumluluğun bana ait olduğunu kabul ediyorum.")
+                                    .font(EtubuClusterFonts.ui(14, weight: .semibold))
+                                    .foregroundStyle(.white)
+                                    .multilineTextAlignment(.leading)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .padding(14)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(checked ? theme.accent.opacity(0.16) : Color.white.opacity(0.08))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                            .strokeBorder(
+                                                checked ? theme.accent.opacity(0.7) : Color.white.opacity(0.2),
+                                                lineWidth: 1.2
+                                            )
+                                    )
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(accepting)
+                        .accessibilityElement(children: .combine)
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityLabel("Okudum, anladım")
+                        .accessibilityIdentifier("etubu.legal.checkbox")
+
+                        Button {
+                            guard !accepting else { return }
+                            if !checked { checked = true }
+                            accepting = true
+                            EtubuLegalAcceptance.accept()
+                            onAccepted()
+                        } label: {
+                            Text(accepting ? "Başlatılıyor…" : "Kabul et ve devam et")
+                                .font(EtubuClusterFonts.ui(17, weight: .bold))
+                                .foregroundStyle(checked && !accepting ? .black : .white.opacity(0.45))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 15)
+                                .background(
+                                    (checked && !accepting ? theme.accent : Color.white.opacity(0.12)),
+                                    in: Capsule()
+                                )
+                                .contentShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        // Do not use .disabled — Maestro can “tap” a disabled control without
+                        // invoking the action (leaves legal stuck on the accept screen).
+                        .accessibilityIdentifier("etubu.legal.accept")
+                        .accessibilityLabel("Kabul et ve devam et")
+                        .accessibilityAddTraits(.isButton)
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.top, 10)
+                    .padding(.bottom, max(12, bottomInset))
+                    .background(theme.canvas.opacity(0.96))
                 }
             }
         }
@@ -122,7 +170,7 @@ struct EtubuLegalAcceptanceView: View {
         VStack(alignment: .leading, spacing: 12) {
             section(
                 "1. Amaç ve kapsam",
-                "ETUBU Cluster; Tesla aracıyla Bluetooth üzerinden alınan telemetriyi, rota ve yol uyarısı bilgilerini araç içi kadran tarzında gösteren yardımcı bir uygulamadır. Uygulama sürüşü yönetmez, araca komut göndermez ve resmi bir navigasyon veya güvenlik sistemi değildir."
+                "Etubu; Tesla aracıyla Bluetooth üzerinden alınan telemetriyi, rota ve yol uyarısı bilgilerini araç içi kadran tarzında gösteren yardımcı bir uygulamadır. Uygulama sürüşü yönetmez, araca komut göndermez ve resmi bir navigasyon veya güvenlik sistemi değildir."
             )
             section(
                 "2. Veri kaynakları",
@@ -141,7 +189,7 @@ struct EtubuLegalAcceptanceView: View {
             )
             section(
                 "3. Sorumluluk beyanı",
-                "ETUBU, Tesla Inc. veya bağlı kuruluşlarıyla resmi bir ortaklık, onay veya bağlantı içinde değildir. “Tesla” yalnızca uyumluluk bağlamında anılır. Uygulama “olduğu gibi” sunulur; doğruluk, kesintisizlik veya belirli bir amaca uygunluk konusunda açık veya zımni garanti verilmez."
+                "Etubu, Tesla Inc. veya bağlı kuruluşlarıyla resmi bir ortaklık, onay veya bağlantı içinde değildir. “Tesla” yalnızca uyumluluk bağlamında anılır. Uygulama “olduğu gibi” sunulur; doğruluk, kesintisizlik veya belirli bir amaca uygunluk konusunda açık veya zımni garanti verilmez."
             )
             section(
                 "4. Kullanıcının yasal sorumluluğu",

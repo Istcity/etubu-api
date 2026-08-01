@@ -3,8 +3,7 @@ import ActivityKit
 import AVFoundation
 import UIKit
 
-/// Live Activity + Dynamic Island — yalnızca uygulama **arka plandayken**.
-/// Ön plana gelince veya süreç ölünce (staleDate) kapanır; uygulama kapalıyken kalmaz.
+/// Live Activity + Dynamic Island — sürüş sırasında ön/arka plan.
 @available(iOS 16.2, *)
 enum EtubuLiveActivityController {
     private static var current: Activity<EtubuDriveAttributes>?
@@ -14,10 +13,14 @@ enum EtubuLiveActivityController {
     /// Uygulama öldürülürse güncelleme kesilir; bu süre sonra sistem LA’yı bayat sayar.
     private static let staleSeconds: TimeInterval = 75
 
-    /// Sadece gerçek arka plan — foreground / terminate sonrası LA yok.
+    /// Sürüş aktifken LA/Island her zaman güncellenir (ön plan dahil).
     @MainActor
-    static var isBackgroundOnlySession: Bool {
-        UIApplication.shared.applicationState == .background
+    static var isDriveSessionAllowed: Bool {
+        let t = EtubuVehicleTelemetry.shared
+        return t.kmh >= 1
+            || t.connectionState == .connected
+            || t.routeActive
+            || EtubuDemoDrive.isActive
     }
 
     static func ensureAudioSession(mixWithOthers: Bool) {
@@ -131,7 +134,9 @@ enum EtubuLiveActivityController {
             weatherCount: rb.weatherCount,
             primaryWarn: warnPrimary,
             aheadWarn2: warn2,
-            remainingPoints: remaining.count
+            remainingPoints: remaining.count,
+            socPercent: t.socPercent,
+            rangeKm: t.rangeKm
         )
     }
 
@@ -146,10 +151,8 @@ enum EtubuLiveActivityController {
         tpmsRL: Int? = nil,
         tpmsRR: Int? = nil
     ) async -> Bool {
-        let allowed = await MainActor.run { isBackgroundOnlySession }
+        let allowed = await MainActor.run { isDriveSessionAllowed }
         guard allowed else {
-            // Ön planda başlatma — varsa kapat
-            await end()
             return false
         }
         guard ActivityAuthorizationInfo().areActivitiesEnabled else {
@@ -198,7 +201,7 @@ enum EtubuLiveActivityController {
         tpmsRL: Int? = nil,
         tpmsRR: Int? = nil
     ) async {
-        let allowed = await MainActor.run { isBackgroundOnlySession }
+        let allowed = await MainActor.run { isDriveSessionAllowed }
         guard allowed else { return }
         guard let activity = current ?? Activity<EtubuDriveAttributes>.activities.first else { return }
         current = activity
@@ -213,15 +216,19 @@ enum EtubuLiveActivityController {
         await activity.update(makeContent(state: state))
     }
 
-    /// Arka planda yayınla; ön plandaysa varsa LA’yı kapat (otomatik start yok).
+    /// Sürüşte Island/LA güncelle; yoksa başlat. Oturum bitince kapat.
     static func publishCurrent(voice: String = "ETUBU") async {
-        let allowed = await MainActor.run { isBackgroundOnlySession }
+        let allowed = await MainActor.run { isDriveSessionAllowed }
         guard allowed else {
             await end()
             return
         }
         guard let activity = current ?? Activity<EtubuDriveAttributes>.activities.first else {
-            _ = await start(voice: voice, kmh: 0, gear: "P", rpm: 0, source: "idle")
+            let snap = await MainActor.run { () -> (Int, String, Int, String) in
+                let t = EtubuVehicleTelemetry.shared
+                return (t.kmh, t.gear, t.rpm, t.source == .none ? "idle" : t.source.rawValue)
+            }
+            _ = await start(voice: voice, kmh: snap.0, gear: snap.1, rpm: snap.2, source: snap.3)
             return
         }
         current = activity
@@ -229,7 +236,7 @@ enum EtubuLiveActivityController {
         await activity.update(makeContent(state: state))
     }
 
-    /// Arka plana geçince Island’ı aç.
+    /// Arka plana geçince Island’ı aç / sürdür.
     static func beginBackgroundSession() async {
         let snap = await MainActor.run { () -> (kmh: Int, gear: String, rpm: Int, source: String, fl: Int?, fr: Int?, rl: Int?, rr: Int?) in
             let t = EtubuVehicleTelemetry.shared

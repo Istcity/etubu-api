@@ -18,8 +18,8 @@ enum EtubuAppLanguage: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Kritik nokta / rota koruma uyarıları yalnızca Türkçe’de.
-    var criticalAlertsEnabled: Bool { self == .tr }
+    /// Rota / radar / şarj / hava uyarıları — dil bağımsız (OSM/OCM/Open-Meteo global; EGM radar TR).
+    var criticalAlertsEnabled: Bool { true }
 
     private static let storageKey = "etubu.app.language"
 

@@ -16,17 +16,17 @@ struct EtubuVFXCameraAnchorView: View {
             .allowsHitTesting(false)
             .opacity(Double(0.4 + manager.intensity * 0.6))
             .mask {
-                Capsule()
-                    .fill(
-                        RadialGradient(
-                            colors: [.white, .white.opacity(0.8), .clear],
-                            center: .center,
-                            startRadius: 0,
-                            endRadius: max(cutout.aura.width, cutout.aura.height) * 0.55
-                        )
-                    )
-                    .padding(max(10, min(cutout.aura.width, cutout.aura.height) * 0.1))
-                    .blur(radius: 16)
+                let dx = (cutout.pill.midX - cutout.aura.minX) - cutout.aura.width * 0.5
+                let dy = (cutout.pill.midY - cutout.aura.minY) - cutout.aura.height * 0.5
+                let pw = cutout.pill.width
+                let ph = cutout.pill.height
+                ZStack {
+                    Capsule().fill(Color.white).frame(width: pw * 1.8, height: ph * 1.8).blur(radius: 8)
+                    Capsule().fill(Color.white.opacity(0.7)).frame(width: pw * 2.3, height: ph * 2.3).blur(radius: 16)
+                }
+                .frame(width: cutout.aura.width, height: cutout.aura.height)
+                .offset(x: dx, y: dy)
+                .blur(radius: 18)
             }
             .onAppear {
                 manager.sync(theme: theme, cutout: cutout, kmh: kmh)

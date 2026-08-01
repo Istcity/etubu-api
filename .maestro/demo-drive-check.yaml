@@ -1,0 +1,58 @@
+appId: com.etubu.app
+---
+- launchApp:
+    clearState: true
+    arguments:
+      etubuSkipOnboarding: true
+- extendedWaitUntil:
+    visible: "Okudum, anladım.*"
+    timeout: 15000
+- tapOn:
+    id: "etubu.legal.checkbox"
+    optional: true
+- tapOn:
+    point: "50%,90%"
+- tapOn:
+    text: "Uygulamayı Kullanırken İzin Ver"
+    optional: true
+- tapOn:
+    text: "Allow While Using App"
+    optional: true
+- tapOn:
+    text: "İzin Ver"
+    optional: true
+- extendedWaitUntil:
+    visible: "km/h"
+    timeout: 25000
+- tapOn:
+    id: "etubu.settings.open"
+- extendedWaitUntil:
+    visible: "Uygulama hakkında"
+    timeout: 10000
+- scrollUntilVisible:
+    element:
+      id: "etubu.demo.toggle"
+    direction: DOWN
+    timeout: 12000
+- tapOn:
+    id: "etubu.demo.toggle"
+- waitForAnimationToEnd:
+    timeout: 2000
+- extendedWaitUntil:
+    visible:
+      id: "etubu.gear"
+    timeout: 8000
+- assertVisible:
+    text: "D"
+    id: "etubu.gear"
+- assertVisible:
+    id: "etubu.speed"
+- extendedWaitUntil:
+    visible: "Radar"
+    timeout: 10000
+- assertVisible: "YOL UYARILARI"
+- assertVisible:
+    id: "etubu.demo.stop"
+- assertVisible:
+    id: "etubu.sound.on"
+- takeScreenshot: demo-drive-live

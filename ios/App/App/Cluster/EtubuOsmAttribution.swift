@@ -19,7 +19,7 @@ enum EtubuOsmAttribution {
     • Lisans: https://www.openstreetmap.org/copyright
     • ODbL metni: https://opendatacommons.org/licenses/odbl/
 
-    Uygulamada hız limitleri, yol sınıfları ve benzeri bilgiler Overpass / OSM verisinden alınabilir. Veriyi uyarlarsanız ODbL paylaşı alike koşullarına uymanız gerekir. OSM, Tesla veya ETUBU’nun resmi ortağı değildir.
+    Uygulamada hız limitleri, yol sınıfları ve benzeri bilgiler Overpass / OSM verisinden alınabilir. Veriyi uyarlarsanız ODbL paylaşı alike koşullarına uymanız gerekir. OSM, Tesla veya Etubu’nun resmi ortağı değildir.
     """
 
     static let copyrightURL = URL(string: "https://www.openstreetmap.org/copyright")!

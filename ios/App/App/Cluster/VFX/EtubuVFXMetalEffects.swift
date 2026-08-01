@@ -77,17 +77,27 @@ private struct EtubuCutoutMetalModifier: ViewModifier {
 
 extension View {
     /// Theme-aware Metal post on cutout Canvas (iOS 17+ stitchable library).
+    /// Simulator: no-op — stitchable Metal often paints the layer black / stalls UI.
+    @ViewBuilder
     func etubuCutoutMetal(
         fx: EtubuCutoutFX,
         time: Double,
         intensity: CGFloat
     ) -> some View {
-        modifier(
-            EtubuCutoutMetalModifier(
-                kind: EtubuVFXMetalEffects.kind(for: fx),
-                time: Float(time),
-                intensity: Float(intensity)
+        #if targetEnvironment(simulator)
+        self
+        #else
+        if EtubuRuntimeProfile.allowMetalCutoutShaders {
+            modifier(
+                EtubuCutoutMetalModifier(
+                    kind: EtubuVFXMetalEffects.kind(for: fx),
+                    time: Float(time),
+                    intensity: Float(min(1.35, intensity))
+                )
             )
-        )
+        } else {
+            self
+        }
+        #endif
     }
 }

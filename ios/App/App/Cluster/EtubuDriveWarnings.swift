@@ -85,6 +85,12 @@ final class EtubuDriveWarnings: ObservableObject {
     /// Trip distance meta when not in corridor (web `#avgSpeedMeta`).
     @Published var tripDistLabel: String = ""
 
+    /// Demo drive mirror — RootView already observes this object (reliable UI refresh).
+    @Published var demoActive = false
+    @Published var demoKmh: Int = 0
+    @Published var demoGear: String = "P"
+    @Published var demoPowerKw: Int = 0
+
     private var timer: Timer?
 
     private init() {}
@@ -103,14 +109,28 @@ final class EtubuDriveWarnings: ObservableObject {
         corridorRemainLabel = ""
         corridorLabel = ""
         tripDistLabel = ""
+        // demoActive / demoKmh — clearCriticalAlerts demo sürüşünü bozmasın;
+        // sadece stop() / applyDemoDrive(false) sıfırlar.
     }
+
+    func applyDemoDrive(active: Bool, kmh: Int, gear: String, power: Int) {
+        demoActive = active
+        demoKmh = kmh
+        demoGear = gear
+        demoPowerKw = power
+    }
+
+    private var lastPollJSONHash: Int = 0
+    private var pollIdleTicks = 0
 
     func startPolling() {
         timer?.invalidate()
         Self.armRouteHazardHook()
-        timer = Timer.scheduledTimer(withTimeInterval: 0.55, repeats: true) { [weak self] _ in
+        // 0.55s → 1.0s; yaklaşırken hızlanır (aşağıda).
+        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.pollOnce() }
         }
+        if let t = timer { RunLoop.main.add(t, forMode: .common) }
         pollOnce()
     }
 
@@ -125,15 +145,27 @@ final class EtubuDriveWarnings: ObservableObject {
     }
 
     private func pollOnce() {
-        guard EtubuAppLanguage.current.criticalAlertsEnabled else {
-            clearCriticalAlerts()
-            return
+        // Demo kendi uyarılarını yazar — web poll boş queue ile silmesin.
+        if EtubuDemoDrive.isActive { return }
+        let routeQuiet = routeCoords.isEmpty && queue.isEmpty && primary == nil
+            && !EtubuVehicleTelemetry.shared.routeActive
+        if routeQuiet {
+            pollIdleTicks &+= 1
+            // Rota yokken her 3. tikte bir oku (≈3s).
+            if pollIdleTicks % 3 != 1 { return }
+        } else {
+            pollIdleTicks = 0
         }
         EtubuClusterAudioBridge.evalJSReturning(Self.readScript) { [weak self] raw in
             guard let self, let raw, let data = raw.data(using: .utf8),
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
             else { return }
+            let hash = raw.hashValue
             Task { @MainActor in
+                // Callback gecikmeli gelebilir — demo başlamışsa web sonucunu yoksay.
+                if EtubuDemoDrive.isActive { return }
+                if hash == self.lastPollJSONHash { return }
+                self.lastPollJSONHash = hash
                 self.apply(json)
             }
         }
@@ -257,7 +289,30 @@ final class EtubuDriveWarnings: ObservableObject {
         corridorRemainLabel = (json["remain"] as? String) ?? ""
         corridorLabel = (json["corridorLabel"] as? String) ?? ""
         tripDistLabel = (json["tripMeta"] as? String) ?? ""
+
+        let routeOn = json["active"] as? Bool ?? false
+        let remainKm: Double? = {
+            if let n = json["remainKm"] as? Double { return n }
+            if let n = json["remainKm"] as? NSNumber { return n.doubleValue }
+            if let s = json["remainKm"] as? String { return Double(s) }
+            // tripMeta "123 km" fallback
+            if let meta = json["tripMeta"] as? String {
+                let parts = meta.replacingOccurrences(of: ",", with: ".")
+                if let match = parts.range(of: #"[0-9]+(?:\.[0-9]+)?\s*km"#, options: .regularExpression) {
+                    let num = parts[match].replacingOccurrences(of: "km", with: "")
+                        .trimmingCharacters(in: .whitespaces)
+                    return Double(num)
+                }
+            }
+            return nil
+        }()
+        EtubuVehicleTelemetry.shared.applyCapRouteRemain(active: routeOn, remainKm: remainKm)
+
         Self.pushLiveActivityBrief()
+        EtubuVehicleTelemetry.shared.publishWidgetSnapshot(
+            primaryWarn: primary.map { "\($0.title) \($0.distanceLabel)" }
+        )
+        EtubuEvRoutePlanner.shared.refreshFromLiveState()
     }
 
     private static var lastLivePushMs: Double = 0
@@ -657,6 +712,35 @@ final class EtubuDriveWarnings: ObservableObject {
         }
 
         var active = !!(window.RouteGuard && RouteGuard.isActive && RouteGuard.isActive());
+        var remainKm = null;
+        var routeTotalKm = null;
+        if (coords.length >= 2) {
+          var totalM = 0;
+          for (var ri = 1; ri < coords.length; ri++) {
+            var ca = coords[ri-1], cb = coords[ri];
+            var dLatR = (cb.lat - ca.lat) * Math.PI/180;
+            var dLonR = (cb.lng - ca.lng) * Math.PI/180;
+            var aaR = Math.sin(dLatR/2)*Math.sin(dLatR/2) +
+              Math.cos(ca.lat*Math.PI/180)*Math.cos(cb.lat*Math.PI/180)*Math.sin(dLonR/2)*Math.sin(dLonR/2);
+            totalM += 2*6371000*Math.asin(Math.sqrt(aaR));
+          }
+          routeTotalKm = Math.round(totalM / 100) / 10;
+          if (lat != null && Number.isFinite(lat)) {
+            var uIdx = nearestIdx(lat, lng);
+            var alongM = 0;
+            for (var ai = 1; ai <= uIdx && ai < coords.length; ai++) {
+              var aa = coords[ai-1], bb = coords[ai];
+              var dLatA = (bb.lat - aa.lat) * Math.PI/180;
+              var dLonA = (bb.lng - aa.lng) * Math.PI/180;
+              var aaa = Math.sin(dLatA/2)*Math.sin(dLatA/2) +
+                Math.cos(aa.lat*Math.PI/180)*Math.cos(bb.lat*Math.PI/180)*Math.sin(dLonA/2)*Math.sin(dLonA/2);
+              alongM += 2*6371000*Math.asin(Math.sqrt(aaa));
+            }
+            remainKm = Math.max(0, Math.round((totalM - alongM) / 100) / 10);
+          } else {
+            remainKm = routeTotalKm;
+          }
+        }
         return JSON.stringify({
           active: active,
           stage: queue.length ? (queue[0].stage || stage) : 'idle',
@@ -667,7 +751,8 @@ final class EtubuDriveWarnings: ObservableObject {
           brief: brief,
           remainingBrief: remainingBrief,
           corridor: corridor, over: over, avg: avg, limit: limit,
-          remain: remain, corridorLabel: corridorLabel, tripMeta: tripMeta
+          remain: remain, corridorLabel: corridorLabel, tripMeta: tripMeta,
+          remainKm: remainKm, routeTotalKm: routeTotalKm
         });
       } catch (e) {
         return JSON.stringify({ stage: 'idle', queue: [], hazards: [], remaining: [], coords: [], brief: {}, remainingBrief: {} });

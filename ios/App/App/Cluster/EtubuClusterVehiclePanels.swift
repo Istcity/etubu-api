@@ -169,11 +169,14 @@ struct EtubuRadarSettingsView: View {
     @AppStorage("etubu_radar_corridor") private var corridor = true
 
     var body: some View {
-        Section("Radar / koridor uyarıları") {
+        Section("Uyarı sesleri (yalnızca burada)") {
             Toggle("Bip sesleri", isOn: $beeps)
             Toggle("Sesli uyarı (TTS)", isOn: $tts)
             Toggle("Uyarı kartları", isOn: $cards)
             Toggle("Hız koridoru paneli", isOn: $corridor)
+            Text("Ana ekrandaki hoparlör ikonu yalnızca EV sürüş sesini aç/kapatır; uyarı seslerini kapatmaz.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
         .onChange(of: beeps) { _, _ in sync() }
         .onChange(of: tts) { _, _ in sync() }

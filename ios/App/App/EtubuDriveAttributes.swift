@@ -27,6 +27,8 @@ public struct EtubuDriveAttributes: ActivityAttributes {
         public var primaryWarn: String
         public var aheadWarn2: String
         public var remainingPoints: Int
+        public var socPercent: Int?
+        public var rangeKm: Int?
 
         public init(
             kmh: Int,
@@ -48,7 +50,9 @@ public struct EtubuDriveAttributes: ActivityAttributes {
             weatherCount: Int = 0,
             primaryWarn: String = "",
             aheadWarn2: String = "",
-            remainingPoints: Int = 0
+            remainingPoints: Int = 0,
+            socPercent: Int? = nil,
+            rangeKm: Int? = nil
         ) {
             self.kmh = kmh
             self.gear = gear
@@ -70,6 +74,8 @@ public struct EtubuDriveAttributes: ActivityAttributes {
             self.primaryWarn = primaryWarn
             self.aheadWarn2 = aheadWarn2
             self.remainingPoints = remainingPoints
+            self.socPercent = socPercent
+            self.rangeKm = rangeKm
         }
 
         public var routeSummaryLine: String {

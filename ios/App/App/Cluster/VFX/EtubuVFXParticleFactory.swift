@@ -18,26 +18,30 @@ enum EtubuVFXParticleFactory {
         let root = Entity()
         root.name = "EtubuVFX.\(type.rawValue)"
 
+        // Global soft cap — keeps Island FX vivid without thrashing GPU / thermal.
+        let i = min(1.0, intensity) * 0.72
+        let b = budget * 0.82
+
         let primary = Entity()
         primary.name = "primary"
-        primary.components.set(configure(type: type, shapeSize: shapeSize, intensity: intensity, budget: budget))
+        primary.components.set(configure(type: type, shapeSize: shapeSize, intensity: i, budget: b))
         root.addChild(primary)
 
-        if let secondary = secondaryEmitter(type: type, shapeSize: shapeSize, intensity: intensity, budget: budget) {
+        if let secondary = secondaryEmitter(type: type, shapeSize: shapeSize, intensity: i, budget: b) {
             let child = Entity()
             child.name = "secondary"
             child.components.set(secondary)
             root.addChild(child)
         }
 
-        if let light = emissionLight(for: type, intensity: intensity) {
+        if let light = emissionLight(for: type, intensity: i) {
             root.addChild(light)
         }
 
         if type == .patlama || type == .yanardag || type == .havaFisek {
             let debris = Entity()
             debris.name = "debris"
-            debris.components.set(debrisEmitter(type: type, shapeSize: shapeSize, intensity: intensity, budget: budget))
+            debris.components.set(debrisEmitter(type: type, shapeSize: shapeSize, intensity: i, budget: b))
             root.addChild(debris)
         }
 

@@ -1,8 +1,12 @@
 import Foundation
+import CoreLocation
+import MapKit
+import UIKit
 
 struct EtubuRoutePlace: Identifiable, Equatable, Hashable {
     var id: String {
         if isMyLocation { return "konumum" }
+        if let lat, let lng { return "\(label)|\(lat)|\(lng)" }
         return "\(cityName)|\(districtName)|\(label)"
     }
     let label: String
@@ -11,6 +15,8 @@ struct EtubuRoutePlace: Identifiable, Equatable, Hashable {
     let isMyLocation: Bool
     var isMerkez: Bool = false
     var nearLabel: String = ""
+    var lat: Double? = nil
+    var lng: Double? = nil
 }
 
 struct EtubuRouteStatus: Equatable {
@@ -203,7 +209,9 @@ enum EtubuRouteBridge {
         districtName: p.districtName || '',
         isMyLocation: !!p.isMyLocation,
         isMerkez: !!p.isMerkez,
-        nearLabel: p.nearLabel || ''
+        nearLabel: p.nearLabel || '',
+        lat: (typeof p.lat === 'number') ? p.lat : (p.latitude != null ? Number(p.latitude) : null),
+        lng: (typeof p.lng === 'number') ? p.lng : (p.longitude != null ? Number(p.longitude) : (p.lon != null ? Number(p.lon) : null))
       };
     }
     """
@@ -224,85 +232,135 @@ enum EtubuRouteBridge {
         """)
     }
 
+    /// Seed RouteGuard / GpsTracker with native CLLocation before Cap geolocation resolves.
+    static func pushNativeLocationToWeb() {
+        let t = EtubuVehicleTelemetry.shared
+        guard let lat = t.latitude, let lng = t.longitude,
+              lat.isFinite, lng.isFinite else { return }
+        EtubuClusterAudioBridge.evalJS("""
+        (function(){
+          try {
+            var loc = { lat: \(lat), lng: \(lng) };
+            localStorage.setItem('etubu_last_map_location', JSON.stringify(loc));
+            sessionStorage.setItem('etubu_last_map_location', JSON.stringify(loc));
+          } catch (e) {}
+        })();
+        """)
+    }
+
+    /// Cap stub (`index.html`) → `index-app.html` + RouteGuard script. Autocomplete can
+    /// work via native helpers without this; `buildRoute` cannot.
+    static func ensureCapAppReady(attemptsLeft: Int = 45, completion: @escaping (Bool) -> Void) {
+        EtubuCapBridgeViewController.armWebContent()
+        EtubuClusterAudioBridge.evalJSReturning("""
+        (function(){
+          try {
+            if (window.RouteGuard && typeof window.RouteGuard.buildRoute === 'function') return '1';
+            if (typeof window.__ETUBU_LOAD_APP__ === 'function') {
+              try { window.__ETUBU_LOAD_APP__(); } catch (e) {}
+              return '0';
+            }
+            if (!document.getElementById('routeGuard')) {
+              try { location.replace('index-app.html'); } catch (e2) {}
+            }
+            return '0';
+          } catch (e) { return '0'; }
+        })();
+        """) { raw in
+            let ready = (raw == "1" || raw == "\"1\"")
+            if ready {
+                DispatchQueue.main.async { completion(true) }
+                return
+            }
+            if attemptsLeft <= 0 {
+                DispatchQueue.main.async { completion(false) }
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                ensureCapAppReady(attemptsLeft: attemptsLeft - 1, completion: completion)
+            }
+        }
+    }
+
     /// Builds TR place index (web RouteGuard) and enables route UI even when Cap UI lang ≠ tr.
     static func ensureIndex(completion: ((Bool) -> Void)? = nil) {
-        // Native URLSession first (Cap WebView CORS often blocks etubu.com fetch).
-        Task {
-            var injected = false
-            do {
-                var n = try await EtubuTrafikAPI.buildAndCachePlaceIndex()
-                // First launch after UTF-8 fix: rebuild if only legacy/corrupt cache exists
-                if n < 100 {
-                    n = try await EtubuTrafikAPI.buildAndCachePlaceIndex(force: true)
+        ensureCapAppReady { _ in
+            // Native URLSession first (Cap WebView CORS often blocks etubu.com fetch).
+            Task {
+                var injected = false
+                do {
+                    var n = try await EtubuTrafikAPI.buildAndCachePlaceIndex()
+                    // First launch after UTF-8 fix: rebuild if only legacy/corrupt cache exists
+                    if n < 100 {
+                        n = try await EtubuTrafikAPI.buildAndCachePlaceIndex(force: true)
+                    }
+                    if n > 100, let raw = EtubuTrafikAPI.cachedIndexJSONString() {
+                        let b64 = Data(raw.utf8).base64EncodedString()
+                        // atob alone breaks UTF-8 (Çorum → mojibake). Decode bytes → TextDecoder.
+                        EtubuClusterAudioBridge.evalJS("""
+                        (function(){
+                          try {
+                            var bin = atob('\(b64)');
+                            var bytes = new Uint8Array(bin.length);
+                            for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+                            var raw = (typeof TextDecoder !== 'undefined')
+                              ? new TextDecoder('utf-8').decode(bytes)
+                              : decodeURIComponent(escape(bin));
+                            localStorage.setItem('etubu_place_index_v3', raw);
+                            sessionStorage.setItem('etubu_place_index_v3', raw);
+                            localStorage.setItem('etubu_place_index_v4', raw);
+                            sessionStorage.setItem('etubu_place_index_v4', raw);
+                          } catch (e) {}
+                        })();
+                        """)
+                        injected = true
+                    }
+                } catch {
+                    // Fall through to JS RouteGuard.buildPlaceIndex via native trafikGet.
                 }
-                if n > 100, let raw = EtubuTrafikAPI.cachedIndexJSONString() {
-                    let b64 = Data(raw.utf8).base64EncodedString()
-                    // atob alone breaks UTF-8 (Çorum → mojibake). Decode bytes → TextDecoder.
+                _ = injected
+                DispatchQueue.main.async {
                     EtubuClusterAudioBridge.evalJS("""
-                    (function(){
+                    (async function(){
                       try {
-                        var bin = atob('\(b64)');
-                        var bytes = new Uint8Array(bin.length);
-                        for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-                        var raw = (typeof TextDecoder !== 'undefined')
-                          ? new TextDecoder('utf-8').decode(bytes)
-                          : decodeURIComponent(escape(bin));
-                        localStorage.setItem('etubu_place_index_v3', raw);
-                        sessionStorage.setItem('etubu_place_index_v3', raw);
-                        localStorage.setItem('etubu_place_index_v4', raw);
-                        sessionStorage.setItem('etubu_place_index_v4', raw);
+                        localStorage.setItem('etubu_force_tr_route', '1');
+                        sessionStorage.setItem('etubu_force_tr_route', '1');
+                        var rg = document.getElementById('routeGuard');
+                        if (rg) { rg.hidden = false; rg.classList.remove('is-collapsed','is-drive-hidden'); }
+                        var form = document.getElementById('routeForm');
+                        if (form) form.hidden = false;
+                        if (window.RouteGuard && window.RouteGuard.buildPlaceIndex) {
+                          await window.RouteGuard.buildPlaceIndex();
+                        }
+                        var from = document.getElementById('routeFromInput');
+                        if (from) {
+                          if (!from.value || !String(from.value).trim()) from.value = 'Konumum';
+                          from.dispatchEvent(new Event('focus', { bubbles: true }));
+                          from.dispatchEvent(new Event('input', { bubbles: true }));
+                        }
+                        if (navigator.geolocation) {
+                          navigator.geolocation.getCurrentPosition(function(pos){
+                            try {
+                              localStorage.setItem('etubu_last_map_location', JSON.stringify({
+                                lat: pos.coords.latitude, lng: pos.coords.longitude
+                              }));
+                            } catch(e) {}
+                          }, function(){}, { enableHighAccuracy: true, timeout: 10000, maximumAge: 120000 });
+                        }
                       } catch (e) {}
                     })();
                     """)
-                    injected = true
+                    pollIndexReady(attemptsLeft: 20, completion: completion)
                 }
-            } catch {
-                // Fall through to JS RouteGuard.buildPlaceIndex via native trafikGet.
-            }
-            _ = injected
-            DispatchQueue.main.async {
-                EtubuClusterAudioBridge.evalJS("""
-                (async function(){
-                  try {
-                    localStorage.setItem('etubu_force_tr_route', '1');
-                    sessionStorage.setItem('etubu_force_tr_route', '1');
-                    var rg = document.getElementById('routeGuard');
-                    if (rg) { rg.hidden = false; rg.classList.remove('is-collapsed','is-drive-hidden'); }
-                    var form = document.getElementById('routeForm');
-                    if (form) form.hidden = false;
-                    if (window.RouteGuard && window.RouteGuard.buildPlaceIndex) {
-                      await window.RouteGuard.buildPlaceIndex();
-                    }
-                    var from = document.getElementById('routeFromInput');
-                    if (from) {
-                      if (!from.value || !String(from.value).trim()) from.value = 'Konumum';
-                      from.dispatchEvent(new Event('focus', { bubbles: true }));
-                      from.dispatchEvent(new Event('input', { bubbles: true }));
-                    }
-                    if (navigator.geolocation) {
-                      navigator.geolocation.getCurrentPosition(function(pos){
-                        try {
-                          localStorage.setItem('etubu_last_map_location', JSON.stringify({
-                            lat: pos.coords.latitude, lng: pos.coords.longitude
-                          }));
-                        } catch(e) {}
-                      }, function(){}, { enableHighAccuracy: true, timeout: 10000, maximumAge: 120000 });
-                    }
-                  } catch (e) {}
-                })();
-                """)
-                pollIndexReady(attemptsLeft: 60, completion: completion)
             }
         }
     }
 
     private static func pollIndexReady(attemptsLeft: Int, completion: ((Bool) -> Void)?) {
+        // Index'i her tick'te yeniden build etme — yalnızca hazır mı bak.
         EtubuClusterAudioBridge.evalJSReturning("""
-        (async function(){
+        (function(){
           try {
-            if (window.RouteGuard && window.RouteGuard.buildPlaceIndex) {
-              await window.RouteGuard.buildPlaceIndex();
-            }
             var raw = JSON.parse(
               localStorage.getItem('etubu_place_index_v4')
               || sessionStorage.getItem('etubu_place_index_v4')
@@ -325,7 +383,7 @@ enum EtubuRouteBridge {
                 DispatchQueue.main.async { completion?(ready) }
                 return
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                 pollIndexReady(attemptsLeft: attemptsLeft - 1, completion: completion)
             }
         }
@@ -366,8 +424,47 @@ enum EtubuRouteBridge {
         })();
         """) { raw in
             DispatchQueue.main.async {
-                completion(Self.parsePlaces(raw))
+                let places = Self.parsePlaces(raw)
+                if !places.isEmpty {
+                    completion(places)
+                    return
+                }
+                // TR index boş / yurt dışı sorgu → Nominatim
+                Self.nominatimSearch(query: query, completion: completion)
             }
+        }
+    }
+
+    private static func nominatimSearch(query: String, completion: @escaping ([EtubuRoutePlace]) -> Void) {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard q.count >= 2 else {
+            completion([])
+            return
+        }
+        let qJSON = jsStringLiteral(q)
+        EtubuClusterAudioBridge.evalJSReturning("""
+        (async function(){
+          try {
+            var t = \(qJSON);
+            var url = 'https://nominatim.openstreetmap.org/search?format=json&limit=12&q=' + encodeURIComponent(t);
+            var res = await fetch(url, { headers: { 'Accept-Language': (window.__etubuLang || 'en'), 'User-Agent': 'Etubu/1.0 (com.etubu.app)' } });
+            if (!res.ok) return '[]';
+            var arr = await res.json();
+            return JSON.stringify((arr || []).map(function(hit){
+              return {
+                id: 'nom-' + hit.place_id,
+                label: hit.display_name || t,
+                city: '',
+                district: '',
+                lat: Number(hit.lat),
+                lng: Number(hit.lon),
+                isMyLocation: false
+              };
+            }));
+          } catch(e) { return '[]'; }
+        })();
+        """) { raw in
+            DispatchQueue.main.async { completion(Self.parsePlaces(raw)) }
         }
     }
 
@@ -404,12 +501,35 @@ enum EtubuRouteBridge {
         })();
         """) { raw in
             DispatchQueue.main.async {
+                // Cap WebView yok / henüz hazır değil → fail-closed (ilçe iste).
+                guard let raw else {
+                    completion(Self.nativeNeedsDistrictHeuristic(text))
+                    return
+                }
                 completion(raw == "1")
             }
         }
     }
 
-    /// Resolve typed text like web (Çorum→Merkez, Alaca→Çorum/Alaca).
+    /// Cap cold-start fallback — tek token büyükşehir adını ilçe ister.
+    private static func nativeNeedsDistrictHeuristic(_ text: String) -> Bool {
+        let q = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            .folding(options: .diacriticInsensitive, locale: Locale(identifier: "tr_TR"))
+        guard !q.isEmpty else { return false }
+        let tokens = q.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+        guard tokens.count == 1 else { return false }
+        let metros: Set<String> = [
+            "istanbul", "ankara", "izmir", "bursa", "antalya", "adana", "konya",
+            "gaziantep", "mersin", "kayseri", "eskişehir", "eskisehir", "diyarbakir",
+            "diyarbakır", "samsun", "denizli", "sanliurfa", "şanlıurfa", "malatya",
+            "erzurum", "van", "batman", "elazig", "elazığ", "manisa", "balikesir",
+            "balıkesir", "kahramanmaras", "kahramanmaraş", "aydın", "aydin", "tekirdag",
+            "tekirdağ", "sakarya", "mugla", "muğla", "trabzon", "ordu",
+        ]
+        return metros.contains(tokens[0])
+    }
+
+    /// Resolve typed text like web (Çorum→Merkez, Alaca→Çorum/Alaca). Falls back to Nominatim worldwide.
     static func resolve(text: String, completion: @escaping (EtubuRoutePlace?) -> Void) {
         let tJSON = jsStringLiteral(text)
         EtubuClusterAudioBridge.evalJSReturning("""
@@ -418,10 +538,27 @@ enum EtubuRouteBridge {
             var t = \(tJSON);
             if (window.RouteGuard && window.RouteGuard.resolve) {
               var p = await window.RouteGuard.resolve(t);
-              return JSON.stringify(p || null);
+              if (p) return JSON.stringify(p);
             }
             \(placeHelpersJS)
-            return JSON.stringify(__etubuMapPlace(__etubuResolvePlace(t)) || null);
+            var local = __etubuMapPlace(__etubuResolvePlace(t));
+            if (local) return JSON.stringify(local);
+            // Global geocode — OpenStreetMap Nominatim
+            var url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(t);
+            var res = await fetch(url, { headers: { 'Accept-Language': (window.__etubuLang || 'en'), 'User-Agent': 'Etubu/1.0 (com.etubu.app)' } });
+            if (!res.ok) return 'null';
+            var arr = await res.json();
+            if (!arr || !arr.length) return 'null';
+            var hit = arr[0];
+            return JSON.stringify({
+              id: 'nom-' + hit.place_id,
+              label: hit.display_name || t,
+              city: hit.address && (hit.address.city || hit.address.town || hit.address.village) || '',
+              district: hit.address && hit.address.suburb || '',
+              lat: Number(hit.lat),
+              lng: Number(hit.lon),
+              isMyLocation: false
+            });
           } catch(e) { return 'null'; }
         })();
         """) { raw in
@@ -443,59 +580,71 @@ enum EtubuRouteBridge {
     static func plan(from: String, to: String, completion: ((Bool, String) -> Void)? = nil) {
         primeWarningAudio()
         EtubuDriveWarnings.armRouteHazardHook()
+        EtubuMapLocationHelper.shared.startIfNeeded()
+        // Seed Cap RouteGuard with native GPS before "Konumum" resolve.
+        pushNativeLocationToWeb()
         let fromJSON = jsStringLiteral(from.isEmpty ? "Konumum" : from)
         let toJSON = jsStringLiteral(to)
-        EtubuClusterAudioBridge.evalJSReturning("""
-        (async function(){
-          try {
-            localStorage.setItem('etubu_force_tr_route', '1');
-            sessionStorage.setItem('etubu_force_tr_route', '1');
-            if (window.RadarAlert && window.RadarAlert.primeAudio) window.RadarAlert.primeAudio();
-            var rg = document.getElementById('routeGuard');
-            if (rg) { rg.hidden = false; rg.classList.remove('is-collapsed','is-drive-hidden'); }
-            var form = document.getElementById('routeForm');
-            if (form) form.hidden = false;
-            var fromLabel = \(fromJSON);
-            var toLabel = \(toJSON);
-            // Same path as web Cap bridge — resolve + buildRoute (createRoute + hazards + brief)
-            if (window.RouteGuard && window.RouteGuard.buildRoute) {
-              var out = await window.RouteGuard.buildRoute(fromLabel, toLabel);
-              return JSON.stringify(out || { ok: false, message: 'Rota kurulamadı' });
+        ensureCapAppReady { ready in
+            guard ready else {
+                completion?(false, "Rota motoru yükleniyor — tekrar deneyin")
+                // Keep warming Cap in background for the next attempt.
+                EtubuCapBridgeViewController.armWebContent()
+                return
             }
-            return JSON.stringify({ ok: false, message: 'RouteGuard yok' });
-          } catch (e) {
-            return JSON.stringify({ ok: false, message: String(e && e.message ? e.message : e) });
-          }
-        })();
-        """) { raw in
-            var ok = false
-            var msg = "Rota kurulamadı"
-            if let raw, let data = raw.data(using: .utf8),
-               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                ok = json["ok"] as? Bool ?? false
-                msg = (json["message"] as? String) ?? msg
-            }
-            if ok {
-                pollPlanReady(attemptsLeft: 16) { ready, statusMsg in
-                    completion?(ready, ready ? statusMsg : (statusMsg.isEmpty ? msg : statusMsg))
+            EtubuClusterAudioBridge.evalJSReturning("""
+            (async function(){
+              try {
+                window.__ETUBU_GPS_ARMED__ = true;
+                localStorage.setItem('etubu_force_tr_route', '1');
+                sessionStorage.setItem('etubu_force_tr_route', '1');
+                if (window.RadarAlert && window.RadarAlert.primeAudio) window.RadarAlert.primeAudio();
+                var rg = document.getElementById('routeGuard');
+                if (rg) { rg.hidden = false; rg.classList.remove('is-collapsed','is-drive-hidden'); }
+                var form = document.getElementById('routeForm');
+                if (form) form.hidden = false;
+                var fromLabel = \(fromJSON);
+                var toLabel = \(toJSON);
+                // Same path as web Cap bridge — resolve + buildRoute (createRoute + hazards + brief)
+                if (window.RouteGuard && window.RouteGuard.buildRoute) {
+                  var out = await window.RouteGuard.buildRoute(fromLabel, toLabel);
+                  return JSON.stringify(out || { ok: false, message: 'Rota kurulamadı' });
                 }
-            } else {
-                // Still poll briefly — createRoute may have partially activated
-                pollPlanReady(attemptsLeft: 6) { ready, statusMsg in
-                    completion?(ready || ok, ready ? statusMsg : msg)
+                return JSON.stringify({ ok: false, message: 'Rota motoru hazır değil' });
+              } catch (e) {
+                return JSON.stringify({ ok: false, message: String(e && e.message ? e.message : e) });
+              }
+            })();
+            """) { raw in
+                var ok = false
+                var msg = "Rota kurulamadı"
+                if let raw, let data = raw.data(using: .utf8),
+                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                    ok = json["ok"] as? Bool ?? false
+                    msg = (json["message"] as? String) ?? msg
+                }
+                if ok {
+                    pollPlanReady(attemptsLeft: 12, delay: 0.5) { ready, statusMsg in
+                        completion?(ready, ready ? statusMsg : (statusMsg.isEmpty ? msg : statusMsg))
+                    }
+                } else {
+                    // Still poll briefly — createRoute may have partially activated
+                    pollPlanReady(attemptsLeft: 6, delay: 0.6) { ready, statusMsg in
+                        completion?(ready || ok, ready ? statusMsg : msg)
+                    }
                 }
             }
         }
     }
 
-    private static func pollPlanReady(attemptsLeft: Int, completion: ((Bool, String) -> Void)?) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+    private static func pollPlanReady(attemptsLeft: Int, delay: Double = 0.7, completion: ((Bool, String) -> Void)?) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
             status { st in
                 let enriched = st.brief.hasAny || st.hazardCount > 0 || (st.active && !st.navOnly)
                 if st.active && (enriched || st.navOnly || attemptsLeft <= 3) {
                     let msg: String
                     if st.navOnly {
-                        msg = "Rota çizildi (navigasyon) — yurt dışı / OSRM; radar-koridor TR verisi yok"
+                        msg = "Rota çizildi — OSRM; EGM radar yok · şarj/hava/OSM kamera var"
                     } else if st.active {
                         msg = "Rota aktif · \(st.brief.radarCount) radar · \(st.brief.corridorCount) koridor · \(st.brief.chargeCount) şarj · \(st.brief.weatherCount) hava"
                     } else {
@@ -514,7 +663,8 @@ enum EtubuRouteBridge {
                     completion?(false, st.statusText)
                     return
                 }
-                pollPlanReady(attemptsLeft: attemptsLeft - 1, completion: completion)
+                let nextDelay = min(1.0, delay + 0.15)
+                pollPlanReady(attemptsLeft: attemptsLeft - 1, delay: nextDelay, completion: completion)
             }
         }
     }
@@ -534,6 +684,130 @@ enum EtubuRouteBridge {
           } catch (e) {}
         })();
         """)
+        Task { @MainActor in
+            EtubuVehicleTelemetry.shared.routeDestLat = nil
+            EtubuVehicleTelemetry.shared.routeDestLng = nil
+            EtubuVehicleTelemetry.shared.capRouteRemainKm = nil
+            EtubuVehicleTelemetry.shared.refreshEnergyPlan()
+        }
+    }
+
+    /// Hedef koordinatı oku (Maps handoff).
+    static func readDestinationCoordinate(completion: @escaping (CLLocationCoordinate2D?) -> Void) {
+        EtubuClusterAudioBridge.evalJSReturning("""
+        (function(){
+          try {
+            var saved = JSON.parse(sessionStorage.getItem('etubu_route_last') || localStorage.getItem('etubu_route_last') || '{}');
+            if (saved && saved.to && typeof saved.to.lat === 'number' && typeof saved.to.lng === 'number') {
+              return JSON.stringify({ lat: saved.to.lat, lng: saved.to.lng });
+            }
+            var coords = (window.__etubuRouteState && window.__etubuRouteState.coords) || [];
+            if (coords.length) {
+              var last = coords[coords.length - 1];
+              return JSON.stringify({ lat: last.lat, lng: last.lng });
+            }
+            return 'null';
+          } catch(e) { return 'null'; }
+        })();
+        """) { raw in
+            DispatchQueue.main.async {
+                guard let raw, raw != "null",
+                      let data = raw.data(using: .utf8),
+                      let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let lat = json["lat"] as? Double ?? (json["lat"] as? NSNumber)?.doubleValue,
+                      let lng = json["lng"] as? Double ?? (json["lng"] as? NSNumber)?.doubleValue
+                else {
+                    completion(nil)
+                    return
+                }
+                completion(CLLocationCoordinate2D(latitude: lat, longitude: lng))
+            }
+        }
+    }
+
+    static func openInMaps(destinationName: String) {
+        readDestinationCoordinate { coord in
+            Task { @MainActor in
+                let name = destinationName.isEmpty ? "Etubu rota" : destinationName
+                let resolved = coord ?? {
+                    if let lat = EtubuVehicleTelemetry.shared.routeDestLat,
+                       let lng = EtubuVehicleTelemetry.shared.routeDestLng {
+                        return CLLocationCoordinate2D(latitude: lat, longitude: lng)
+                    }
+                    return nil
+                }()
+                openCoordinateInMaps(resolved, name: name)
+            }
+        }
+    }
+
+    /// Şarj önerisi / Haritada aç (şarj): en yakın şarj istasyonu.
+    static func openNearestChargeInMaps() {
+        Task { @MainActor in
+            if openNearestChargeStopIfAvailable() { return }
+            openCoordinateInMaps(nil, name: "Şarj istasyonu")
+        }
+    }
+
+    /// Önerilen / rota üzerindeki en yakın şarj (alongKm veya kullanıcıya mesafe).
+    @MainActor
+    @discardableResult
+    static func openNearestChargeStopIfAvailable() -> Bool {
+        let planner = EtubuEvRoutePlanner.shared
+        let warnings = EtubuDriveWarnings.shared
+        let candidates: [EtubuRouteHazard] = {
+            if !planner.suggestedStops.isEmpty { return planner.suggestedStops }
+            let pool = warnings.remainingHazards.isEmpty ? warnings.hazards : warnings.remainingHazards
+            return pool.filter { $0.kind == "charge" }
+        }()
+        guard !candidates.isEmpty else { return false }
+        let t = EtubuVehicleTelemetry.shared
+        let nearest: EtubuRouteHazard = {
+            if let lat = t.latitude, let lng = t.longitude {
+                return candidates.min(by: { a, b in
+                    haversineKm(lat, lng, a.lat, a.lng) < haversineKm(lat, lng, b.lat, b.lng)
+                }) ?? candidates[0]
+            }
+            return candidates.sorted { ($0.alongKm ?? 1e9) < ($1.alongKm ?? 1e9) }.first ?? candidates[0]
+        }()
+        openChargeStop(nearest)
+        return true
+    }
+
+    @MainActor
+    static func openChargeStop(_ stop: EtubuRouteHazard) {
+        let name = stop.label.isEmpty ? "Şarj istasyonu" : stop.label
+        let coord = CLLocationCoordinate2D(latitude: stop.lat, longitude: stop.lng)
+        guard CLLocationCoordinate2DIsValid(coord),
+              abs(stop.lat) > 0.01 || abs(stop.lng) > 0.01 else {
+            openCoordinateInMaps(nil, name: name)
+            return
+        }
+        openCoordinateInMaps(coord, name: name)
+    }
+
+    private static func openCoordinateInMaps(_ coord: CLLocationCoordinate2D?, name: String) {
+        Task { @MainActor in
+            if let coord {
+                let item = MKMapItem(placemark: MKPlacemark(coordinate: coord))
+                item.name = name
+                item.openInMaps(launchOptions: [
+                    MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving
+                ])
+            } else if let encoded = name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+                      let url = URL(string: "http://maps.apple.com/?daddr=\(encoded)") {
+                UIApplication.shared.open(url)
+            }
+        }
+    }
+
+    private static func haversineKm(_ lat1: Double, _ lon1: Double, _ lat2: Double, _ lon2: Double) -> Double {
+        let r = 6371.0
+        let dLat = (lat2 - lat1) * .pi / 180
+        let dLon = (lon2 - lon1) * .pi / 180
+        let a = sin(dLat / 2) * sin(dLat / 2)
+            + cos(lat1 * .pi / 180) * cos(lat2 * .pi / 180) * sin(dLon / 2) * sin(dLon / 2)
+        return 2 * r * asin(min(1, sqrt(a)))
     }
 
     static func status(completion: @escaping (EtubuRouteStatus) -> Void) {
@@ -709,13 +983,29 @@ enum EtubuRouteBridge {
         return arr.compactMap { row -> EtubuRoutePlace? in
             let label = (row["label"] as? String) ?? ""
             guard !label.isEmpty else { return nil }
+            let lat: Double? = {
+                if let n = row["lat"] as? Double { return n }
+                if let n = row["lat"] as? NSNumber { return n.doubleValue }
+                if let s = row["lat"] as? String { return Double(s) }
+                return nil
+            }()
+            let lng: Double? = {
+                if let n = row["lng"] as? Double { return n }
+                if let n = row["lng"] as? NSNumber { return n.doubleValue }
+                if let n = row["lon"] as? Double { return n }
+                if let n = row["lon"] as? NSNumber { return n.doubleValue }
+                if let s = row["lng"] as? String { return Double(s) }
+                return nil
+            }()
             return EtubuRoutePlace(
                 label: label,
-                cityName: (row["cityName"] as? String) ?? "",
-                districtName: (row["districtName"] as? String) ?? "",
+                cityName: (row["cityName"] as? String) ?? (row["city"] as? String) ?? "",
+                districtName: (row["districtName"] as? String) ?? (row["district"] as? String) ?? "",
                 isMyLocation: (row["isMyLocation"] as? Bool) ?? false,
                 isMerkez: (row["isMerkez"] as? Bool) ?? false,
-                nearLabel: (row["nearLabel"] as? String) ?? ""
+                nearLabel: (row["nearLabel"] as? String) ?? "",
+                lat: lat,
+                lng: lng
             )
         }
     }

@@ -2,17 +2,65 @@ import Foundation
 import CoreLocation
 import Combine
 
+extension Notification.Name {
+    static let etubuDemoSoundArmed = Notification.Name("etubuDemoSoundArmed")
+}
+
 /// Demo: İstanbul Küçükçekmece → İzmit (Kocaeli), hızlandırılmış gerçek rota simülasyonu.
 @MainActor
 final class EtubuDemoDrive: ObservableObject {
     static let shared = EtubuDemoDrive()
 
+    /// Nonisolated mirror of `isRunning` — GPS/OBD/telemetry guards (any thread).
+    nonisolated(unsafe) static var isActive = false
+
+    private static let udRunning = "etubu.demo.running"
+    private static let udKmh = "etubu.demo.kmh"
+    private static let udGear = "etubu.demo.gear"
+    private static let udPower = "etubu.demo.power"
+
     @Published private(set) var isRunning = false
+    /// UI’nin doğrudan okuduğu demo değerleri (telemetry ezilse bile dial doğru kalsın).
+    @Published private(set) var displayKmh: Int = 0
+    @Published private(set) var displayGear: String = "P"
+    @Published private(set) var displayPowerKw: Int = 0
     @Published var mirrorEnabled: Bool = UserDefaults.standard.bool(forKey: "etubu.demo.mirror") {
         didSet { UserDefaults.standard.set(mirrorEnabled, forKey: "etubu.demo.mirror") }
     }
 
+    private func publishDisplay(kmh: Int, gear: String, power: Int) {
+        displayKmh = kmh
+        displayGear = gear
+        displayPowerKw = power
+        let ud = UserDefaults.standard
+        ud.set(kmh, forKey: Self.udKmh)
+        ud.set(gear, forKey: Self.udGear)
+        ud.set(power, forKey: Self.udPower)
+        // Yalnızca demo çalışırken aktif — stop() sonrası publishDisplay demo UI’yi yeniden açmasın.
+        EtubuDriveWarnings.shared.applyDemoDrive(active: isRunning, kmh: kmh, gear: gear, power: power)
+        EtubuVehicleTelemetry.shared.demoUIEpoch &+= 1
+        EtubuVehicleTelemetry.shared.publishWidgetSnapshot()
+    }
+
+    private func publishRunning(_ on: Bool) {
+        isRunning = on
+        Self.isActive = on
+        UserDefaults.standard.set(on, forKey: Self.udRunning)
+        if on {
+            EtubuDriveWarnings.shared.applyDemoDrive(
+                active: true,
+                kmh: displayKmh,
+                gear: displayGear,
+                power: displayPowerKw
+            )
+        } else {
+            EtubuDriveWarnings.shared.applyDemoDrive(active: false, kmh: 0, gear: "P", power: 0)
+        }
+        EtubuVehicleTelemetry.shared.demoUIEpoch &+= 1
+    }
+
     private var tickTask: Task<Void, Never>?
+    private var tickTimer: Timer?
     /// 0…1 rota ilerlemesi
     private var progress: Double = 0
     private var route: [CLLocationCoordinate2D] = []
@@ -32,10 +80,12 @@ final class EtubuDemoDrive: ObservableObject {
 
     func start() {
         guard !isRunning else { return }
-        isRunning = true
+        publishRunning(true)
         progress = 0
         warnCycle = 0
         buildKucukcekmeceToIzmitRoute()
+
+        EtubuTeslaBleSession.shared.suspendForDemo()
 
         let t = EtubuVehicleTelemetry.shared
         t.connectionState = .connected
@@ -48,10 +98,19 @@ final class EtubuDemoDrive: ObservableObject {
         t.navDestination = "İzmit, Kocaeli"
         t.outsideC = 18
         t.insideC = 21
-        if t.rangeKm == nil { t.rangeKm = 312 }
-        t.kmh = 0
-        t.gear = "P"
-        t.powerKw = 0
+        if t.rangeKm == nil || (t.rangeKm ?? 0) >= 300 { t.rangeKm = 180 }
+        if t.socPercent == nil || (t.socPercent ?? 0) >= 70 { t.socPercent = 42 }
+        t.rangeKm = 180
+        t.socPercent = 42
+        t.powerHistory = []
+        // İlk karede hemen hareket — UI / Maestro “D” + hız görsün.
+        t.kmh = 28
+        t.gear = "D"
+        t.powerKw = 42
+        t.powerHistory = [42]
+        t.navRemainKm = max(1, totalMeters / 1000)
+        t.refreshEnergyPlan()
+        publishDisplay(kmh: 28, gear: "D", power: 42)
         if let first = route.first {
             t.latitude = first.latitude
             t.longitude = first.longitude
@@ -60,37 +119,72 @@ final class EtubuDemoDrive: ObservableObject {
         EtubuDriveWarnings.shared.routeCoords = route
         injectHazardsAlongRoute()
         EtubuRouteBridge.primeWarningAudio()
-        EtubuClusterAudioBridge.startDrive(kmh: 0, gear: "P", source: "demo", powerKw: 0)
-        // Dururken levha yok
-        EtubuOsmSpeedLimit.shared.applyDemoLimit(nil)
+        // EV ses + uyarı beep context — silent-mode’dan çık.
+        UserDefaults.standard.set("calm-ev", forKey: "etubu.cluster.voice")
+        EtubuClusterAudioBridge.startDrive(kmh: 28, gear: "D", source: "demo", powerKw: 42)
+        EtubuClusterAudioBridge.setSoundEnabled(true, voice: "calm-ev")
+        NotificationCenter.default.post(name: .etubuDemoSoundArmed, object: nil)
+        // Dururken levha yok — ilk step hareket limitini basar
+        EtubuOsmSpeedLimit.shared.applyDemoLimit(50, highway: "residential")
 
         tickTask?.cancel()
-        tickTask = Task { [weak self] in
-            while let self, !Task.isCancelled, self.isRunning {
+        tickTimer?.invalidate()
+        // İlk adım hemen; sonra common-mode timer (sheet scroll default runloop’u aç bırakmasın).
+        step()
+        // İlk uyarıyı beklemeden bas (warnCycle % 10).
+        updateAheadWarning(
+            remainM: totalMeters * (1 - progress),
+            kmh: EtubuVehicleTelemetry.shared.kmh
+        )
+        let timer = Timer(timeInterval: tickSec, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, self.isRunning else { return }
                 self.step()
-                try? await Task.sleep(nanoseconds: UInt64(self.tickSec * 1_000_000_000))
             }
         }
+        RunLoop.main.add(timer, forMode: .common)
+        tickTimer = timer
+        tickTask = nil
     }
 
     func stop() {
-        isRunning = false
+        publishRunning(false)
         tickTask?.cancel()
         tickTask = nil
+        tickTimer?.invalidate()
+        tickTimer = nil
         let t = EtubuVehicleTelemetry.shared
         t.source = .none
         t.connectionState = EtubuTeslaVinStore.vin == nil ? .needsVIN : .disconnected
-        t.statusMessage = "Demo bitti"
+        t.statusMessage = ""
+        t.deviceLabel = ""
         t.routeActive = false
         t.navDestination = ""
+        t.routeTo = ""
+        t.routeFrom = ""
+        t.navRemainKm = nil
+        t.capRouteRemainKm = nil
+        t.energyAtArrivalPercent = nil
+        t.needsChargeStop = false
         t.kmh = 0
         t.gear = "P"
         t.powerKw = 0
+        displayKmh = 0
+        displayGear = "P"
+        displayPowerKw = 0
+        UserDefaults.standard.set(0, forKey: Self.udKmh)
+        UserDefaults.standard.set("P", forKey: Self.udGear)
+        UserDefaults.standard.set(0, forKey: Self.udPower)
+        EtubuDriveWarnings.shared.applyDemoDrive(active: false, kmh: 0, gear: "P", power: 0)
         EtubuDriveWarnings.shared.clearCriticalAlerts()
         EtubuDriveWarnings.shared.routeCoords = []
         EtubuOsmSpeedLimit.shared.clearDemoOverride()
         EtubuClusterAudioBridge.endDrive()
-        EtubuTeslaBleSession.shared.bootstrapIfPossible()
+        if #available(iOS 16.2, *) {
+            Task { await EtubuLiveActivityController.end() }
+        }
+        EtubuTeslaBleSession.shared.resumeAfterDemo()
+        EtubuVehicleTelemetry.shared.demoUIEpoch &+= 1
     }
 
     // MARK: - Rota: Küçükçekmece → İzmit (TEM / O-4 yaklaşık)
@@ -179,11 +273,28 @@ final class EtubuDemoDrive: ObservableObject {
         t.kmh = kmh
         t.gear = gear
         t.powerKw = power
+        publishDisplay(kmh: kmh, gear: gear, power: power)
+        // Sparkline / regen bar — aynı history yolu (applyTeslaDrive ile uyumlu).
+        var hist = t.powerHistory
+        hist.append(power)
+        if hist.count > 40 { hist.removeFirst(hist.count - 40) }
+        t.powerHistory = hist
         t.rpm = max(0, kmh * 28)
+        // Demo tick: Tesla poll SOC/rota’yı ezmesin.
+        t.socPercent = 42
+        t.rangeKm = 180
+        t.routeActive = true
+        if t.routeTo.isEmpty { t.routeTo = "İzmit / Kocaeli" }
+        if t.navDestination.isEmpty { t.navDestination = "İzmit, Kocaeli" }
+        t.persistChargeCacheForUI()
         t.latitude = coord.latitude
         t.longitude = coord.longitude
         t.headingDeg = heading
         t.lastUpdateAt = Date()
+        t.source = .tesla
+        t.connectionState = .connected
+        t.statusMessage = "Demo · Küçükçekmece → İzmit"
+        t.deviceLabel = "Demo"
 
         let remainM = totalMeters * (1 - progress)
         t.navRemainKm = max(0, remainM / 1000)
@@ -194,6 +305,14 @@ final class EtubuDemoDrive: ObservableObject {
         } else {
             t.navEtaMinutes = nil
         }
+        t.refreshEnergyPlan()
+        EtubuTripHistoryStore.shared.noteTelemetry(
+            kmh: kmh,
+            gear: gear,
+            odo: t.odometerKm,
+            powerKw: power,
+            routeTo: t.routeTo.isEmpty ? "İzmit" : t.routeTo
+        )
 
         EtubuClusterAudioBridge.pushDrive(kmh: kmh, powerKw: power, source: "demo")
 
@@ -321,6 +440,7 @@ final class EtubuDemoDrive: ObservableObject {
         w.remainingBrief = w.brief
         w.corridorActive = false
         w.corridorLabel = "TEM / O-4"
+        EtubuVehicleTelemetry.shared.refreshEnergyPlan()
     }
 
     private func updateAheadWarning(remainM: Double, kmh: Int) {
@@ -373,7 +493,13 @@ final class EtubuDemoDrive: ObservableObject {
             )
         }
         w.remainingHazards = ahead
-        // Radar / koridor önceliği zaten hazards sırası + filter ile
+        EtubuVehicleTelemetry.shared.refreshEnergyPlan()
+        EtubuClusterAudioBridge.playWarnCue(
+            id: item.id,
+            kind: item.kind,
+            stage: item.stage.rawValue,
+            phrase: "\(item.title) \(item.distanceLabel)"
+        )
         _ = kmh
         _ = remainM
     }

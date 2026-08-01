@@ -93,10 +93,8 @@ enum EtubuClusterAudioBridge {
             evalJS("""
             (function(){
               try {
-                // Web gibi: beep + TTS hazır
+                // EV ses — uyarı beep/TTS ayarlarına dokunma (yalnızca ayarlar)
                 if (window.RadarAlert && window.RadarAlert.primeAudio) window.RadarAlert.primeAudio();
-                localStorage.setItem('etubu_radar_beeps', '1');
-                localStorage.setItem('etubu_radar_tts', localStorage.getItem('etubu_radar_tts') || '1');
                 var Ctx = window.AudioContext || window.webkitAudioContext;
                 if (Ctx) {
                   if (!window.__etubuBeepCtx) window.__etubuBeepCtx = new Ctx();
@@ -233,10 +231,9 @@ enum EtubuClusterAudioBridge {
         """)
     }
 
-    /// Web `I18n.setLang` — TR dışı dillerde kritik nokta / RouteGuard kapalı.
+    /// Web `I18n.setLang` — rota/uyarı özellikleri dil bağımsız (OSM/OCM global).
     static func setLanguage(_ code: String) {
         let safe = code.replacingOccurrences(of: "'", with: "")
-        let forceTr = (safe == "tr")
         evalJS("""
         (function(){
           try {
@@ -244,14 +241,10 @@ enum EtubuClusterAudioBridge {
             window.__etubuLang = '\(safe)';
             if (window.sessionStorage) {
               sessionStorage.setItem('etubu_lang', '\(safe)');
-              if (\(forceTr ? "true" : "false")) {
-                sessionStorage.setItem('etubu_force_tr_route', '1');
-                window.__etubuForceTrRoute = 1;
-              } else {
-                sessionStorage.removeItem('etubu_force_tr_route');
-                window.__etubuForceTrRoute = 0;
-                try { localStorage.removeItem('etubu_force_tr_route'); } catch(e0) {}
-              }
+              // Native cluster: rota özelliklerini dil değişiminde kapatma.
+              sessionStorage.setItem('etubu_force_tr_route', '1');
+              window.__etubuForceTrRoute = 1;
+              try { localStorage.setItem('etubu_force_tr_route', '1'); } catch(e0) {}
             }
             if (window.RouteGuard && window.RouteGuard.syncVisibility) {
               window.RouteGuard.syncVisibility();
@@ -259,11 +252,69 @@ enum EtubuClusterAudioBridge {
             if (window.RouteGuard && window.RouteGuard.refreshLocale) {
               window.RouteGuard.refreshLocale();
             }
-            if (!\(forceTr ? "true" : "false")) {
-              if (window.RadarAlert && window.RadarAlert.clear) window.RadarAlert.clear();
-              if (window.__etubuRouteState) {
-                window.__etubuRouteState.hazards = [];
+          } catch (e) {}
+        })();
+        """)
+    }
+
+    /// Demo / native uyarı bip + kısa TTS (RouteGuard alertBeep ile aynı fikir).
+    private static var lastWarnCueKey = ""
+    private static var lastWarnCueAt = Date.distantPast
+
+    static func playWarnCue(id: String, kind: String, stage: String, phrase: String) {
+        // Uyarı sesi yalnızca ayarlardan kapatılır — ana ekran EV mute’u etkilemez.
+        let beepsOn = UserDefaults.standard.object(forKey: "etubu_radar_beeps") as? Bool ?? true
+        let ttsOn = UserDefaults.standard.object(forKey: "etubu_radar_tts") as? Bool ?? true
+        guard beepsOn || ttsOn else { return }
+
+        let key = "\(id)|\(stage)"
+        let now = Date()
+        if key == lastWarnCueKey, now.timeIntervalSince(lastWarnCueAt) < 12 { return }
+        lastWarnCueKey = key
+        lastWarnCueAt = now
+
+        let urgent = (stage == "critical" || stage == "near")
+        let beeps = (beepsOn && urgent) ? 2 : (beepsOn ? 1 : 0)
+        let safePhrase = phrase
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "'", with: "\\'")
+            .replacingOccurrences(of: "\n", with: " ")
+        AppDelegate.activateDriveAudioSession()
+        evalJS("""
+        (function(){
+          try {
+            if (window.RadarAlert && window.RadarAlert.primeAudio) window.RadarAlert.primeAudio();
+            var Ctx = window.AudioContext || window.webkitAudioContext;
+            if (Ctx && \(beeps) > 0) {
+              if (!window.__etubuBeepCtx) window.__etubuBeepCtx = new Ctx();
+              var ctx = window.__etubuBeepCtx;
+              if (ctx.state === 'suspended') ctx.resume();
+              var now = ctx.currentTime;
+              var freq = \(urgent ? 1180 : 880);
+              for (var i = 0; i < \(beeps); i++) {
+                var o = ctx.createOscillator();
+                var g = ctx.createGain();
+                o.type = 'sine';
+                o.frequency.value = freq;
+                var t0 = now + i * \(urgent ? 0.16 : 0.2);
+                g.gain.setValueAtTime(0.0001, t0);
+                g.gain.exponentialRampToValueAtTime(\(urgent ? 0.22 : 0.16), t0 + 0.02);
+                g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.11);
+                o.connect(g);
+                g.connect(ctx.destination);
+                o.start(t0);
+                o.stop(t0 + 0.13);
               }
+            }
+            var phrase = '\(safePhrase)';
+            if (\(ttsOn ? "true" : "false") && phrase && window.speechSynthesis && typeof SpeechSynthesisUtterance !== 'undefined') {
+              try {
+                window.speechSynthesis.cancel();
+                var u = new SpeechSynthesisUtterance(phrase);
+                u.lang = 'tr-TR';
+                u.rate = \(urgent ? 1.08 : 1.02);
+                window.speechSynthesis.speak(u);
+              } catch (e1) {}
             }
           } catch (e) {}
         })();
@@ -300,10 +351,19 @@ enum EtubuClusterAudioBridge {
         }
     }
 
-    static func evalJSReturning(_ js: String, completion: @escaping (String?) -> Void) {
+    static func evalJSReturning(_ js: String, timeout: TimeInterval = 22, completion: @escaping (String?) -> Void) {
         DispatchQueue.main.async {
+            var finished = false
+            let finish: (String?) -> Void = { value in
+                guard !finished else { return }
+                finished = true
+                completion(value)
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + timeout) {
+                finish(nil)
+            }
             guard let webView = findWebView() else {
-                completion(nil)
+                finish(nil)
                 return
             }
             // Keep Cap engine warm under the opaque cluster overlay.
@@ -326,17 +386,17 @@ enum EtubuClusterAudioBridge {
                 webView.callAsyncJavaScript(wrapped, arguments: [:], in: nil, in: .page) { result in
                     switch result {
                     case .success(let value):
-                        completion(stringifyEvalResult(value))
+                        finish(stringifyEvalResult(value))
                     case .failure:
                         // Fallback for older WebKit edge cases
                         webView.evaluateJavaScript(js) { value, _ in
-                            completion(stringifyEvalResult(value))
+                            finish(stringifyEvalResult(value))
                         }
                     }
                 }
             } else {
                 webView.evaluateJavaScript(js) { result, _ in
-                    completion(stringifyEvalResult(result))
+                    finish(stringifyEvalResult(result))
                 }
             }
         }

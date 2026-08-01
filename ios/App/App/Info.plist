@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>ETUBU</string>
+	<string>Etubu</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -52,13 +52,13 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>ETUBU connects to your Tesla over Bluetooth using your vehicle VIN to show live speed, gear, and battery on the cluster. It can also connect to an OBD BLE adapter as a fallback.</string>
+	<string>Etubu connects to your Tesla over Bluetooth using your vehicle VIN to show live speed, gear, and battery. It can also connect to an OBD BLE adapter as a fallback.</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
-	<string>ETUBU uses Bluetooth for Tesla vehicle telemetry (VIN-matched) and optional OBD BLE fallback.</string>
+	<string>Etubu uses Bluetooth for Tesla vehicle telemetry (VIN-matched) and optional OBD BLE fallback.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Optional continuous GPS sync while driving. Location is processed only on your device.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>ETUBU uses your location to sync EV driving sounds with GPS speed. Location stays on your device.</string>
+	<string>Etubu uses your location to sync EV driving sounds with GPS speed. Location stays on your device.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>NSSupportsLiveActivitiesFrequentUpdates</key>

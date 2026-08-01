@@ -23,6 +23,7 @@ final class EtubuTeslaBleSession: ObservableObject {
     private var userStopped = false
     private var reconnectAttempt = 0
     private var tick = 0
+    private var lastLiveActivityPush = Date.distantPast
     private var activePairVIN: String?
     /// Ignore brief BLE disconnect flickers right after a successful connect.
     private var connectedAt: Date?
@@ -30,10 +31,15 @@ final class EtubuTeslaBleSession: ObservableObject {
     @Published private(set) var pairStep: PairFlowStep = .none
 
     private var telemetry: EtubuVehicleTelemetry { .shared }
+    /// Demo sürerken BLE poll yazmasın.
+    private var demoSuspended = false
+    /// Pair / connect spam kilidi.
+    private var pairInFlight = false
 
     private init() {}
 
     func bootstrapIfPossible() {
+        guard !demoSuspended else { return }
         guard let vin = EtubuTeslaVinStore.vin else {
             telemetry.connectionState = .needsVIN
             telemetry.statusMessage = "VIN girin ve eşleştirin"
@@ -51,7 +57,25 @@ final class EtubuTeslaBleSession: ObservableObject {
         Task { await connectNormal(vin: vin) }
     }
 
+    /// Demo drive telemetry çakışmasını önlemek için BLE poll'u durdur.
+    func suspendForDemo() {
+        demoSuspended = true
+        cancelJobs()
+    }
+
+    func resumeAfterDemo() {
+        guard demoSuspended else { return }
+        demoSuspended = false
+        userStopped = false
+        bootstrapIfPossible()
+    }
+
     func saveVINAndPair(_ raw: String) async {
+        guard !pairInFlight else { return }
+        switch pairStep {
+        case .sendingRequest, .connectingAfterCard: return
+        default: break
+        }
         let vin = EtubuTeslaVinStore.normalize(raw)
         guard EtubuTeslaVinStore.isValidVIN(vin) else {
             telemetry.statusMessage = "VIN must be 17 characters"
@@ -120,11 +144,15 @@ final class EtubuTeslaBleSession: ObservableObject {
     }
 
     func confirmCardTapped() async {
+        guard !pairInFlight else { return }
+        guard pairStep == .waitingForCard || pairStep == .failed else { return }
         guard let vin = activePairVIN ?? EtubuTeslaVinStore.vin else {
             telemetry.connectionState = .needsVIN
             telemetry.statusMessage = "VIN bulunamadı"
             return
         }
+        pairInFlight = true
+        defer { pairInFlight = false }
         telemetry.connectionState = .connecting
         telemetry.statusMessage = "Kart doğrulaması sonrası bağlanıyor…"
         pairStep = .connectingAfterCard
@@ -132,10 +160,16 @@ final class EtubuTeslaBleSession: ObservableObject {
             await client.disconnect()
         }
         try? await Task.sleep(nanoseconds: 2_500_000_000)
+        guard !demoSuspended else { return }
         await connectNormal(vin: vin, allowPairFallback: false, maxRetries: 3)
     }
 
     func retryPair() async {
+        guard !pairInFlight else { return }
+        switch pairStep {
+        case .sendingRequest, .connectingAfterCard: return
+        default: break
+        }
         guard let vin = activePairVIN ?? EtubuTeslaVinStore.vin else {
             telemetry.connectionState = .needsVIN
             telemetry.statusMessage = "VIN girin ve eşleştirin"
@@ -148,6 +182,9 @@ final class EtubuTeslaBleSession: ObservableObject {
     // MARK: - Pairing
 
     private func pair(vin: String) async {
+        guard !pairInFlight else { return }
+        pairInFlight = true
+        defer { pairInFlight = false }
         cancelJobs()
         activePairVIN = vin
         pairStep = .sendingRequest
@@ -191,6 +228,7 @@ final class EtubuTeslaBleSession: ObservableObject {
     // MARK: - Connect + poll
 
     private func connectNormal(vin: String, allowPairFallback: Bool = true, maxRetries: Int = 1) async {
+        guard !demoSuspended else { return }
         cancelJobs()
         telemetry.connectionState = .connecting
         telemetry.statusMessage = "Bağlanıyor…"
@@ -224,6 +262,7 @@ final class EtubuTeslaBleSession: ObservableObject {
                 activePairVIN = nil
                 pairStep = .none
                 startPolling(c)
+                EtubuVehicleLaunchNotifier.shared.notifyVehicleConnected(source: "tesla")
                 return
             } catch {
                 if attempt < maxRetries {
@@ -252,30 +291,47 @@ final class EtubuTeslaBleSession: ObservableObject {
                 let boot = try await client.fetch(.categories([.charge, .climate, .tirePressure]))
                 await MainActor.run { self.applySnapshot(boot) }
             } catch {
-                // devam — drive poll yine dener
+                // Kombine istek başarısızsa lastiği ayrı dene
+                if let tiresOnly = try? await client.fetch(.categories([.tirePressure])) {
+                    await MainActor.run { self.applySnapshot(tiresOnly) }
+                }
+                if let chargeOnly = try? await client.fetch(.categories([.charge, .climate])) {
+                    await MainActor.run { self.applySnapshot(chargeOnly) }
+                }
+            }
+            // Lastik yoksa bir kez daha zorla
+            let missingTires = await MainActor.run {
+                self.telemetry.tpmsFL.psi == nil
+                    && self.telemetry.tpmsFR.psi == nil
+                    && self.telemetry.tpmsRL.psi == nil
+                    && self.telemetry.tpmsRR.psi == nil
+            }
+            if missingTires, let tires = try? await client.fetch(.categories([.tirePressure])) {
+                await MainActor.run { self.applySnapshot(tires) }
             }
             while !Task.isCancelled {
+                let suspended = await MainActor.run { self.demoSuspended }
+                if suspended { return }
                 do {
+                    // Drive first + apply immediately — speed/gear/power never wait on extras
                     let drive = try await client.fetchDrive()
                     failStreak = 0
                     await MainActor.run { self.applyDrive(drive) }
 
                     self.tick += 1
                     let parked = await MainActor.run { self.telemetry.kmh < 3 }
-                    // Hareket: sık; park: seyrek — pil tasarrufu
+
+                    // At most ONE secondary category per cycle so drive cadence stays tight
                     if self.tick % (parked ? 3 : 2) == 0 {
-                        let snap = try await client.fetch(.categories([.charge, .climate]))
+                        let snap = try await client.fetch(.categories([.charge, .climate, .tirePressure]))
                         await MainActor.run { self.applySnapshot(snap) }
-                    }
-                    if self.tick % (parked ? 5 : 3) == 0 {
+                    } else if self.tick % (parked ? 5 : 4) == 0 {
                         let snap = try await client.fetch(.categories([.tirePressure]))
                         await MainActor.run { self.applySnapshot(snap) }
-                    }
-                    if self.tick % (parked ? 10 : 7) == 0 {
+                    } else if self.tick % (parked ? 12 : 9) == 0 {
                         let snap = try await client.fetch(.categories([.closures]))
                         await MainActor.run { self.applySnapshot(snap) }
-                    }
-                    if self.tick % (parked ? 8 : 5) == 0 {
+                    } else if self.tick % (parked ? 10 : 7) == 0 {
                         let snap = try await client.fetch(.categories([.media, .mediaDetail]))
                         await MainActor.run { self.applySnapshot(snap) }
                     }
@@ -285,7 +341,7 @@ final class EtubuTeslaBleSession: ObservableObject {
                         await MainActor.run {
                             self.telemetry.statusMessage = "Sinyal zayıf… (\(failStreak)/5)"
                         }
-                        try? await Task.sleep(nanoseconds: 700_000_000)
+                        try? await Task.sleep(nanoseconds: 450_000_000)
                         continue
                     }
                     await MainActor.run {
@@ -294,18 +350,21 @@ final class EtubuTeslaBleSession: ObservableObject {
                     }
                     break
                 }
+                // Moving: ~2 Hz drive; parked: ~0.8 Hz — critical cluster data stays snappy
                 let sleepNs: UInt64 = await MainActor.run {
-                    self.telemetry.kmh < 3 ? 2_400_000_000 : 1_400_000_000
+                    self.telemetry.kmh < 3 ? 1_200_000_000 : 450_000_000
                 }
                 try? await Task.sleep(nanoseconds: sleepNs)
             }
-            if !self.userStopped, let vin = EtubuTeslaVinStore.vin {
+            let skipReconnect = await MainActor.run { self.userStopped || self.demoSuspended }
+            if !skipReconnect, let vin = EtubuTeslaVinStore.vin {
                 await MainActor.run { self.scheduleReconnect(vin: vin) }
             }
         }
     }
 
     private func applyDrive(_ drive: DriveState) {
+        guard !demoSuspended else { return }
         let mph = drive.speedMph ?? 0
         let kmh = Int((mph * 1.60934).rounded())
         let gear: String = {
@@ -341,7 +400,11 @@ final class EtubuTeslaBleSession: ObservableObject {
             source: "tesla"
         )
         AppDelegate.activateDriveAudioSession()
-        pushLiveActivity()
+        // Live Activity: max ~2 Hz so faster drive poll doesn't spam
+        if Date().timeIntervalSince(lastLiveActivityPush) >= 0.5 {
+            lastLiveActivityPush = Date()
+            pushLiveActivity()
+        }
     }
 
     private func applySnapshot(_ snap: TeslaVehicleSnapshot) {
@@ -374,8 +437,15 @@ final class EtubuTeslaBleSession: ObservableObject {
         }
         if let tires = snap.tirePressure {
             func reading(_ t: TirePressureState.Tire?) -> EtubuTireReading {
-                EtubuTireReading(
-                    psi: EtubuVehicleTelemetry.barToPsi(t?.pressureBar),
+                // Tesla reports bar; if value looks like psi already (> 8), keep as-is.
+                let raw = t?.pressureBar
+                let psi: Double? = {
+                    guard let raw else { return nil }
+                    if raw > 8 { return raw }
+                    return EtubuVehicleTelemetry.barToPsi(raw)
+                }()
+                return EtubuTireReading(
+                    psi: psi,
                     warning: t?.hasWarning == true
                 )
             }
@@ -415,7 +485,7 @@ final class EtubuTeslaBleSession: ObservableObject {
         stateTask = Task { [weak self] in
             for await state in client.stateStream {
                 await MainActor.run {
-                    guard let self else { return }
+                    guard let self, !self.demoSuspended else { return }
                     switch state {
                     case .scanning:
                         self.telemetry.connectionState = .connecting
@@ -428,6 +498,7 @@ final class EtubuTeslaBleSession: ObservableObject {
                         self.ignoreDisconnectUntil = Date().addingTimeInterval(4)
                         self.telemetry.connectionState = .connected
                         self.telemetry.statusMessage = "Bağlandı · salt okuma"
+                        EtubuVehicleLaunchNotifier.shared.notifyVehicleConnected(source: "tesla")
                     case .disconnected:
                         if !self.userStopped {
                             if self.pairStep == .waitingForCard {
@@ -458,7 +529,7 @@ final class EtubuTeslaBleSession: ObservableObject {
     }
 
     private func scheduleReconnect(vin: String, debounce: TimeInterval = 0) {
-        guard !userStopped else { return }
+        guard !userStopped, !demoSuspended else { return }
         guard EtubuTeslaVinStore.pairedConfirmed(for: vin) else { return }
         // Zaten bağlı ve taze veri geliyorsa yeniden bağlanma başlatma
         if telemetry.connectionState == .connected,
@@ -505,6 +576,43 @@ final class EtubuTeslaBleSession: ObservableObject {
                 voice: "ETUBU",
                 source: "tesla"
             )
+        }
+    }
+
+    // MARK: - Remote commands (BLE write)
+
+    @Published var lastCommandMessage: String = ""
+
+    func setClimate(on: Bool) async {
+        await sendCommand(.climate(on ? .on : .off), label: on ? "İklim açıldı" : "İklim kapandı")
+    }
+
+    func setChargeLimit(_ percent: Int) async {
+        let p = Int32(min(100, max(50, percent)))
+        await sendCommand(.charge(.setLimit(percent: p)), label: "Şarj limiti \(p)%")
+    }
+
+    func setCharging(start: Bool) async {
+        await sendCommand(.charge(start ? .start : .stop), label: start ? "Şarj başladı" : "Şarj durdu")
+    }
+
+    func setLocked(_ lock: Bool) async {
+        await sendCommand(.security(lock ? .lock : .unlock), label: lock ? "Kilitlendi" : "Kilit açıldı")
+    }
+
+    private func sendCommand(_ command: Command, label: String) async {
+        guard let client else {
+            lastCommandMessage = "Araç bağlı değil"
+            telemetry.statusMessage = lastCommandMessage
+            return
+        }
+        do {
+            try await client.send(command)
+            lastCommandMessage = label
+            telemetry.statusMessage = label
+        } catch {
+            lastCommandMessage = "Komut başarısız: \(error.localizedDescription)"
+            telemetry.statusMessage = lastCommandMessage
         }
     }
 }

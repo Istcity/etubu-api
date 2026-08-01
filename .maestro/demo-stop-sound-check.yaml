@@ -1,0 +1,78 @@
+appId: com.etubu.app
+---
+- launchApp:
+    clearState: true
+    permissions:
+      all: allow
+      notifications: deny
+    arguments:
+      etubuSkipOnboarding: true
+- extendedWaitUntil:
+    visible: "Okudum, anladım.*"
+    timeout: 15000
+- tapOn:
+    id: "etubu.legal.checkbox"
+    optional: true
+- tapOn:
+    point: "50%,90%"
+- tapOn:
+    text: "Uygulamayı Kullanırken İzin Ver"
+    optional: true
+- tapOn:
+    text: "Allow While Using App"
+    optional: true
+- tapOn:
+    text: "İzin Ver"
+    optional: true
+- extendedWaitUntil:
+    visible: "km/h"
+    timeout: 25000
+# Ses ikonu tek tuş: sessiz → açık → sessiz
+- tapOn:
+    id: "etubu.sound.off"
+- extendedWaitUntil:
+    visible:
+      id: "etubu.sound.on"
+    timeout: 3000
+- tapOn:
+    id: "etubu.sound.on"
+- extendedWaitUntil:
+    visible:
+      id: "etubu.sound.off"
+    timeout: 3000
+- tapOn:
+    id: "etubu.settings.open"
+- extendedWaitUntil:
+    visible: "Uygulama hakkında"
+    timeout: 10000
+- scrollUntilVisible:
+    element:
+      id: "etubu.demo.toggle"
+    direction: DOWN
+    timeout: 12000
+- tapOn:
+    id: "etubu.demo.toggle"
+- waitForAnimationToEnd:
+    timeout: 2500
+- extendedWaitUntil:
+    visible:
+      id: "etubu.gear"
+    timeout: 8000
+- assertVisible:
+    text: "D"
+    id: "etubu.gear"
+# Demo’yu bitir — kadran üzerindeki stop (demoActive ile bağlı)
+- extendedWaitUntil:
+    visible:
+      id: "etubu.demo.stop"
+    timeout: 10000
+- tapOn:
+    id: "etubu.demo.stop"
+- waitForAnimationToEnd:
+    timeout: 1500
+- assertNotVisible:
+    id: "etubu.demo.stop"
+- assertNotVisible: "Demo’yu bitir"
+- assertNotVisible: "^Demo$"
+- assertNotVisible: "Demo bitti"
+- takeScreenshot: demo-stopped-clean

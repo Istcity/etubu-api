@@ -13,16 +13,30 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         configureAudioSession(quality: true)
-        // Install cluster ASAP — do NOT block RunLoop or fire-and-forget end that races start.
+        // Paint every known window immediately — Cap shell is near-black by default.
+        let canvas = EtubuRuntimeProfile.canvasUIColor
+        if let window {
+            window.backgroundColor = canvas
+            window.rootViewController?.view.backgroundColor = canvas
+        }
+        for scene in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }) {
+            for w in scene.windows {
+                w.backgroundColor = canvas
+                w.rootViewController?.view.backgroundColor = canvas
+            }
+        }
+        // Overlay cluster ASAP (separate UIWindow — never trapped under Cap/WKWebView).
+        EtubuClusterPresenter.shared.installOverCapacitor()
         DispatchQueue.main.async {
+            EtubuRuntimeProfile.hideLingeringSplashOverlays()
             EtubuClusterPresenter.shared.installOverCapacitor()
         }
-        for delay in [0.2, 0.5, 1.0] as [Double] {
+        for delay in [0.1, 0.3, 0.7, 1.4, 2.5] as [Double] {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                EtubuRuntimeProfile.hideLingeringSplashOverlays()
                 EtubuClusterPresenter.shared.installOverCapacitor()
             }
         }
-        // Clean leftover LA from prior process, then allow cluster to start one.
         if #available(iOS 16.2, *) {
             Task { @MainActor in
                 await EtubuLiveActivityController.end()
@@ -31,6 +45,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         } else {
             Self.liveActivityBootstrapped = true
         }
+        // Bildirim merkezi yalnızca kullanıcı “Araça binince bildir” açınca kurulur —
+        // erken UNUserNotificationCenter erişimi iOS’ta izin diyaloğunu tetikleyebiliyor.
+        // EtubuVehicleLaunchNotifier.shared.configure() — ertelendi
         return true
     }
 
@@ -132,23 +149,23 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     func applicationWillEnterForeground(_ application: UIApplication) {
         configureAudioSession(quality: true)
         if #available(iOS 16.2, *) {
-            // Ön plana dönünce Island + LA hemen bitsin
+            // Keepalive arka plan audio’sunu bırak; LA sürüşte devam edebilir.
             EtubuLiveActivityController.stopSilentKeepalive()
-            EtubuLiveActivityController.endAllNow()
+            Task { await EtubuLiveActivityController.publishCurrent() }
         }
     }
 
     func applicationDidBecomeActive(_ application: UIApplication) {
         configureAudioSession(quality: true)
+        EtubuRuntimeProfile.hideLingeringSplashOverlays()
         EtubuClusterPresenter.shared.installOverCapacitor()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
             Task { @MainActor in
                 EtubuTeslaBleSession.shared.bootstrapIfPossible()
             }
         }
-        // Foreground’da LA yok — publish/start yok
         if #available(iOS 16.2, *) {
-            EtubuLiveActivityController.endAllNow()
+            Task { await EtubuLiveActivityController.publishCurrent() }
         }
     }
 

@@ -16,7 +16,7 @@ struct EtubuClusterSimView: View {
     private let pages: [OnboardPage] = [
         OnboardPage(
             icon: "sparkles",
-            title: "ETUBU Cluster",
+            title: "Etubu",
             body: "Tesla’nızın hız, vites, menzil ve yol uyarılarını tek ekranda, araç içi kadran gibi gösterir. Kaydırarak kısa tura başlayın."
         ),
         OnboardPage(
@@ -47,16 +47,26 @@ struct EtubuClusterSimView: View {
 
             VStack(spacing: 0) {
                 HStack {
-                    Button("Atla") { finish(requestRemainder: true) }
-                        .font(EtubuClusterFonts.ui(15, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.8))
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(Capsule().fill(Color.white.opacity(0.12)))
+                    Button {
+                        finish(requestRemainder: false)
+                    } label: {
+                        Text("Atla")
+                            .font(EtubuClusterFonts.ui(15, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.8))
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(Capsule().fill(Color.white.opacity(0.12)))
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Atla")
+                    .accessibilityIdentifier("etubu.sim.skip")
                     Spacer()
                 }
                 .padding(.horizontal, 20)
-                .padding(.top, 14)
+                // Dynamic Island / status bar altında kalsın — Maestro tap’leri status bara düşmesin.
+                .padding(.top, 56)
+                .zIndex(20)
 
                 TabView(selection: $page) {
                     ForEach(Array(pages.enumerated()), id: \.offset) { index, item in
@@ -66,22 +76,24 @@ struct EtubuClusterSimView: View {
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
                 .animation(.easeInOut(duration: 0.25), value: page)
+                .clipped()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 progressDots
                     .padding(.top, 8)
                     .padding(.bottom, 12)
+                    .zIndex(20)
 
                 bottomCTA
                     .padding(.horizontal, 24)
                     .padding(.bottom, 28)
+                    .zIndex(20)
+                    .background(Color.black.opacity(0.001)) // hit-test band
             }
         }
         .onAppear {
-            // İzinleri en başta al
-            permissions.requestLocation(completion: nil)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
-                permissions.requestBluetooth(completion: nil)
-            }
+            // Konum/Bluetooth izinlerini otomatik isteme — legal/onboarding üstüne
+            // sistem diyaloğu biner ve “siyah ekran / takılı” gibi görünür.
         }
     }
 
@@ -203,7 +215,9 @@ struct EtubuClusterSimView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 15)
                 .background(theme.accent, in: Capsule())
+                .contentShape(Rectangle())
         }
+        .accessibilityIdentifier(isLast ? "etubu.sim.start" : "etubu.sim.continue")
     }
 
     private func finish(requestRemainder: Bool) {

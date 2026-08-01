@@ -8,7 +8,13 @@ final class EtubuMapLocationHelper: NSObject, ObservableObject, CLLocationManage
 
     static let locationEnabledKey = "etubu.cluster.locationEnabled"
 
-    private let manager = CLLocationManager()
+    private lazy var manager: CLLocationManager = {
+        let m = CLLocationManager()
+        m.delegate = self
+        m.desiredAccuracy = kCLLocationAccuracyBestForNavigation
+        m.distanceFilter = 2
+        return m
+    }()
     private var started = false
 
     var isLocationEnabled: Bool {
@@ -18,9 +24,8 @@ final class EtubuMapLocationHelper: NSObject, ObservableObject, CLLocationManage
 
     private override init() {
         super.init()
-        manager.delegate = self
-        manager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
-        manager.distanceFilter = 5
+        // Do NOT touch CLLocationManager here — creation alone can surface
+        // authorization UI when background location mode is enabled.
     }
 
     func startIfNeeded() {
@@ -81,11 +86,21 @@ final class EtubuMapLocationHelper: NSObject, ObservableObject, CLLocationManage
         let lat = loc.coordinate.latitude
         let lng = loc.coordinate.longitude
         DispatchQueue.main.async {
-            EtubuVehicleTelemetry.shared.applyMapLocation(
+            // Demo kendi rota koordinatlarını yazar — gerçek GPS ile ezme.
+            if EtubuDemoDrive.isActive { return }
+            let t = EtubuVehicleTelemetry.shared
+            t.applyMapLocation(
                 lat: lat,
                 lng: lng,
-                heading: EtubuVehicleTelemetry.shared.headingDeg
+                heading: t.headingDeg
             )
+            // Valid CLLocation.speed is m/s (≥ 0); ignore invalid (-1) and crawl noise.
+            if loc.speed >= 0, loc.horizontalAccuracy >= 0, loc.horizontalAccuracy < 65 {
+                let gpsKmh = Int((loc.speed * 3.6).rounded())
+                t.applyGpsSpeedBridge(kmh: gpsKmh)
+            } else if loc.speed < 0 {
+                t.applyGpsSpeedBridge(kmh: 0)
+            }
             EtubuClusterAudioBridge.evalJS("""
             (function(){
               try {

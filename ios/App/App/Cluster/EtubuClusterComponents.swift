@@ -7,18 +7,34 @@ struct EtubuSpeedDialView: View {
     var compact: Bool = false
     /// Optional override — landscape Dynamic Island uses smaller dial to avoid overflow.
     var diameter: CGFloat? = nil
+    /// Gear / km/h / kW sizing; defaults to diameter. Use base size when dial is enlarged.
+    var chromeDiameter: CGFloat? = nil
     var powerKw: Int? = nil
+    @ObservedObject private var warnings = EtubuDriveWarnings.shared
+
+    /// Demo aktifken warnings aynası (Radar kartı ile aynı Combined publisher).
+    private var shownKmh: Int { warnings.demoActive ? warnings.demoKmh : kmh }
+    private var shownGear: String {
+        if warnings.demoActive {
+            let g = warnings.demoGear
+            if (g.isEmpty || g == "P"), warnings.demoKmh >= 3 { return "D" }
+            return g.isEmpty ? "D" : g
+        }
+        return gear
+    }
+    private var shownPowerKw: Int? { warnings.demoActive ? warnings.demoPowerKw : powerKw }
 
     private var dialSize: CGFloat { diameter ?? (compact ? 200 : 280) }
+    private var chromeSize: CGFloat { chromeDiameter ?? dialSize }
 
     private var textBoost: CGFloat { compact ? 1.22 * 1.15 : 1.22 }
 
     /// 100+ km/h → 3 hane; fontu daralt ki "1…" kesilmesin
-    private var tripleDigitFactor: CGFloat { kmh >= 100 ? 0.74 : (kmh >= 10 ? 0.92 : 1.0) }
+    private var tripleDigitFactor: CGFloat { shownKmh >= 100 ? 0.74 : (shownKmh >= 10 ? 0.92 : 1.0) }
 
     private var speedFont: CGFloat {
         let base: CGFloat = compact
-            ? max(64, min(dialSize * 0.32, 96))
+            ? max(64, min(dialSize * 0.32, 110))
             : max(92, min(dialSize * 0.38, 124))
         return base * textBoost * min(theme.gaugeScale, 1.04) * tripleDigitFactor
     }
@@ -26,30 +42,30 @@ struct EtubuSpeedDialView: View {
     private var gearFont: CGFloat {
         // Tek harf (aktif vites) — çember içinde okunaklı, taşmasın
         let base: CGFloat = compact
-            ? max(16, min(dialSize * 0.09, 24))
-            : max(18, min(dialSize * 0.085, 28))
+            ? max(16, min(chromeSize * 0.09, 24))
+            : max(18, min(chromeSize * 0.085, 28))
         return base
     }
 
     private var unitFont: CGFloat {
         let base: CGFloat = compact
-            ? max(10, min(dialSize * 0.050, 15))
-            : max(13, min(dialSize * 0.058, 18))
-        return base * textBoost * (kmh >= 100 ? 0.9 : 1)
+            ? max(10, min(chromeSize * 0.050, 15))
+            : max(13, min(chromeSize * 0.058, 18))
+        return base * textBoost * (shownKmh >= 100 ? 0.9 : 1)
     }
 
     private var kwFont: CGFloat {
-        compact ? max(10, min(dialSize * 0.045, 14)) : max(12, min(dialSize * 0.048, 16))
+        compact ? max(10, min(chromeSize * 0.045, 14)) : max(12, min(chromeSize * 0.048, 16))
     }
 
     private var gearSpacing: CGFloat {
-        compact ? max(5, dialSize * 0.026) : max(7, dialSize * 0.034)
+        compact ? max(5, chromeSize * 0.026) : max(7, chromeSize * 0.034)
     }
     private var gearBarWidth: CGFloat {
-        compact ? max(6, dialSize * 0.028) : max(8, dialSize * 0.034)
+        compact ? max(6, chromeSize * 0.028) : max(8, chromeSize * 0.034)
     }
-    private var speedProgress: CGFloat { min(1, CGFloat(max(0, kmh)) / 180) }
-    private var power: Int { powerKw ?? 0 }
+    private var speedProgress: CGFloat { min(1, CGFloat(max(0, shownKmh)) / 180) }
+    private var power: Int { shownPowerKw ?? 0 }
     private var powerFill: CGFloat { min(1, CGFloat(abs(power)) / 160) }
 
     /// Clearance from the visible outer stroke only (no invisible clip circle).
@@ -67,16 +83,17 @@ struct EtubuSpeedDialView: View {
             // Content is NOT circle-masked — only the drawn ring stroke defines the circle.
             VStack(spacing: compact ? max(1, dialSize * 0.008) : 5) {
                 gearRow
-                Text("\(kmh)")
+                Text("\(shownKmh)")
                     .font(EtubuClusterFonts.gauge(speedFont))
                     .monospacedDigit()
-                    .tracking(kmh >= 100 ? 0 : min(theme.gaugeTracking, 0.8) * 0.06)
+                    .tracking(shownKmh >= 100 ? 0 : min(theme.gaugeTracking, 0.8) * 0.06)
                     .foregroundStyle(theme.primaryText)
                     .shadow(color: theme.accent.opacity(0.4), radius: compact ? 8 : 6)
                     .minimumScaleFactor(0.38)
                     .lineLimit(1)
-                    .frame(maxWidth: dialSize * (kmh >= 100 ? 0.78 : 0.70))
-                    .contentTransition(.numericText())
+                    .frame(maxWidth: dialSize * (shownKmh >= 100 ? 0.78 : 0.70))
+                    .accessibilityIdentifier("etubu.speed")
+                    // Instant digit — no numericText morph lag on critical speed
                 Text("km/h")
                     .font(EtubuClusterFonts.ui(unitFont, weight: .semibold))
                     .foregroundStyle(theme.mutedText)
@@ -84,8 +101,24 @@ struct EtubuSpeedDialView: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
 
+                if warnings.demoActive {
+                    Button {
+                        EtubuDemoDrive.shared.stop()
+                    } label: {
+                        Text(EtubuClusterL10n.t("demoStop"))
+                            .font(EtubuClusterFonts.ui(compact ? 9 : 11, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, compact ? 8 : 10)
+                            .padding(.vertical, compact ? 4 : 5)
+                            .background(Capsule().fill(Color.red.opacity(0.92)))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(EtubuClusterL10n.t("demoStop"))
+                    .accessibilityIdentifier("etubu.demo.stop")
+                }
+
                 if compact {
-                    Text(powerKw.map { "\($0) kW" } ?? "— kW")
+                    Text(shownPowerKw.map { "\($0) kW" } ?? "— kW")
                         .font(EtubuClusterFonts.gauge(kwFont))
                         .monospacedDigit()
                         .foregroundStyle(
@@ -108,20 +141,16 @@ struct EtubuSpeedDialView: View {
     @ViewBuilder
     private var dialRings: some View {
         let lw = theme.ringLineWidth(for: dialSize)
+        let moving = shownKmh >= 1
         ZStack {
             // Single outer track
             Circle()
                 .strokeBorder(theme.stroke.opacity(0.40), lineWidth: lw)
 
             switch theme.dialRingStyle {
-            case .thin:
-                Circle()
-                    .strokeBorder(theme.accent.opacity(0.55 + 0.25 * speedProgress), lineWidth: lw * 1.15)
-                    .shadow(color: theme.glow, radius: 8)
-
             case .neonSweep:
                 Circle()
-                    .trim(from: 0, to: max(0.04, speedProgress))
+                    .trim(from: 0, to: moving ? max(0.02, speedProgress) : 0)
                     .stroke(
                         AngularGradient(
                             colors: [
@@ -135,30 +164,31 @@ struct EtubuSpeedDialView: View {
                         style: StrokeStyle(lineWidth: lw * 1.55, lineCap: .round)
                     )
                     .rotationEffect(.degrees(-90))
-                    .shadow(color: theme.accent.opacity(0.85), radius: 10)
-                    .animation(.easeOut(duration: 0.25), value: speedProgress)
+                    .shadow(color: theme.accent.opacity(moving ? 0.85 : 0), radius: 10)
+                    .animation(.easeOut(duration: 0.08), value: speedProgress)
 
             case .dualGlow:
                 // Thicker dual-glow — still ON the same outer ring (no inner concentric clip circle)
                 Circle()
                     .strokeBorder(theme.accent.opacity(0.28), lineWidth: lw * 2.1)
                 Circle()
-                    .trim(from: 0, to: max(0.05, speedProgress))
+                    .trim(from: 0, to: moving ? max(0.02, speedProgress) : 0)
                     .stroke(theme.accent, style: StrokeStyle(lineWidth: lw * 1.45, lineCap: .round))
                     .rotationEffect(.degrees(-90))
-                    .shadow(color: theme.accent.opacity(0.75), radius: 12)
+                    .shadow(color: theme.accent.opacity(moving ? 0.75 : 0), radius: 12)
+                    .animation(.easeOut(duration: 0.08), value: speedProgress)
 
             case .dashed:
                 Circle()
                     .strokeBorder(theme.accent.opacity(0.7), style: StrokeStyle(lineWidth: lw * 1.2, dash: [7, 5]))
                 Circle()
-                    .trim(from: 0, to: max(0.03, speedProgress))
+                    .trim(from: 0, to: moving ? max(0.02, speedProgress) : 0)
                     .stroke(Color.white.opacity(0.85), style: StrokeStyle(lineWidth: lw * 0.85, lineCap: .round))
                     .rotationEffect(.degrees(-90))
 
             case .plasmaRibbon:
                 Circle()
-                    .trim(from: 0, to: max(0.06, speedProgress))
+                    .trim(from: 0, to: moving ? max(0.02, speedProgress) : 0)
                     .stroke(
                         AngularGradient(
                             colors: [
@@ -171,8 +201,13 @@ struct EtubuSpeedDialView: View {
                         ),
                         style: StrokeStyle(lineWidth: lw * 1.75, lineCap: .round)
                     )
-                    .rotationEffect(.degrees(-90 + Double(kmh % 360) * 0.15))
-                    .shadow(color: theme.glow, radius: 12)
+                    .rotationEffect(.degrees(-90 + Double(max(0, shownKmh)) * 0.15))
+                    .shadow(color: theme.glow.opacity(moving ? 1 : 0.15), radius: 12)
+
+            case .thin:
+                Circle()
+                    .strokeBorder(theme.accent.opacity(moving ? (0.55 + 0.25 * speedProgress) : 0.35), lineWidth: lw * 1.15)
+                    .shadow(color: theme.glow.opacity(moving ? 1 : 0.2), radius: 8)
             }
 
             // Bipolar regen / drive meter on the ring (power-bar behaviour)
@@ -232,17 +267,18 @@ struct EtubuSpeedDialView: View {
                     .shadow(color: Color.orange.opacity(0.55), radius: 8)
             }
         }
-        .animation(.easeOut(duration: 0.2), value: power)
+        .animation(.easeOut(duration: 0.1), value: power)
     }
 
     private var gearRow: some View {
         // Tek aktif vites harfi — PRND dizisi taşırıyordu
-        Text(gear.isEmpty ? "P" : String(gear.prefix(1)))
+        Text(shownGear.isEmpty ? "P" : String(shownGear.prefix(1)))
             .font(EtubuClusterFonts.gauge(gearFont, weight: .bold))
             .foregroundStyle(theme.accent)
             .minimumScaleFactor(0.7)
             .lineLimit(1)
             .frame(height: gearFont * 1.15)
+            .accessibilityIdentifier("etubu.gear")
     }
 }
 
@@ -921,7 +957,6 @@ struct EtubuPowerRegenBarView: View {
                     .font(EtubuClusterFonts.gauge(compact ? 13 : 15))
                     .monospacedDigit()
                     .foregroundStyle(labelColor)
-                    .contentTransition(.numericText())
             }
 
             GeometryReader { geo in
@@ -970,7 +1005,7 @@ struct EtubuPowerRegenBarView: View {
                         .strokeBorder(labelColor.opacity(regenerating || accelerating ? 0.4 : 0.14), lineWidth: 1)
                 )
         )
-        .animation(.easeOut(duration: 0.2), value: power)
+        .animation(.easeOut(duration: 0.1), value: power)
     }
 
     private var powerLabel: String {

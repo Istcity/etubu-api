@@ -66,8 +66,9 @@ final class EtubuVFXManager: ObservableObject {
 
     private static func detectTier() -> EtubuVFXType.PerformanceTier {
         #if targetEnvironment(simulator)
-        return .standard
+        return .base
         #else
+        if ProcessInfo.processInfo.isLowPowerModeEnabled { return .base }
         let cores = ProcessInfo.processInfo.processorCount
         let mem = ProcessInfo.processInfo.physicalMemory
         if mem >= 8_000_000_000 && cores >= 6 { return .proMax }

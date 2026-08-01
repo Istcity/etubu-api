@@ -3,8 +3,12 @@ import UIKit
 
 /// Theme-aware cluster fonts — gauge + UI family, design, weight and scale change per theme.
 enum EtubuClusterFonts {
-    /// Extra scale for landscape.
+    /// Extra scale for landscape (legacy; prefer `setContentScale` from layout metrics).
     static var layoutBoost: CGFloat = 0.9
+
+    /// Full content scale from `EtubuClusterLayoutMetrics` (device + orientation).
+    private(set) static var contentScale: CGFloat = 1.0
+    private static var useContentScale = false
 
     /// Active theme fonts — updated by `setTheme()`.
     private(set) static var gaugeFamily = "Orbitron-Bold"
@@ -25,9 +29,20 @@ enum EtubuClusterFonts {
         gaugeTracking = theme.gaugeTracking
     }
 
+    /// Apply canvas-derived scale (SE…Pro Max). Call from onAppear / onChange — not during body layout math.
+    static func setContentScale(_ scale: CGFloat) {
+        let next = min(1.28, max(0.72, scale))
+        guard abs(contentScale - next) > 0.001 || !useContentScale else { return }
+        contentScale = next
+        useContentScale = true
+        // Keep legacy boost in sync for any leftover readers.
+        layoutBoost = next
+    }
+
     static var displayScale: CGFloat {
-        let b = UIScreen.main.bounds
-        let longSide = max(b.width, b.height)
+        if useContentScale { return contentScale }
+        // Fallback before first metrics pass — scene bounds, not UIScreen when possible.
+        let longSide = sceneLongSide()
         if longSide >= 920 { return 1.10 }
         if longSide >= 880 { return 1.06 }
         if longSide >= 840 { return 1.02 }
@@ -35,7 +50,22 @@ enum EtubuClusterFonts {
         return 0.90
     }
 
-    private static var scale: CGFloat { displayScale * layoutBoost }
+    private static var scale: CGFloat {
+        if useContentScale { return contentScale }
+        return displayScale * layoutBoost
+    }
+
+    private static func sceneLongSide() -> CGFloat {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        if let scene = scenes.first(where: { $0.activationState == .foregroundActive }) ?? scenes.first {
+            let b = scene.coordinateSpace.bounds
+            if b.width > 40, b.height > 40 { return max(b.width, b.height) }
+            let s = scene.screen.bounds
+            return max(s.width, s.height)
+        }
+        let b = UIScreen.main.bounds
+        return max(b.width, b.height)
+    }
 
     static func gauge(_ size: CGFloat, weight: UIFont.Weight? = nil) -> Font {
         let w = weight ?? uiKitWeight(gaugeWeight)

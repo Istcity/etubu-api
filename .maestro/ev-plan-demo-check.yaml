@@ -1,0 +1,113 @@
+appId: com.etubu.app
+---
+- launchApp:
+    clearState: true
+    permissions:
+      all: allow
+      notifications: deny
+    arguments:
+      etubuSkipOnboarding: true
+- extendedWaitUntil:
+    visible: "Okudum, anladım.*"
+    timeout: 15000
+- tapOn:
+    id: "etubu.legal.checkbox"
+- tapOn:
+    point: "50%,92%"
+- waitForAnimationToEnd:
+    timeout: 2000
+- tapOn:
+    text: "Uygulamayı Kullanırken İzin Ver"
+    optional: true
+- tapOn:
+    text: "Allow While Using App"
+    optional: true
+- tapOn:
+    text: "İzin Ver"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 1500
+# skipOnboarding arg → sim yok; yine de Atla varsa geç
+- runFlow:
+    when:
+      visible:
+        id: "etubu.sim.skip"
+    commands:
+      - tapOn:
+          id: "etubu.sim.skip"
+      - waitForAnimationToEnd:
+          timeout: 1500
+- extendedWaitUntil:
+    visible:
+      id: "etubu.settings.open"
+    timeout: 25000
+- tapOn:
+    id: "etubu.settings.open"
+- extendedWaitUntil:
+    visible: "Uygulama hakkında"
+    timeout: 10000
+- scrollUntilVisible:
+    element:
+      id: "etubu.demo.toggle"
+    direction: DOWN
+    timeout: 12000
+- tapOn:
+    id: "etubu.demo.toggle"
+- waitForAnimationToEnd:
+    timeout: 1500
+# Settings sheet kapat — portrait EV şeridi görünsün
+- tapOn:
+    text: "Tamam"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- swipe:
+    direction: DOWN
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 2500
+- extendedWaitUntil:
+    visible:
+      id: "etubu.gear"
+    timeout: 8000
+- assertVisible:
+    text: "D"
+    id: "etubu.gear"
+- extendedWaitUntil:
+    visible:
+      id: "etubu.ev.arrivalSoc"
+    timeout: 15000
+- assertVisible:
+    id: "etubu.ev.portraitStrip"
+- assertVisible:
+    id: "etubu.route.openMaps"
+- extendedWaitUntil:
+    visible:
+      id: "etubu.ev.chargeSuggest"
+    timeout: 10000
+    optional: true
+- takeScreenshot: ev-plan-demo-portrait
+# Settings’te EV planı bölümü
+- tapOn:
+    id: "etubu.settings.open"
+- scrollUntilVisible:
+    element: "EV rota planı"
+    direction: DOWN
+    timeout: 10000
+- assertVisible: "EV rota planı"
+- tapOn:
+    text: "Tamam"
+    optional: true
+- swipe:
+    direction: DOWN
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 1500
+- tapOn:
+    id: "etubu.demo.stop"
+- waitForAnimationToEnd:
+    timeout: 1500
+- assertNotVisible:
+    id: "etubu.demo.stop"
+- takeScreenshot: ev-plan-demo-stopped

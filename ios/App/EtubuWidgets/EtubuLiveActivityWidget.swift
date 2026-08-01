@@ -34,6 +34,18 @@ struct EtubuLiveActivityWidget: Widget {
                         .font(.headline.weight(.bold))
                         .frame(minWidth: 16)
                 }
+                if let soc = context.state.socPercent {
+                    HStack(spacing: 6) {
+                        Text("\(soc)%")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.green)
+                        if let range = context.state.rangeKm {
+                            Text("· \(range) km")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
                 if !context.state.routeSummaryLine.isEmpty {
                     Text(context.state.routeSummaryLine)
                         .font(.system(size: 11, weight: .semibold))
@@ -82,9 +94,15 @@ struct EtubuLiveActivityWidget: Widget {
                             .font(.system(size: 22, weight: .bold).monospacedDigit())
                             .minimumScaleFactor(0.7)
                             .lineLimit(1)
-                        Text("km/h")
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundStyle(.secondary)
+                        if let soc = context.state.socPercent {
+                            Text("\(soc)%")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(.green)
+                        } else {
+                            Text("km/h")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
                 DynamicIslandExpandedRegion(.center) {
@@ -135,6 +153,13 @@ struct EtubuLiveActivityWidget: Widget {
                         .lineLimit(1)
                         .minimumScaleFactor(0.45)
                         .frame(maxWidth: 56, alignment: .trailing)
+                } else if let soc = context.state.socPercent {
+                    Text("\(soc)%")
+                        .font(.system(size: 11, weight: .bold).monospacedDigit())
+                        .foregroundStyle(.green)
+                        .minimumScaleFactor(0.55)
+                        .lineLimit(1)
+                        .frame(maxWidth: 36, alignment: .trailing)
                 } else if context.state.routeActive, !context.state.routeTo.isEmpty {
                     Text(shortDest(context.state.routeTo))
                         .font(.system(size: 10, weight: .bold))
@@ -150,10 +175,16 @@ struct EtubuLiveActivityWidget: Widget {
                         .frame(maxWidth: 28, alignment: .trailing)
                 }
             } minimal: {
-                Image("EtubuLogo")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 14, height: 14)
+                if let soc = context.state.socPercent {
+                    Text("\(soc)")
+                        .font(.system(size: 10, weight: .bold).monospacedDigit())
+                        .foregroundStyle(.green)
+                } else {
+                    Image("EtubuLogo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 14, height: 14)
+                }
             }
             .widgetURL(URL(string: "com.etubu.app://drive"))
         }

@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import Darwin
 
 /// Resolves camera cutout / Dynamic Island geometry in **full-screen** coordinates.
 /// Landscape: pill is a *vertical* capsule on the physical top edge (camera side) of the phone.
@@ -13,29 +14,45 @@ enum EtubuCameraCutout {
         var landscapeEdge: HorizontalAlignment?
     }
 
-    /// Spill for FX — larger soft field, biased away from screen hard edges.
-    static let maxSpillPoints: CGFloat = 40
+    /// Spill for FX — symmetric around pill (keep aura.mid == pill.mid).
+    static let maxSpillPoints: CGFloat = 36
 
     // MARK: - Device model → Dynamic Island pill size (points)
 
-    /// Returns (width, height) of the Dynamic Island pill for known device screen sizes.
-    /// Falls back to safe-area heuristics if unrecognized.
+    /// Returns (width, height) of the Dynamic Island pill for known Pro-class devices.
+    /// Non-Pro / unknown → nil (safe-area heuristics decide notch vs none).
     private static func knownIslandSize() -> (w: CGFloat, h: CGFloat)? {
         let b = UIScreen.main.nativeBounds
-        let w = min(b.width, b.height)
-        let h = max(b.width, b.height)
-        // iPhone 14 Pro / 15 Pro / 16 Pro (1179×2556)
-        if w == 1179 && h == 2556 { return (126, 37) }
-        // iPhone 14 Pro Max / 15 Pro Max / 16 Pro Max (1290×2796)
-        if w == 1290 && h == 2796 { return (126, 37) }
-        // iPhone 15 / 16 (1179×2556)
-        if w == 1170 && h == 2532 { return (126, 37) }
-        // iPhone 16e (1206×2622)
-        if w == 1206 && h == 2622 { return (126, 37) }
-        // iPhone 17 Pro series / future (≥1320 wide)
-        if w >= 1290 { return (126, 37) }
-        if w >= 1170 { return (126, 37) }
-        return nil
+        let w = Int(min(b.width, b.height))
+        let h = Int(max(b.width, b.height))
+        let di = (w: CGFloat(126), h: CGFloat(37.33))
+        switch (w, h) {
+        case (1179, 2556): return di // 14/15 Pro
+        case (1290, 2796): return di // 14/15 Pro Max
+        case (1206, 2622): return di // 16 Pro / 17 Pro class
+        case (1320, 2868): return di // 16/17 Pro Max class
+        case (1284, 2778): return di // legacy Pro Max-ish
+        default:
+            // utsname fallback for new models with unknown nativeBounds mapping
+            let id = machineIdentifier()
+            if id.contains("iPhone15,2") || id.contains("iPhone15,3")
+                || id.contains("iPhone16,1") || id.contains("iPhone16,2")
+                || id.contains("iPhone17,1") || id.contains("iPhone17,2")
+                || id.contains("iPhone18") {
+                return di
+            }
+            return nil
+        }
+    }
+
+    private static func machineIdentifier() -> String {
+        var sys = utsname()
+        uname(&sys)
+        return withUnsafePointer(to: &sys.machine) {
+            $0.withMemoryRebound(to: CChar.self, capacity: 1) {
+                String(cString: $0)
+            }
+        }
     }
 
     // MARK: - Public
@@ -79,14 +96,20 @@ enum EtubuCameraCutout {
         switch style {
         case .dynamicIsland:
             let known = knownIslandSize()
-            let w = known?.w ?? min(size.width * 0.33, max(120, top * 2))
-            let h = known?.h ?? min(37, max(32, top * 0.58))
-            let y = max(11, (top - h) / 2)
+            // Hardware DI ~126×37.33. Prefer centering in the top safe band when
+            // Cap/overlay insets disagree with the classic y≈11 placement.
+            let w = known?.w ?? 126
+            let h = known?.h ?? 37.33
+            let classicY: CGFloat = 11
+            let bandY = max(0, (top - h) * 0.5)
+            // Prefer classic when top inset looks like a real DI device (~59).
+            let y: CGFloat = (top >= 54 && top <= 64) ? classicY : bandY
             pill = CGRect(x: (size.width - w) / 2, y: y, width: w, height: h)
         case .notch:
-            let h = min(34, max(28, top * 0.55))
-            let w = min(size.width * 0.52, max(180, size.width * 0.45))
-            let y = max(0, (top - h) / 2)
+            let h = min(34, max(28, top * 0.52))
+            let w = min(size.width * 0.48, max(170, size.width * 0.42))
+            // Notch hugs the top edge (not mid-safe-area).
+            let y: CGFloat = 0
             pill = CGRect(x: (size.width - w) / 2, y: y, width: w, height: h)
         case .none:
             return nil
@@ -111,21 +134,23 @@ enum EtubuCameraCutout {
         switch style {
         case .dynamicIsland:
             let known = knownIslandSize()
-            let shortAxis = known?.h ?? min(38, max(32, gutter * 0.52))
-            let longAxis = known?.w ?? min(size.height * 0.22, max(118, shortAxis * 3.4))
+            // Portrait (w×h) → landscape (h×w); physical top offset stays ~11pt.
+            let shortAxis = known?.h ?? 37.33
+            let longAxis = known?.w ?? 126
             let y = (size.height - longAxis) / 2
-            // Center the pill horizontally within the gutter
+            let edgePad: CGFloat = 11
             let x: CGFloat = edge == .leading
-                ? max(4, (gutter - shortAxis) / 2)
-                : size.width - max(4, (gutter - shortAxis) / 2) - shortAxis
+                ? edgePad
+                : size.width - edgePad - shortAxis
             pill = CGRect(x: x, y: y, width: shortAxis, height: longAxis)
         case .notch:
             let shortAxis = min(34, max(26, gutter * 0.42))
             let longAxis = min(size.height * 0.36, max(160, gutter * 2.4))
             let y = (size.height - longAxis) / 2
+            let edgePad: CGFloat = 0
             let x: CGFloat = edge == .leading
-                ? max(2, (gutter - shortAxis) / 2)
-                : size.width - max(2, (gutter - shortAxis) / 2) - shortAxis
+                ? edgePad
+                : size.width - edgePad - shortAxis
             pill = CGRect(x: x, y: y, width: shortAxis, height: longAxis)
         case .none:
             return nil
@@ -137,25 +162,25 @@ enum EtubuCameraCutout {
     private static func makeGeometry(
         pill: CGRect, style: Style, size: CGSize, landscapeEdge: HorizontalAlignment?
     ) -> Geometry {
-        // Spill scales with screen so FX fits SE … Pro Max without spilling past bezel
-        let spill = min(maxSpillPoints, max(22, min(size.width, size.height) * 0.055))
         let screen = CGRect(origin: .zero, size: size)
-        let softScreen = screen.insetBy(dx: 2, dy: 2)
-        var aura = pill.insetBy(dx: -spill, dy: -spill).intersection(softScreen)
-        if aura.isNull || aura.width < 8 || aura.height < 8 {
-            aura = pill.insetBy(dx: -min(spill, 24), dy: -min(spill, 24)).intersection(softScreen)
-            if aura.isNull { aura = pill }
+        let softScreen = screen.insetBy(dx: 1, dy: 1)
+        let desiredSpill = min(maxSpillPoints, max(28, min(size.width, size.height) * 0.072))
+
+        // Keep aura centered on the pill. Asymmetric screen-clip / landscape bias
+        // shifts aura.mid away from pill.mid → feather mask + Metal look off-notch.
+        var spill = desiredSpill
+        for _ in 0..<14 {
+            let candidate = pill.insetBy(dx: -spill, dy: -spill)
+            let over = max(
+                max(0, softScreen.minX - candidate.minX),
+                max(0, candidate.maxX - softScreen.maxX),
+                max(0, softScreen.minY - candidate.minY),
+                max(0, candidate.maxY - softScreen.maxY)
+            )
+            if over <= 0.5 { break }
+            spill = max(8, spill - over)
         }
-        if let edge = landscapeEdge {
-            let bias: CGFloat = min(18, spill * 0.45)
-            if edge == .leading {
-                let maxW = softScreen.maxX - aura.minX
-                aura.size.width = min(maxW, aura.width + bias)
-            } else {
-                let newMinX = max(softScreen.minX, aura.minX - bias)
-                aura = CGRect(x: newMinX, y: aura.minY, width: aura.maxX - newMinX, height: aura.height)
-            }
-        }
+        let aura = pill.insetBy(dx: -spill, dy: -spill)
         return Geometry(style: style, pill: pill, aura: aura, landscapeEdge: landscapeEdge)
     }
 
@@ -200,7 +225,16 @@ enum EtubuCameraCutout {
 
     private static func windowInset(for edge: UIRectEdge) -> CGFloat {
         let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-        let window = scenes.flatMap(\.windows).first(where: \.isKeyWindow) ?? scenes.flatMap(\.windows).first
+        let windows = scenes.flatMap(\.windows)
+        // Prefer overlay cluster window — Cap underlay insets can disagree with where we draw.
+        let overlay = windows.first(where: { $0 is EtubuOverlayWindow })
+        let key = windows.first(where: \.isKeyWindow)
+        let normal = windows.first(where: { $0.windowLevel == .normal })
+        let ranked = [overlay, key, normal].compactMap { $0 }
+            + windows
+        let window = ranked.first(where: {
+            max($0.safeAreaInsets.top, $0.safeAreaInsets.left, $0.safeAreaInsets.right) > 20
+        }) ?? ranked.first
         guard let inset = window?.safeAreaInsets else { return 0 }
         switch edge {
         case .top: return inset.top

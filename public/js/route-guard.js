@@ -125,13 +125,18 @@ const RouteGuard = (() => {
   }
 
   function isTurkeyTurkish() {
-    const lang = typeof I18n !== "undefined" ? I18n.lang : "tr";
-    // UI Türkçe ise rota özelliği açık (EGM TR verisi)
-    if (lang === "tr") return true;
+    // Geriye uyumluluk — özellikler dil bağımsız; Cap native her zaman açık.
+    return routeFeaturesEnabled();
+  }
+
+  /** Rota / hazard UI — dil bağımsız (OSRM + OSM kamera + OCM şarj + Open-Meteo). */
+  function routeFeaturesEnabled() {
+    if (window.__ETUBU_NATIVE_CLUSTER__) return true;
     try {
       if (sessionStorage.getItem("etubu_force_tr_route") === "1") return true;
+      if (localStorage.getItem("etubu_force_tr_route") === "1") return true;
     } catch (_) {}
-    return false;
+    return true;
   }
 
   function inTurkeyBounds(lat, lng) {
@@ -649,6 +654,16 @@ const RouteGuard = (() => {
       lastPos = { lat: fix.lat, lng: fix.lng };
       return lastPos;
     }
+    // Native SwiftUI cluster writes phone GPS here before Cap geolocation arms.
+    try {
+      const loc = JSON.parse(
+        localStorage.getItem("etubu_last_map_location") || "{}"
+      );
+      if (Number.isFinite(loc.lat) && Number.isFinite(loc.lng)) {
+        lastPos = { lat: loc.lat, lng: loc.lng };
+        return lastPos;
+      }
+    } catch (_) {}
     return null;
   }
 
@@ -699,6 +714,11 @@ const RouteGuard = (() => {
       const existing = getLiveCoords();
       if (existing) {
         resolve(existing);
+        return;
+      }
+      // Native SwiftUI cluster owns GPS — Cap shell must not prompt during legal/onboarding.
+      if (window.__ETUBU_NATIVE_CLUSTER__ && window.__ETUBU_GPS_ARMED__ !== true) {
+        resolve(null);
         return;
       }
       if (!navigator.geolocation) {
@@ -1184,6 +1204,10 @@ const RouteGuard = (() => {
   }
 
   function parseSeedHazards(coords) {
+    if (!coords || !coords.length) return [];
+    const mid = coords[Math.floor(coords.length / 2)];
+    // TR tohum radarları yalnızca Türkiye sınırları içinde.
+    if (!inTurkeyBounds(Number(mid.lat), Number(mid.lng))) return [];
     const seeds =
       typeof RadarAlert !== "undefined" && RadarAlert.getCameras
         ? RadarAlert.getCameras()
@@ -1208,8 +1232,48 @@ const RouteGuard = (() => {
   }
 
   async function fetchOverpassCharging(coords) {
-    // Artık sunucu proxy (api/chargers.php) kullanılıyor — istemci Overpass yok
-    return [];
+    const samples = sampleAlongRoute(coords, 80000).slice(0, 4);
+    if (!samples.length) return [];
+    const list = [];
+    for (const s of samples) {
+      try {
+        const q =
+          `[out:json][timeout:8];` +
+          `node(around:12000,${s.lat},${s.lng})[amenity=charging_station];out body 24;`;
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 9000);
+        const res = await fetch("https://overpass-api.de/api/interpreter", {
+          method: "POST",
+          body: q,
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          signal: ctrl.signal,
+        });
+        clearTimeout(timer);
+        if (!res.ok) continue;
+        const json = await res.json();
+        for (const el of json.elements || []) {
+          const lat = Number(el.lat);
+          const lng = Number(el.lon);
+          if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+          const near = nearestRouteIdx(coords, lat, lng);
+          if (near.d > 6000) continue;
+          const tags = el.tags || {};
+          list.push({
+            id: `osm-chg-${el.id}`,
+            kind: "charge",
+            lat,
+            lng,
+            label: tags.name || t("routeCharge"),
+            name: tags.name || t("routeCharge"),
+            routeIdx: near.idx,
+            distOffRoute: near.d,
+            source: "overpass",
+            kw: 0,
+          });
+        }
+      } catch (_) {}
+    }
+    return list;
   }
 
   async function fetchOcmCharging(coords) {
@@ -1258,7 +1322,9 @@ const RouteGuard = (() => {
   }
 
   async function fetchChargingAlong(coords) {
-    return fetchOcmCharging(coords);
+    const ocm = await fetchOcmCharging(coords);
+    if (ocm.length) return ocm;
+    return fetchOverpassCharging(coords);
   }
 
   function weatherLabel(code, wind) {
@@ -1281,7 +1347,7 @@ const RouteGuard = (() => {
           const timer = setTimeout(() => ctrl.abort(), 5000);
           const url =
             `https://api.open-meteo.com/v1/forecast?latitude=${s.lat}&longitude=${s.lng}` +
-            `&current=weather_code,precipitation,wind_speed_10m&timezone=Europe%2FIstanbul`;
+            `&current=weather_code,precipitation,wind_speed_10m&timezone=auto`;
           const res = await fetch(url, { signal: ctrl.signal });
           clearTimeout(timer);
           if (!res.ok) return;
@@ -1689,14 +1755,7 @@ const RouteGuard = (() => {
 
   function syncVisibility() {
     if (!root) return;
-    const show = isTurkeyTurkish();
-    if (!show) {
-      root.hidden = true;
-      if (briefEl) briefEl.hidden = true;
-      setPeeks({ brief: false, form: false });
-      clearRoute(false);
-      return;
-    }
+    // Dil değişiminde rotayı silme — özellikler global.
     if (!panelsAutoHidden) {
       root.hidden = false;
       setPeeks({ brief: false, form: false });
@@ -1771,7 +1830,7 @@ const RouteGuard = (() => {
 
     syncVisibility();
     document.addEventListener("etubu:lang-change", () => refreshLocale());
-    if (isTurkeyTurkish()) {
+    if (routeFeaturesEnabled()) {
       buildPlaceIndex()
         .then(async () => {
           restoreSaved();

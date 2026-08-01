@@ -1,7 +1,6 @@
 import SwiftUI
 
-/// Cutout FX — soft fade; speed-linked; **Canvas tema efektleri** (özgün 1:1).
-/// iOS 18 RealityKit isteğe bağlı alt katman — tema kimliğini ezmez.
+/// Cutout FX — rim locked to hardware pill mid; soft glow without edge-clipped blur bias.
 struct EtubuNotchAuraView: View {
     let kmh: Int
     let theme: ClusterTheme
@@ -10,54 +9,45 @@ struct EtubuNotchAuraView: View {
     @State private var springKmh: CGFloat = 0
 
     private var fx: EtubuCutoutFX { .forTheme(theme) }
+    private var density: CGFloat { EtubuRuntimeProfile.fxDensity }
 
     private var drive: CGFloat {
         min(1, max(0, springKmh) / 130)
     }
 
-    /// Dururken de görünür taban; hızda güçlenir
+    private var idle: Bool { springKmh < 2.5 }
+
     private var motion: CGFloat {
-        0.42 + drive * 0.58
+        if idle { return 0.05 * density }
+        return (0.20 + drive * 0.45) * (0.55 + density * 0.45)
     }
 
     private var growPt: CGFloat {
-        6 + drive * 16
-    }
-
-    private var landscapeBoost: CGFloat {
-        cutout.landscapeEdge != nil ? 1.18 : 1.0
-    }
-
-    private var themePresence: CGFloat {
-        switch theme {
-        case .midnight, .tunnel, .tesla, .deepOcean: return 1.45
-        case .aurora, .electricIce: return 1.28
-        case .cyberLime, .plasma, .violetStorm, .warp: return 1.35
-        default: return 1.25
-        }
+        idle ? 1.5 : (3 + drive * 8) * density
     }
 
     private var frameInterval: Double {
-        kmh < 2 ? 1.0 / 12.0 : 1.0 / 24.0
+        EtubuRuntimeProfile.fxFrameInterval(idle: idle)
+    }
+
+    /// Pill rect in aura-local coordinates (aura is always centered on pill).
+    private var islandLocal: CGRect {
+        CGRect(
+            x: cutout.pill.minX - cutout.aura.minX,
+            y: cutout.pill.minY - cutout.aura.minY,
+            width: cutout.pill.width,
+            height: cutout.pill.height
+        )
     }
 
     var body: some View {
         ZStack {
+            softPillHalo
             canvasAura
-            // RealityKit: ek derinlik — Canvas üstte tema özgünlüğünü korur
-            if #available(iOS 18.0, *), kmh >= 8 {
-                EtubuVFXCameraAnchorView(
-                    manager: EtubuVFXManager.shared,
-                    kmh: kmh,
-                    theme: theme,
-                    cutout: cutout
-                )
-                .opacity(0.35 + Double(drive) * 0.35)
-                .allowsHitTesting(false)
-            }
         }
+        .frame(width: cutout.aura.width, height: cutout.aura.height)
         .allowsHitTesting(false)
-        .accessibilityLabel(fx.title)
+        .accessibilityHidden(true)
         .id(theme.id)
         .onAppear { springKmh = CGFloat(max(0, kmh)) }
         .onChange(of: kmh) { _, newValue in
@@ -65,65 +55,74 @@ struct EtubuNotchAuraView: View {
                 springKmh = CGFloat(max(0, newValue))
             }
         }
-        .onAppear {
-            EtubuVFXManager.shared.sync(theme: theme, cutout: cutout, kmh: kmh)
+    }
+
+    /// Soft rim — Canvas gradients (no UIView blur → no edge asymmetry).
+    private var softPillHalo: some View {
+        let island = islandLocal
+        let pulse = idle ? 0.0 : (0.06 + Double(drive) * 0.12)
+        return Canvas { ctx, _ in
+            let core = Capsule().path(in: island)
+            let soft = Capsule().path(in: island.insetBy(dx: -4, dy: -4))
+            let outer = Capsule().path(in: island.insetBy(dx: -9, dy: -9))
+            ctx.fill(outer, with: .color(theme.accent.opacity(0.07 + pulse * 0.18)))
+            ctx.fill(soft, with: .color(theme.accent.opacity(0.12 + pulse * 0.22)))
+            ctx.stroke(
+                core,
+                with: .color(theme.accent.opacity(0.38 + pulse * 0.35)),
+                lineWidth: 1.35
+            )
+            ctx.stroke(
+                Capsule().path(in: island.insetBy(dx: 0.5, dy: 0.5)),
+                with: .color(Color.white.opacity(0.16 + pulse * 0.18)),
+                lineWidth: 0.7
+            )
         }
+        .opacity(idle ? 0.78 : 0.95)
     }
 
     private var canvasAura: some View {
-        TimelineView(.animation(minimumInterval: frameInterval, paused: false)) { timeline in
+        TimelineView(.animation(minimumInterval: frameInterval, paused: idle)) { timeline in
             let t = timeline.date.timeIntervalSinceReferenceDate
-            let tMotion = t * Double(0.14 + Double(motion) * 1.8)
-            let metalIntensity = (0.55 + motion * 1.05) * landscapeBoost * themePresence
+            let tMotion = t * Double(0.10 + Double(motion) * 1.15)
+            let island = islandLocal
 
             Canvas { ctx, size in
-                let island = CGRect(
-                    x: cutout.pill.minX - cutout.aura.minX,
-                    y: cutout.pill.minY - cutout.aura.minY,
-                    width: cutout.pill.width,
-                    height: cutout.pill.height
-                )
-                let edgeSafe = max(12, min(size.width, size.height) * 0.10)
-                let roomX = max(0, min(island.minX, size.width - island.maxX) - edgeSafe)
-                let roomY = max(0, min(island.minY, size.height - island.maxY) - edgeSafe)
-                let maxPad = min(growPt * landscapeBoost, roomX, roomY, min(size.width, size.height) * 0.14)
-                let grown = island.insetBy(dx: -maxPad, dy: -maxPad)
+                guard !idle else { return }
+                let edgeSafe = max(10, min(size.width, size.height) * 0.10)
+                let roomX = max(0, min(island.minX, size.width - island.maxX) - edgeSafe * 0.25)
+                let roomY = max(0, min(island.minY, size.height - island.maxY) - edgeSafe * 0.25)
+                let maxPad = min(growPt, roomX, roomY, min(size.width, size.height) * 0.07)
+                let field = island.insetBy(dx: -maxPad, dy: -maxPad)
 
                 var soft = ctx
-                soft.addFilter(.blur(radius: 2.2 + motion * 1.4))
                 soft.blendMode = .plusLighter
                 fx.draw(
                     ctx: soft,
-                    island: grown,
+                    island: field,
                     t: tMotion,
-                    intensity: metalIntensity,
+                    intensity: motion * 0.65 * density,
                     accent: theme.accent,
                     hue: theme.hue,
-                    sizeBoost: (0.85 + drive * 0.45) * landscapeBoost,
+                    sizeBoost: (0.48 + drive * 0.26) * density,
                     motion: motion,
                     transparentGround: true
                 )
             }
-            .frame(width: cutout.aura.width, height: cutout.aura.height)
-            .etubuCutoutMetal(fx: fx, time: tMotion, intensity: metalIntensity)
+            .opacity(0.5 + Double(motion) * 0.28)
             .mask {
                 Capsule()
                     .fill(
                         RadialGradient(
-                            colors: [.white, .white.opacity(0.92), .white.opacity(0.35), .clear],
+                            colors: [.white, .white.opacity(0.55), .clear],
                             center: .center,
-                            startRadius: 0,
-                            endRadius: max(cutout.aura.width, cutout.aura.height) * 0.62
+                            startRadius: 2,
+                            endRadius: max(cutout.pill.width, cutout.pill.height) * 1.15
                         )
                     )
-                    .padding(edgeFadePadding)
-                    .blur(radius: 12)
+                    .frame(width: cutout.pill.width * 2.1, height: cutout.pill.height * 2.1)
+                    .position(x: islandLocal.midX, y: islandLocal.midY)
             }
-            .opacity(0.72 + Double(motion) * 0.28)
         }
-    }
-
-    private var edgeFadePadding: CGFloat {
-        max(6, min(cutout.aura.width, cutout.aura.height) * 0.06)
     }
 }

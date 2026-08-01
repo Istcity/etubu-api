@@ -1,0 +1,76 @@
+appId: com.etubu.app
+---
+- launchApp:
+    clearState: true
+- assertVisible: "Hüküm ve Koşullar"
+- assertVisible: "Etubu"
+- takeScreenshot: qa-01-legal
+- extendedWaitUntil:
+    visible: "İzin Ver"
+    timeout: 8000
+    optional: true
+- tapOn:
+    text: "İzin Ver"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 1500
+- assertVisible: "Okudum, anladım.*"
+- tapOn:
+    id: "etubu.legal.checkbox"
+- waitForAnimationToEnd:
+    timeout: 500
+- tapOn:
+    point: "50%,90%"
+- waitForAnimationToEnd:
+    timeout: 1500
+- tapOn:
+    text: "Uygulamayı Kullanırken İzin Ver"
+    optional: true
+- tapOn:
+    text: "Allow While Using App"
+    optional: true
+- tapOn:
+    text: "İzin Ver"
+    optional: true
+- tapOn:
+    text: "İzin Verme"
+    optional: true
+- tapOn:
+    text: "Don't Allow"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "etubu.sim.skip"
+    timeout: 15000
+    optional: true
+- tapOn:
+    id: "etubu.sim.skip"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 1500
+- extendedWaitUntil:
+    visible: "km/h"
+    timeout: 20000
+- assertNotVisible: "Hüküm ve Koşullar"
+- takeScreenshot: qa-03-main
+- assertVisible: "km/h"
+- assertNotVisible: "Atla"
+- tapOn:
+    id: "etubu.route.open"
+- tapOn:
+    text: "İzin Ver"
+    optional: true
+- extendedWaitUntil:
+    visible: "Şehir / ilçe"
+    timeout: 12000
+- tapOn: "Şehir / ilçe"
+- inputText: "Ankara"
+- assertVisible: "Ankara"
+- takeScreenshot: qa-04-route-typing
+- tapOn: "Kapat"
+- extendedWaitUntil:
+    visible: "km/h"
+    timeout: 8000
+- assertVisible: "km/h"
+- assertVisible: "FL"
+- takeScreenshot: qa-05-main-tpms

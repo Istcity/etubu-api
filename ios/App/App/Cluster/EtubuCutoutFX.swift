@@ -52,23 +52,26 @@ enum EtubuCutoutFX: String, CaseIterable, Identifiable {
         transparentGround: Bool = false
     ) {
         let base = max(0.95, min(1.85, max(island.width, island.height) / 100))
-        // Transparent notch: daha uzun parçacıklar — tema efektleri Island’da okunur kalsın
-        let scaleCap: CGFloat = transparentGround ? 1.15 : 1.85
-        let scale = min(scaleCap, base * max(0.65, min(1.25, sizeBoost)))
-        let gated = max(0.22, min(transparentGround ? 1.55 : 2.0, intensity * max(0.28, motion)))
+        // Transparent notch: shorter reach so particles dissolve before the soft mask edge
+        let scaleCap: CGFloat = transparentGround ? 0.92 : 1.85
+        let scale = min(scaleCap, base * max(0.55, min(1.1, sizeBoost)))
+        let gated = max(0.15, min(transparentGround ? 1.05 : 1.65, intensity * max(0.22, motion)))
+        let dens = EtubuRuntimeProfile.fxDensity
+        // Cap draw cost on Simulator / Low Power without changing visual identity.
+        let cost = gated * dens
         switch self {
-        case .elektrik: Self.drawElectric(ctx: ctx, island: island, t: t, intensity: gated, scale: scale, clearGround: transparentGround)
-        case .ates: Self.drawFire(ctx: ctx, island: island, t: t, intensity: gated, scale: scale, clearGround: transparentGround)
-        case .duman: Self.drawSmoke(ctx: ctx, island: island, t: t, intensity: gated, scale: scale, clearGround: transparentGround)
-        case .patlama: Self.drawExplosion(ctx: ctx, island: island, t: t, intensity: gated, scale: scale, clearGround: transparentGround)
-        case .isikHuzmesi: Self.drawBeam(ctx: ctx, island: island, t: t, intensity: gated, scale: scale, accent: accent, clearGround: transparentGround)
-        case .buzKristali: Self.drawFrost(ctx: ctx, island: island, t: t, intensity: gated, scale: scale, clearGround: transparentGround)
-        case .warpHalka: Self.drawWarp(ctx: ctx, island: island, t: t, intensity: gated, scale: scale, accent: accent, clearGround: transparentGround)
-        case .plazma: Self.drawPlasma(ctx: ctx, island: island, t: t, intensity: gated, scale: scale, hue: hue, clearGround: transparentGround)
-        case .solarCorona: Self.drawSolarCorona(ctx: ctx, island: island, t: t, intensity: gated, scale: scale, clearGround: transparentGround)
-        case .yildirimMor: Self.drawVioletStorm(ctx: ctx, island: island, t: t, intensity: gated, scale: scale, clearGround: transparentGround)
-        case .okyanusDalga: Self.drawOceanWave(ctx: ctx, island: island, t: t, intensity: gated, scale: scale, accent: accent, clearGround: transparentGround)
-        case .tunelCizgi: Self.drawTunnelLines(ctx: ctx, island: island, t: t, intensity: gated, scale: scale, accent: accent, clearGround: transparentGround)
+        case .elektrik: Self.drawElectric(ctx: ctx, island: island, t: t, intensity: cost, scale: scale, clearGround: transparentGround)
+        case .ates: Self.drawFire(ctx: ctx, island: island, t: t, intensity: cost, scale: scale, clearGround: transparentGround)
+        case .duman: Self.drawSmoke(ctx: ctx, island: island, t: t, intensity: cost, scale: scale, clearGround: transparentGround)
+        case .patlama: Self.drawExplosion(ctx: ctx, island: island, t: t, intensity: cost, scale: scale, clearGround: transparentGround)
+        case .isikHuzmesi: Self.drawBeam(ctx: ctx, island: island, t: t, intensity: cost, scale: scale, accent: accent, clearGround: transparentGround)
+        case .buzKristali: Self.drawFrost(ctx: ctx, island: island, t: t, intensity: cost, scale: scale, clearGround: transparentGround)
+        case .warpHalka: Self.drawWarp(ctx: ctx, island: island, t: t, intensity: cost, scale: scale, accent: accent, clearGround: transparentGround)
+        case .plazma: Self.drawPlasma(ctx: ctx, island: island, t: t, intensity: cost, scale: scale, hue: hue, clearGround: transparentGround)
+        case .solarCorona: Self.drawSolarCorona(ctx: ctx, island: island, t: t, intensity: cost, scale: scale, clearGround: transparentGround)
+        case .yildirimMor: Self.drawVioletStorm(ctx: ctx, island: island, t: t, intensity: cost, scale: scale, clearGround: transparentGround)
+        case .okyanusDalga: Self.drawOceanWave(ctx: ctx, island: island, t: t, intensity: cost, scale: scale, accent: accent, clearGround: transparentGround)
+        case .tunelCizgi: Self.drawTunnelLines(ctx: ctx, island: island, t: t, intensity: cost, scale: scale, accent: accent, clearGround: transparentGround)
         }
     }
 }
@@ -145,13 +148,11 @@ private extension EtubuCutoutFX {
             let len = max(1, hypot(outward.x, outward.y))
             let nx = outward.x / len
             let ny = outward.y / len
-            // Prefer upward bias like reference flames
-            let upBias: CGFloat = -0.35
             let rise = CGFloat((t * (22 + Double(i % 5) * 6) + Double(i) * 7).truncatingRemainder(dividingBy: 55))
             let flicker = CGFloat(sin(t * 18 + Double(i) * 1.9)) * 5 * scale
             let tip = CGPoint(
                 x: base.x + nx * (22 + rise * 0.85) * scale + ny * flicker,
-                y: base.y + (ny + upBias) * (22 + rise * 0.85) * scale - nx * flicker * 0.35
+                y: base.y + ny * (22 + rise * 0.85) * scale - nx * flicker * 0.35
             )
             var flame = Path()
             let side = 6.5 * scale
@@ -170,7 +171,7 @@ private extension EtubuCutoutFX {
         for i in 0..<22 {
             let ang = Double(i) / 22 * .pi * 2 + t * 1.5
             let dist = (20 + CGFloat((t * 32 + Double(i) * 11).truncatingRemainder(dividingBy: 55))) * scale
-            let p = CGPoint(x: island.midX + cos(ang) * dist, y: island.midY + sin(ang) * dist * 0.88 - dist * 0.12)
+            let p = CGPoint(x: island.midX + cos(ang) * dist, y: island.midY + sin(ang) * dist)
             let life = max(0, 1 - (dist / scale - 20) / 55)
             let sz = (1.4 + intensity * 0.7) * scale * life
             ctx.fill(Path(ellipseIn: CGRect(x: p.x - sz, y: p.y - sz, width: sz * 2, height: sz * 2)), with: .color(Color.orange.opacity(0.9 * life)))
@@ -184,13 +185,20 @@ private extension EtubuCutoutFX {
         if !clearGround {
             ctx.fill(Capsule().path(in: island.insetBy(dx: -10 * scale, dy: -9 * scale)), with: .color(Color.black.opacity(0.35)))
         }
+        let c = CGPoint(x: island.midX, y: island.midY)
         for i in 0..<24 {
             let u = frag(Double(i) / 24 + t * 0.04)
             let base = EtubuCutoutGeom.pointOnCapsule(island.insetBy(dx: -2, dy: -2), u: u)
             let rise = CGFloat((t * (10 + Double(i % 5) * 2.8) + Double(i) * 15).truncatingRemainder(dividingBy: 110))
-            let sway = sin(t * 1.05 + Double(i) * 0.75) * (14 + rise * 0.16) * scale
-            let x = base.x + sway
-            let y = base.y - rise * 0.55 * scale + cos(t * 0.85 + Double(i)) * 6 * scale
+            // Outward from pill center (not screen-up) so landscape stays centered.
+            let nx = base.x - c.x
+            let ny = base.y - c.y
+            let len = max(1, hypot(nx, ny))
+            let ox = nx / len
+            let oy = ny / len
+            let sway = sin(t * 1.05 + Double(i) * 0.75) * (10 + rise * 0.12) * scale
+            let x = base.x + ox * rise * 0.55 * scale + -oy * sway
+            let y = base.y + oy * rise * 0.55 * scale + ox * sway
             let r = (14 + rise * 0.32 + intensity * 6) * scale
             let life = max(0, 1 - rise / 110)
             let gray = 0.06 + Double(i % 5) * 0.05
