@@ -367,17 +367,20 @@ final class EtubuTeslaBleSession: ObservableObject {
                                 && self.telemetry.tpmsRR.psi == nil)
                     }
 
-                    // Eksik SoC/iklim/TPMS varken her döngüde zorla; yoksa seyrek tut.
-                    if missingExtras || self.tick % (parked ? 2 : 2) == 0 {
+                    // Eksik SoC/iklim/TPMS varken her döngüde zorla; doluyken parkta seyrek.
+                    if missingExtras {
                         let snap = try await client.fetch(.categories([.charge, .climate, .tirePressure]))
                         await MainActor.run { self.applySnapshot(snap) }
-                    } else if self.tick % (parked ? 5 : 4) == 0 {
+                    } else if self.tick % (parked ? 5 : 3) == 0 {
+                        let snap = try await client.fetch(.categories([.charge, .climate, .tirePressure]))
+                        await MainActor.run { self.applySnapshot(snap) }
+                    } else if self.tick % (parked ? 8 : 5) == 0 {
                         let snap = try await client.fetch(.categories([.tirePressure]))
                         await MainActor.run { self.applySnapshot(snap) }
-                    } else if self.tick % (parked ? 12 : 9) == 0 {
+                    } else if self.tick % (parked ? 16 : 10) == 0 {
                         let snap = try await client.fetch(.categories([.closures]))
                         await MainActor.run { self.applySnapshot(snap) }
-                    } else if self.tick % (parked ? 10 : 7) == 0 {
+                    } else if self.tick % (parked ? 14 : 8) == 0 {
                         let snap = try await client.fetch(.categories([.media, .mediaDetail]))
                         await MainActor.run { self.applySnapshot(snap) }
                     }
@@ -397,9 +400,17 @@ final class EtubuTeslaBleSession: ObservableObject {
                     // Poll öldü — otomatik reconnect yok (yalnızca açılış / kullanıcı).
                     return
                 }
-                // Moving: ~2 Hz drive; parked: ~0.8 Hz — critical cluster data stays snappy
+                // Moving: ~2 Hz drive; parked + extras ok: ~0.55 Hz
                 let sleepNs: UInt64 = await MainActor.run {
-                    self.telemetry.kmh < 3 ? 1_200_000_000 : 450_000_000
+                    let parkedNow = self.telemetry.kmh < 3
+                    let missing = self.telemetry.socPercent == nil
+                        || self.telemetry.outsideC == nil
+                        || (self.telemetry.tpmsFL.psi == nil
+                            && self.telemetry.tpmsFR.psi == nil
+                            && self.telemetry.tpmsRL.psi == nil
+                            && self.telemetry.tpmsRR.psi == nil)
+                    if !parkedNow { return 450_000_000 }
+                    return missing ? 1_200_000_000 : 1_800_000_000
                 }
                 try? await Task.sleep(nanoseconds: sleepNs)
             }

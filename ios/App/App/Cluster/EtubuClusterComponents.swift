@@ -10,9 +10,14 @@ struct EtubuSpeedDialView: View {
     /// Gear / km/h / kW sizing; defaults to diameter. Use base size when dial is enlarged.
     var chromeDiameter: CGFloat? = nil
     var powerKw: Int? = nil
+    /// Son güç örnekleri — kadran altı sparkline (regen/drive).
+    var powerHistory: [Int] = []
+    /// SoC ince halka (0–100).
+    var socPercent: Int? = nil
     @ObservedObject private var warnings = EtubuDriveWarnings.shared
     /// Soft display lerp — keskin sıçrama yok, yumuşak yükseliş.
     @State private var displayKmh: Double = 0
+    @State private var boostPulse: CGFloat = 0
 
     private var rawKmh: Int { warnings.demoActive ? warnings.demoKmh : kmh }
     private var shownGear: String {
@@ -72,6 +77,19 @@ struct EtubuSpeedDialView: View {
     private var speedProgress: CGFloat { min(1, CGFloat(max(0, shownKmh)) / 180) }
     private var power: Int { shownPowerKw ?? 0 }
     private var powerFill: CGFloat { min(1, CGFloat(abs(power)) / 160) }
+    private var boostStrength: CGFloat {
+        guard !isStationary else { return 0 }
+        if power > 40 { return min(1, CGFloat(power) / 220) }
+        return 0
+    }
+    private var sparkSamples: [Int] {
+        let src = powerHistory.isEmpty ? [power] : powerHistory
+        return Array(src.suffix(28))
+    }
+    private var socProgress: CGFloat {
+        guard let soc = socPercent else { return 0 }
+        return min(1, max(0, CGFloat(soc) / 100))
+    }
 
     private var ringClearance: CGFloat {
         guard compact else { return dialSize * 0.05 }
@@ -81,6 +99,26 @@ struct EtubuSpeedDialView: View {
     var body: some View {
         ZStack {
             if compact { dialRings }
+
+            // Soft boost wash — hızlanmada yumuşak ışık, keskin flaş değil.
+            if boostStrength > 0.05 {
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                theme.accent.opacity(0.22 * boostStrength + 0.06 * boostPulse),
+                                theme.accent.opacity(0.06 * boostStrength),
+                                .clear,
+                            ],
+                            center: .center,
+                            startRadius: dialSize * 0.12,
+                            endRadius: dialSize * 0.52
+                        )
+                    )
+                    .frame(width: dialSize * 0.92, height: dialSize * 0.92)
+                    .allowsHitTesting(false)
+                    .animation(.easeOut(duration: 0.35), value: boostStrength)
+            }
 
             VStack(spacing: compact ? max(1, dialSize * 0.008) : 5) {
                 gearRow
@@ -104,6 +142,12 @@ struct EtubuSpeedDialView: View {
                     .tracking(min(theme.gaugeTracking, 0.8) * 0.4)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
+
+                if !isStationary, sparkSamples.count >= 2 {
+                    EtubuPowerHistorySparkline(samples: sparkSamples, compact: true)
+                        .frame(width: dialSize * (compact ? 0.42 : 0.38), height: compact ? 14 : 18)
+                        .padding(.top, compact ? 0 : 1)
+                }
 
                 if warnings.demoActive {
                     Button {
@@ -152,9 +196,18 @@ struct EtubuSpeedDialView: View {
                 withTransaction(t) { displayKmh = 0 }
                 return
             }
-            // Yumuşak, kesik kesik yükseliş — sert sıçrama yok.
             withAnimation(.easeOut(duration: 0.48)) {
                 displayKmh = Double(new)
+            }
+        }
+        .onChange(of: power) { _, new in
+            guard new > 55 else {
+                withAnimation(.easeOut(duration: 0.4)) { boostPulse = 0 }
+                return
+            }
+            withAnimation(.easeOut(duration: 0.25)) { boostPulse = 1 }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
+                withAnimation(.easeOut(duration: 0.55)) { boostPulse = 0.35 }
             }
         }
         .animation(nil, value: power)
@@ -168,11 +221,23 @@ struct EtubuSpeedDialView: View {
             Circle()
                 .strokeBorder(theme.stroke.opacity(0.40), lineWidth: lw)
 
+            // SoC ince halka — hız halkasının dışında.
+            if socProgress > 0 {
+                Circle()
+                    .trim(from: 0, to: max(0.02, socProgress))
+                    .stroke(
+                        theme.accent.opacity(0.55),
+                        style: StrokeStyle(lineWidth: max(2, lw * 0.45), lineCap: .round)
+                    )
+                    .rotationEffect(.degrees(-90))
+                    .padding(lw * 0.15)
+                    .opacity(0.85)
+            }
+
             if moving {
                 movingRingFill(lineWidth: lw)
                 bipolarPowerRing(lineWidth: lw)
             } else {
-                // Park: sabit ince halka — trim / shadow / power yok.
                 Circle()
                     .strokeBorder(theme.accent.opacity(0.28), lineWidth: lw * 1.05)
             }
@@ -180,6 +245,7 @@ struct EtubuSpeedDialView: View {
         .frame(width: dialSize, height: dialSize)
         .allowsHitTesting(false)
         .animation(.easeOut(duration: 0.48), value: shownKmh)
+        .animation(.easeOut(duration: 0.4), value: socProgress)
         .animation(nil, value: power)
     }
 

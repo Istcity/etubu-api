@@ -3,16 +3,27 @@ import SwiftUI
 struct EtubuTPMSGridView: View {
     @ObservedObject var telemetry: EtubuVehicleTelemetry
 
+    private let coldPsi: Double = 42
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                tireCell("FL", telemetry.tpmsFL)
-                tireCell("FR", telemetry.tpmsFR)
+            ZStack {
+                // Araç silueti (ince)
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
+                    .frame(width: 36, height: 56)
+                VStack(spacing: 10) {
+                    HStack(spacing: 18) {
+                        tireRadial("FL", telemetry.tpmsFL)
+                        tireRadial("FR", telemetry.tpmsFR)
+                    }
+                    HStack(spacing: 18) {
+                        tireRadial("RL", telemetry.tpmsRL)
+                        tireRadial("RR", telemetry.tpmsRR)
+                    }
+                }
             }
-            HStack(spacing: 8) {
-                tireCell("RL", telemetry.tpmsRL)
-                tireCell("RR", telemetry.tpmsRR)
-            }
+            .frame(maxWidth: .infinity)
             if telemetry.isAwaitingTPMS {
                 Text(EtubuClusterL10n.t("awaitingTPMS"))
                     .font(.system(size: 10, weight: .medium))
@@ -23,28 +34,35 @@ struct EtubuTPMSGridView: View {
         }
     }
 
-    private func tireCell(_ name: String, _ tire: EtubuTireReading) -> some View {
-        HStack(spacing: 4) {
-            Text(name)
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(.white.opacity(0.45))
-                .frame(width: 22, alignment: .leading)
-            if let psi = tire.psi {
-                Text(String(format: "%.1f", psi))
-                    .font(.system(size: 13, weight: tire.warning ? .bold : .semibold, design: .rounded).monospacedDigit())
-                    .foregroundStyle(tire.warning ? Color.orange : Color.white.opacity(0.95))
-                Text("psi")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.4))
-            } else {
-                Text("—")
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.35))
+    private func tireRadial(_ name: String, _ tire: EtubuTireReading) -> some View {
+        let psi = tire.psi
+        let fill: CGFloat = {
+            guard let psi else { return 0 }
+            return min(1, max(0.08, CGFloat(psi / coldPsi)))
+        }()
+        let warn = tire.warning || (psi.map { $0 < 32 || $0 > 48 } ?? false)
+        let tint: Color = {
+            if psi == nil { return .white.opacity(0.2) }
+            if warn { return .orange }
+            return Color(red: 0.35, green: 0.92, blue: 0.55)
+        }()
+        return VStack(spacing: 3) {
+            ZStack {
+                Circle()
+                    .stroke(Color.white.opacity(0.12), lineWidth: 3)
+                Circle()
+                    .trim(from: 0, to: fill)
+                    .stroke(tint, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                Text(psi.map { String(format: "%.0f", $0) } ?? "—")
+                    .font(.system(size: 11, weight: warn ? .bold : .semibold, design: .rounded).monospacedDigit())
+                    .foregroundStyle(psi == nil ? .white.opacity(0.35) : .white.opacity(0.95))
             }
+            .frame(width: 34, height: 34)
+            Text(name)
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(.white.opacity(0.4))
         }
-        .lineLimit(1)
-        .minimumScaleFactor(0.7)
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -78,35 +96,59 @@ struct EtubuMediaNowPlayingView: View {
 struct EtubuChargeDetailChip: View {
     @ObservedObject var telemetry: EtubuVehicleTelemetry
 
+    private var soc: CGFloat {
+        CGFloat(telemetry.displaySocPercent ?? telemetry.socPercent ?? 0) / 100
+    }
+
     var body: some View {
-        if telemetry.isCharging || telemetry.chargePortOpen == true {
+        if telemetry.isCharging || telemetry.chargePortOpen == true || telemetry.displaySocPercent != nil {
             HStack(spacing: 8) {
-                Image(systemName: "bolt.fill")
-                    .foregroundStyle(.green)
-                if let kw = telemetry.chargeKw {
-                    Text("\(kw) kW")
+                ZStack {
+                    Circle()
+                        .stroke(Color.white.opacity(0.15), lineWidth: 3)
+                    Circle()
+                        .trim(from: 0, to: max(0.02, soc))
+                        .stroke(
+                            telemetry.isCharging ? Color.green : Color.cyan.opacity(0.9),
+                            style: StrokeStyle(lineWidth: 3, lineCap: .round)
+                        )
+                        .rotationEffect(.degrees(-90))
+                    Image(systemName: telemetry.isCharging ? "bolt.fill" : "battery.100")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(telemetry.isCharging ? Color.green : Color.white.opacity(0.7))
+                }
+                .frame(width: 28, height: 28)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(telemetry.displaySocPercent.map { "\($0)%" } ?? "—%")
                         .font(.caption.weight(.bold).monospacedDigit())
+                        .foregroundStyle(.white)
+                    HStack(spacing: 6) {
+                        if let kw = telemetry.chargeKw, telemetry.isCharging {
+                            Text("\(kw) kW")
+                                .font(.caption2.weight(.semibold).monospacedDigit())
+                        }
+                        if let m = telemetry.minutesToFullCharge, m > 0, telemetry.isCharging {
+                            Text("\(m) dk")
+                                .font(.caption2.monospacedDigit())
+                                .foregroundStyle(.white.opacity(0.55))
+                        }
+                        if let range = telemetry.displayRangeKm {
+                            Text("\(range) km")
+                                .font(.caption2.monospacedDigit())
+                                .foregroundStyle(.white.opacity(0.55))
+                        }
+                    }
                 }
-                if let a = telemetry.chargerAmps {
-                    Text("\(a) A")
-                        .font(.caption2.monospacedDigit())
-                        .foregroundStyle(.white.opacity(0.55))
-                }
-                if let lim = telemetry.chargeLimitPercent {
-                    Text("lim \(lim)%")
-                        .font(.caption2)
-                        .foregroundStyle(.white.opacity(0.55))
-                }
-                if let m = telemetry.minutesToFullCharge, m > 0 {
-                    Text("\(m) dk")
-                        .font(.caption2.monospacedDigit())
-                        .foregroundStyle(.white.opacity(0.55))
-                }
+                Spacer(minLength: 0)
             }
-            .foregroundStyle(.white)
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(Capsule().fill(Color.green.opacity(0.18)))
+            .background(
+                Capsule().fill(
+                    telemetry.isCharging ? Color.green.opacity(0.18) : Color.white.opacity(0.06)
+                )
+            )
         }
     }
 }
@@ -135,6 +177,7 @@ struct EtubuClosuresChip: View {
 
 struct EtubuPowerHistorySparkline: View {
     let samples: [Int]
+    var compact: Bool = false
 
     var body: some View {
         if samples.count >= 2 {
@@ -143,27 +186,53 @@ struct EtubuPowerHistorySparkline: View {
                 let maxV = CGFloat(samples.max() ?? 1)
                 let span = max(40, max(abs(minV), abs(maxV), maxV - minV))
                 let midY = geo.size.height / 2
+                let lw: CGFloat = compact ? 1.2 : 1.5
                 ZStack {
                     Path { p in
                         p.move(to: CGPoint(x: 0, y: midY))
                         p.addLine(to: CGPoint(x: geo.size.width, y: midY))
                     }
-                    .stroke(Color.white.opacity(0.15), style: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
+                    .stroke(Color.white.opacity(compact ? 0.12 : 0.15), style: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
+
+                    // Regen (negatif) — yeşil
                     Path { path in
+                        var started = false
                         for (i, v) in samples.enumerated() {
                             let x = geo.size.width * CGFloat(i) / CGFloat(max(1, samples.count - 1))
-                            let y = midY - (CGFloat(v) / span) * (geo.size.height * 0.45)
-                            if i == 0 { path.move(to: CGPoint(x: x, y: y)) }
-                            else { path.addLine(to: CGPoint(x: x, y: y)) }
+                            let y = midY - (CGFloat(min(0, v)) / span) * (geo.size.height * 0.45)
+                            if !started { path.move(to: CGPoint(x: x, y: midY)); started = true }
+                            path.addLine(to: CGPoint(x: x, y: y))
                         }
                     }
                     .stroke(
-                        LinearGradient(colors: [.green.opacity(0.8), .orange.opacity(0.85)], startPoint: .leading, endPoint: .trailing),
-                        style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round)
+                        Color(red: 0.3, green: 0.9, blue: 0.55).opacity(0.85),
+                        style: StrokeStyle(lineWidth: lw, lineCap: .round, lineJoin: .round)
+                    )
+
+                    // Drive (pozitif) — turuncu/accent
+                    Path { path in
+                        var started = false
+                        for (i, v) in samples.enumerated() {
+                            let x = geo.size.width * CGFloat(i) / CGFloat(max(1, samples.count - 1))
+                            let y = midY - (CGFloat(max(0, v)) / span) * (geo.size.height * 0.45)
+                            if !started { path.move(to: CGPoint(x: x, y: midY)); started = true }
+                            path.addLine(to: CGPoint(x: x, y: y))
+                        }
+                    }
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color.orange.opacity(0.75),
+                                Color(red: 1.0, green: 0.85, blue: 0.25).opacity(0.9),
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        ),
+                        style: StrokeStyle(lineWidth: lw, lineCap: .round, lineJoin: .round)
                     )
                 }
             }
-            .frame(height: 28)
+            .frame(height: compact ? 14 : 28)
         }
     }
 }

@@ -12,7 +12,8 @@ final class EtubuMapLocationHelper: NSObject, ObservableObject, CLLocationManage
         let m = CLLocationManager()
         m.delegate = self
         m.desiredAccuracy = kCLLocationAccuracyBestForNavigation
-        m.distanceFilter = 2
+        // Hız köprüsü için yeterince sık; 2 m thrash yaratıyordu.
+        m.distanceFilter = 8
         return m
     }()
     private var started = false

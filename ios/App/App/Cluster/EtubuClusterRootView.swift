@@ -48,6 +48,16 @@ struct EtubuClusterRootView: View {
     @AppStorage("etubu.cluster.alertVolume") private var alertVolume: Double = 0.85
     @AppStorage("etubu.demo.running") private var demoRunningUD = false
     @AppStorage("etubu.demo.kmh") private var demoKmhUD = 0
+    /// MapKit thrash önleme — kamera yalnızca anlamlı konum/rota değişiminde güncellenir.
+    @State private var throttledMapCamera: MapCameraPosition = .region(
+        MKCoordinateRegion(
+            center: CLLocationCoordinate2D(latitude: 39.0, longitude: 35.0),
+            span: MKCoordinateSpan(latitudeDelta: 8, longitudeDelta: 8)
+        )
+    )
+    @State private var lastMapCenter: CLLocationCoordinate2D?
+    @State private var lastMapRouteCount: Int = 0
+    @State private var lastMapHeading: Double = 0
     @AppStorage("etubu.demo.gear") private var demoGearUD = "P"
     @AppStorage("etubu.demo.power") private var demoPowerUD = 0
 
@@ -262,10 +272,15 @@ struct EtubuClusterRootView: View {
             EtubuClusterFonts.setTheme(theme)
             EtubuClusterAudioBridge.setLanguage(appLanguage.rawValue)
             EtubuClusterAudioBridge.setTheme(theme.webKey)
+            syncThrottledMapCamera(force: true)
             if !showSim && !showLegal {
                 startCoreIfNeeded()
             }
         }
+        .onChange(of: telemetry.latitude) { _, _ in syncThrottledMapCamera() }
+        .onChange(of: telemetry.longitude) { _, _ in syncThrottledMapCamera() }
+        .onChange(of: telemetry.headingDeg) { _, _ in syncThrottledMapCamera() }
+        .onChange(of: warnings.routeCoords.count) { _, _ in syncThrottledMapCamera(force: true) }
         .onChange(of: demo.isRunning) { _, running in
             if running {
                 selectedVoice = "calm-ev"
@@ -443,9 +458,9 @@ struct EtubuClusterRootView: View {
 
     private var mapBackdrop: some View {
         ZStack(alignment: .bottomTrailing) {
-            Map(position: .constant(mapCameraPosition), interactionModes: []) {
+            Map(position: $throttledMapCamera, interactionModes: []) {
                 if warnings.routeCoords.count >= 2 {
-                    MapPolyline(coordinates: Self.decimateRoute(warnings.routeCoords, maxPoints: 280))
+                    MapPolyline(coordinates: Self.decimateRoute(warnings.routeCoords, maxPoints: 180))
                         .stroke(theme.accent.opacity(0.8), lineWidth: 3)
                 }
                 ForEach(
@@ -480,6 +495,10 @@ struct EtubuClusterRootView: View {
     }
 
     private var mapCameraPosition: MapCameraPosition {
+        computeDesiredMapCamera()
+    }
+
+    private func computeDesiredMapCamera() -> MapCameraPosition {
         if warnings.routeCoords.count >= 2 {
             let lats = warnings.routeCoords.map(\.latitude)
             let lngs = warnings.routeCoords.map(\.longitude)
@@ -507,6 +526,41 @@ struct EtubuClusterRootView: View {
             center: CLLocationCoordinate2D(latitude: 39.0, longitude: 35.0),
             span: MKCoordinateSpan(latitudeDelta: 8, longitudeDelta: 8)
         ))
+    }
+
+    /// ~40 m / 18° heading / rota değişiminde kamera güncelle — MapKit thrash azaltır.
+    private func syncThrottledMapCamera(force: Bool = false) {
+        let desired = computeDesiredMapCamera()
+        let routeCount = warnings.routeCoords.count
+        if routeCount >= 2 {
+            if force || routeCount != lastMapRouteCount {
+                lastMapRouteCount = routeCount
+                throttledMapCamera = desired
+                if let lat = telemetry.latitude, let lng = telemetry.longitude {
+                    lastMapCenter = CLLocationCoordinate2D(latitude: lat, longitude: lng)
+                }
+            }
+            return
+        }
+        lastMapRouteCount = 0
+        guard let lat = telemetry.latitude, let lng = telemetry.longitude else {
+            if force { throttledMapCamera = desired }
+            return
+        }
+        let next = CLLocationCoordinate2D(latitude: lat, longitude: lng)
+        let heading = telemetry.headingDeg ?? lastMapHeading
+        let movedM: Double = {
+            guard let prev = lastMapCenter else { return 9999 }
+            let a = CLLocation(latitude: prev.latitude, longitude: prev.longitude)
+            let b = CLLocation(latitude: next.latitude, longitude: next.longitude)
+            return a.distance(from: b)
+        }()
+        let headingDelta = abs(heading - lastMapHeading)
+        if force || movedM >= 40 || headingDelta >= 18 {
+            lastMapCenter = next
+            lastMapHeading = heading
+            throttledMapCamera = desired
+        }
     }
 
     /// Harita çizimi için rota noktalarını seyrelt (MapKit thrash azaltır).
@@ -645,7 +699,7 @@ struct EtubuClusterRootView: View {
                     tpmsGrid
                 case .telemetry:
                     VStack(alignment: .leading, spacing: 8) {
-                        panelValueRow(telemetry.displaySocPercent.map { "\($0)%" } ?? "—")
+                        EtubuChargeDetailChip(telemetry: telemetry)
                         panelValueRow(telemetry.powerKw.map { "\($0) kW" } ?? "—")
                         panelValueRow({
                             if telemetry.isAwaitingClimate {
@@ -758,7 +812,9 @@ struct EtubuClusterRootView: View {
             compact: compact,
             diameter: diameter,
             chromeDiameter: chromeDiameter,
-            powerKw: dialPowerKw
+            powerKw: dialPowerKw,
+            powerHistory: telemetry.powerHistory,
+            socPercent: telemetry.displaySocPercent
         )
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("etubu.dial")
