@@ -1735,75 +1735,31 @@ struct EtubuClusterRootView: View {
                     .padding(.vertical, 4)
                 }
 
-                Section("Yolculuk geçmişi") {
-                    if let active = trips.active {
-                        LabeledContent("Aktif trip", value: String(format: "%.1f km · max %d", active.distanceKm, active.maxKmh))
-                    }
-                    ForEach(trips.trips.prefix(12)) { trip in
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(trip.routeTo.isEmpty ? "Trip" : trip.routeTo)
-                                .font(.subheadline.weight(.semibold))
-                                .lineLimit(1)
-                            HStack(spacing: 8) {
-                                Text(String(format: "%.1f km", trip.distanceKm))
-                                Text("·")
-                                Text(String(format: "%.0f ort", trip.avgKmh))
-                                if let wh = trip.whPerKm {
-                                    Text("·")
-                                    Text(String(format: "%.0f Wh/km", wh))
-                                }
-                            }
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                        }
-                    }
-                    if trips.trips.isEmpty {
-                        Text("D’ye geçince trip başlar, P’de biter.")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
+                Section(EtubuClusterL10n.t("tripAnalyticsSection")) {
+                    EtubuTripAnalyticsView(store: trips, accent: theme.accent)
                     if let url = trips.exportCSV() {
                         ShareLink(item: url) {
-                            Label("CSV dışa aktar", systemImage: "square.and.arrow.up")
+                            Label(EtubuClusterL10n.t("tripExportCSV"), systemImage: "square.and.arrow.up")
                         }
                     }
-                    Button("Geçmişi temizle", role: .destructive) {
+                    Button(EtubuClusterL10n.t("tripClearHistory"), role: .destructive) {
                         trips.clearAll()
                     }
                 }
 
-                Section("Uzaktan komut (BLE)") {
-                    Text("Kartla eşleşmiş canlı Bluetooth oturumu gerekir. Komut başarısız olabilir.")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                    HStack {
-                        Button("İklim aç") { Task { await tesla.setClimate(on: true) } }
-                        Button("İklim kapat") { Task { await tesla.setClimate(on: false) } }
-                    }
-                    HStack {
-                        Button("Şarj başlat") { Task { await tesla.setCharging(start: true) } }
-                        Button("Şarj durdur") { Task { await tesla.setCharging(start: false) } }
-                    }
+                Section(EtubuClusterL10n.t("remoteCmdSection")) {
+                    EtubuRemoteCommandCards(tesla: tesla)
                     VStack(alignment: .leading, spacing: 6) {
                         HStack {
-                            Text("Şarj limiti")
+                            Text(EtubuClusterL10n.t("cmdChargeLimit"))
                             Spacer()
                             Text("\(Int(remoteChargeLimit))%")
                                 .monospacedDigit()
                         }
                         Slider(value: $remoteChargeLimit, in: 50...100, step: 5)
-                        Button("Limiti uygula") {
+                        Button(EtubuClusterL10n.t("cmdApplyLimit")) {
                             Task { await tesla.setChargeLimit(Int(remoteChargeLimit)) }
                         }
-                    }
-                    HStack {
-                        Button("Kilitle") { Task { await tesla.setLocked(true) } }
-                        Button("Kilit aç") { Task { await tesla.setLocked(false) } }
-                    }
-                    if !tesla.lastCommandMessage.isEmpty {
-                        Text(tesla.lastCommandMessage)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
                     }
                 }
 

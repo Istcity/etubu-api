@@ -119,6 +119,73 @@ final class EtubuTripHistoryStore: ObservableObject {
         Self.save([])
     }
 
+    // MARK: - Analytics (P3)
+
+    struct AnalyticsSummary: Equatable {
+        var tripCount: Int
+        var totalDistanceKm: Double
+        var totalEnergyKwh: Double
+        var avgWhPerKm: Double?
+        var bestWhPerKm: Double?
+        var last7DayKm: Double
+        var last7DayAvgWh: Double?
+    }
+
+    var analytics: AnalyticsSummary {
+        let finished = trips.filter { $0.endedAt != nil && $0.distanceKm > 0.05 }
+        let totalKm = finished.reduce(0.0) { $0 + $1.distanceKm }
+        let withEnergy = finished.compactMap { t -> (Double, Double)? in
+            guard let wh = t.whPerKm, wh > 0, t.distanceKm > 0.05 else { return nil }
+            return (wh, t.distanceKm)
+        }
+        let totalKwh = finished.compactMap(\.energyKwh).reduce(0.0, +)
+        let weightedWh: Double? = {
+            guard !withEnergy.isEmpty else { return nil }
+            let sumWhKm = withEnergy.reduce(0.0) { $0 + $1.0 * $1.1 }
+            let sumKm = withEnergy.reduce(0.0) { $0 + $1.1 }
+            guard sumKm > 0 else { return nil }
+            return sumWhKm / sumKm
+        }()
+        let best = withEnergy.map(\.0).min()
+        let weekAgo = Date().addingTimeInterval(-7 * 24 * 3600)
+        let week = finished.filter { $0.startedAt >= weekAgo }
+        let weekKm = week.reduce(0.0) { $0 + $1.distanceKm }
+        let weekWhSamples = week.compactMap { t -> (Double, Double)? in
+            guard let wh = t.whPerKm, wh > 0 else { return nil }
+            return (wh, t.distanceKm)
+        }
+        let weekAvg: Double? = {
+            guard !weekWhSamples.isEmpty else { return nil }
+            let s = weekWhSamples.reduce(0.0) { $0 + $1.0 * $1.1 }
+            let k = weekWhSamples.reduce(0.0) { $0 + $1.1 }
+            return k > 0 ? s / k : nil
+        }()
+        return AnalyticsSummary(
+            tripCount: finished.count,
+            totalDistanceKm: totalKm,
+            totalEnergyKwh: totalKwh,
+            avgWhPerKm: weightedWh,
+            bestWhPerKm: best,
+            last7DayKm: weekKm,
+            last7DayAvgWh: weekAvg
+        )
+    }
+
+    /// Recent finished trips with Wh/km for chart bars (oldest → newest, max 12).
+    var whPerKmSeries: [(id: String, label: String, whPerKm: Double)] {
+        let df = DateFormatter()
+        df.dateFormat = "d MMM"
+        return trips
+            .filter { $0.endedAt != nil }
+            .compactMap { t -> (String, String, Double)? in
+                guard let wh = t.whPerKm, wh > 0 else { return nil }
+                return (t.id, df.string(from: t.startedAt), wh)
+            }
+            .prefix(12)
+            .reversed()
+            .map { ($0.0, $0.1, $0.2) }
+    }
+
     func exportCSV() -> URL? {
         var lines = ["id,started,ended,distance_km,max_kmh,avg_kmh,wh_per_km,route"]
         let df = ISO8601DateFormatter()

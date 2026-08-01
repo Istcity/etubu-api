@@ -676,7 +676,24 @@ final class EtubuTeslaBleSession: ObservableObject {
 
     // MARK: - Remote commands (BLE write)
 
+    struct NearbyChargerSite: Identifiable, Equatable {
+        var id: String
+        var name: String
+        var distanceKm: Double
+        var available: Int
+        var total: Int
+        var maxPowerKw: Int
+
+        var subtitle: String {
+            let dist = String(format: "%.1f km", distanceKm)
+            let stalls = total > 0 ? "\(available)/\(total)" : "—"
+            let kw = maxPowerKw > 0 ? " · \(maxPowerKw) kW" : ""
+            return "\(dist) · \(stalls)\(kw)"
+        }
+    }
+
     @Published var lastCommandMessage: String = ""
+    @Published var nearbyChargers: [NearbyChargerSite] = []
 
     func setClimate(on: Bool) async {
         await sendCommand(.climate(on ? .on : .off), label: on ? "İklim açıldı" : "İklim kapandı")
@@ -693,6 +710,72 @@ final class EtubuTeslaBleSession: ObservableObject {
 
     func setLocked(_ lock: Bool) async {
         await sendCommand(.security(lock ? .lock : .unlock), label: lock ? "Kilitlendi" : "Kilit açıldı")
+    }
+
+    func setSeatHeater(level: Command.Climate.SeatHeaterLevel, seat: Command.Climate.SeatPosition) async {
+        let label: String
+        switch level {
+        case .off: label = "Koltuk ısıtıcı kapalı"
+        case .low: label = "Koltuk ısıtıcı 1"
+        case .medium: label = "Koltuk ısıtıcı 2"
+        case .high: label = "Koltuk ısıtıcı 3"
+        }
+        await sendCommand(.climate(.setSeatHeater(level: level, seat: seat)), label: label)
+    }
+
+    func ventWindows() async {
+        await sendCommand(.actions(.ventWindows), label: "Camlar aralandı")
+    }
+
+    func closeWindows() async {
+        await sendCommand(.actions(.closeWindows), label: "Camlar kapandı")
+    }
+
+    func openFrunk() async {
+        await sendCommand(.security(.openFrunk), label: "Frunk açıldı")
+    }
+
+    func openTrunk() async {
+        await sendCommand(.security(.openTrunk), label: "Bagaj açıldı")
+    }
+
+    func openChargePort() async {
+        await sendCommand(.charge(.openPort), label: "Şarj kapağı açıldı")
+    }
+
+    func flashLights() async {
+        await sendCommand(.actions(.flashLights), label: "Farlar yakıldı")
+    }
+
+    func refreshNearbyChargers() async {
+        guard let client else {
+            lastCommandMessage = "Araç bağlı değil"
+            return
+        }
+        do {
+            let result = try await client.query(.nearbyCharging(includeMetadata: true, radiusMiles: 50, count: 8))
+            if case .nearbyCharging(let sites) = result {
+                nearbyChargers = sites.superchargers
+                    .filter { !$0.siteClosed && !$0.name.isEmpty }
+                    .sorted { $0.distanceMiles < $1.distanceMiles }
+                    .prefix(8)
+                    .map { s in
+                        NearbyChargerSite(
+                            id: "\(s.id)-\(s.name)",
+                            name: s.name,
+                            distanceKm: Double(s.distanceMiles) * 1.60934,
+                            available: Int(s.availableStalls),
+                            total: Int(s.totalStalls),
+                            maxPowerKw: Int(s.maxPowerKw)
+                        )
+                    }
+                lastCommandMessage = nearbyChargers.isEmpty
+                    ? "Yakında Supercharger yok"
+                    : "\(nearbyChargers.count) Supercharger"
+            }
+        } catch {
+            lastCommandMessage = "Şarj araması başarısız: \(error.localizedDescription)"
+        }
     }
 
     private func sendCommand(_ command: Command, label: String) async {
