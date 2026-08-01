@@ -260,6 +260,29 @@ const RadarAlert = (() => {
     lastSpokenAt = now;
     const urgent = /critical|slow/i.test(String(key));
 
+    // Native SwiftUI cluster owns warn voice (EtubuWarnVoice / playWarnCue).
+    // Cap only primes beeps for web-only sessions.
+    if (window.__ETUBU_NATIVE_CLUSTER__) {
+      try {
+        window.__etubuPendingWarnSpeak = {
+          key: String(key || ""),
+          text: String(text || ""),
+          urgent: !!urgent,
+          at: now,
+        };
+      } catch (_) {}
+      // Soft beep only — phrase is spoken natively from DriveWarnings poll.
+      try {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return;
+        if (!window.__etubuBeepCtx) window.__etubuBeepCtx = new Ctx();
+        const ctx = window.__etubuBeepCtx;
+        if (ctx.state === "suspended") ctx.resume();
+        // Skip Cap beeps too when native handles playWarnCue (avoids double beep).
+      } catch (_) {}
+      return;
+    }
+
     try {
       const Ctx = window.AudioContext || window.webkitAudioContext;
       if (Ctx) {

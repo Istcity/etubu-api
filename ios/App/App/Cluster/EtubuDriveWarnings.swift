@@ -308,11 +308,34 @@ final class EtubuDriveWarnings: ObservableObject {
         }()
         EtubuVehicleTelemetry.shared.applyCapRouteRemain(active: routeOn, remainKm: remainKm)
 
+        // Native cluster: Cap TTS kapalı — ses burada.
+        maybeSpeakPrimaryWarn()
+
         Self.pushLiveActivityBrief()
         EtubuVehicleTelemetry.shared.publishWidgetSnapshot(
             primaryWarn: primary.map { "\($0.title) \($0.distanceLabel)" }
         )
         EtubuEvRoutePlanner.shared.refreshFromLiveState()
+    }
+
+    private var lastSpokenWarnId = ""
+    private var lastSpokenWarnStage = ""
+    private func maybeSpeakPrimaryWarn() {
+        guard !EtubuDemoDrive.isActive else { return }
+        guard let item = primary else { return }
+        guard item.stage == .far || item.stage == .near || item.stage == .critical else { return }
+        let stage = item.stage.rawValue
+        if item.id == lastSpokenWarnId, stage == lastSpokenWarnStage { return }
+        lastSpokenWarnId = item.id
+        lastSpokenWarnStage = stage
+        let phrase = "\(item.title) \(item.distanceLabel)".trimmingCharacters(in: .whitespaces)
+        guard !phrase.isEmpty else { return }
+        EtubuClusterAudioBridge.playWarnCue(
+            id: item.id,
+            kind: item.kind,
+            stage: stage,
+            phrase: phrase
+        )
     }
 
     private static var lastLivePushMs: Double = 0

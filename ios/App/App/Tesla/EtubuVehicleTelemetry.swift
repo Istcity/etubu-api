@@ -6,6 +6,7 @@ enum EtubuVehicleSource: String {
     case tesla
     case obd
     case gps
+    case demo
     case none
 }
 
@@ -57,6 +58,8 @@ final class EtubuVehicleTelemetry: ObservableObject {
     @Published var chargerVolts: Int?
     @Published var minutesToFullCharge: Int?
     @Published var chargePortOpen: Bool?
+    /// Son gerçek araç şarj örneği (demo yazmaz).
+    @Published var lastChargeAt: Date?
 
     // Climate
     @Published var outsideC: Double?
@@ -139,12 +142,70 @@ final class EtubuVehicleTelemetry: ObservableObject {
     /// Demo başlamadan önceki SoC/menzil (stop’ta geri yükle).
     private var preDemoSoc: Int?
     private var preDemoRangeKm: Int?
+    private var preDemoOutsideC: Double?
+    private var preDemoInsideC: Double?
+    private var preDemoClimateOn: Bool?
 
-    /// Bağlı değilken UI’da gösterilen şarj (canlı veya son bilinen).
-    var displaySocPercent: Int? { socPercent }
-    var displayRangeKm: Int? { rangeKm }
+    /// Bağlı değilken UI’da gösterilen şarj (canlı veya son bilinen, stale değilse).
+    static let chargeStaleSeconds: TimeInterval = 6 * 3600
+
+    var displaySocPercent: Int? {
+        if source == .demo { return socPercent }
+        if isLiveTesla { return socPercent }
+        if isChargeStale { return nil }
+        return socPercent
+    }
+    var displayRangeKm: Int? {
+        if source == .demo { return rangeKm }
+        if isLiveTesla { return rangeKm }
+        if isChargeStale { return nil }
+        return rangeKm
+    }
     var isShowingCachedCharge: Bool {
-        !isLiveTesla && socPercent != nil
+        source != .demo && !isLiveTesla && displaySocPercent != nil
+    }
+    var isChargeStale: Bool {
+        guard socPercent != nil || rangeKm != nil else { return false }
+        if isLiveTesla || source == .demo { return false }
+        guard let at = lastChargeAt else { return true }
+        return Date().timeIntervalSince(at) > Self.chargeStaleSeconds
+    }
+    /// “son 12dk” — cache SoC için.
+    var chargeAgeShortLabel: String? {
+        guard isShowingCachedCharge, let at = lastChargeAt else { return nil }
+        let sec = Date().timeIntervalSince(at)
+        if sec < 60 { return EtubuClusterL10n.t("chargeAgeJustNow") }
+        if sec < 3600 {
+            let m = max(1, Int(sec / 60))
+            return String(format: EtubuClusterL10n.t("chargeAgeMinutes"), m)
+        }
+        let h = max(1, Int(sec / 3600))
+        return String(format: EtubuClusterL10n.t("chargeAgeHours"), h)
+    }
+
+    /// Hız kaynağı rozeti metni.
+    var speedSourceLabel: String {
+        if EtubuDemoDrive.isActive || source == .demo { return EtubuClusterL10n.t("sourceDemo") }
+        switch source {
+        case .tesla: return EtubuClusterL10n.t("sourceTesla")
+        case .obd: return EtubuClusterL10n.t("sourceOBD")
+        case .gps: return EtubuClusterL10n.t("sourceGPS")
+        case .demo: return EtubuClusterL10n.t("sourceDemo")
+        case .none: return EtubuClusterL10n.t("sourceNone")
+        }
+    }
+
+    /// Canlı Tesla bağlı ama TPMS/iklim henüz boş.
+    var isAwaitingVehicleExtras: Bool {
+        isLiveTesla
+            && (tpmsFL.psi == nil && tpmsFR.psi == nil && tpmsRL.psi == nil && tpmsRR.psi == nil
+                || outsideC == nil || insideC == nil)
+    }
+    var isAwaitingTPMS: Bool {
+        isLiveTesla && tpmsFL.psi == nil && tpmsFR.psi == nil && tpmsRL.psi == nil && tpmsRR.psi == nil
+    }
+    var isAwaitingClimate: Bool {
+        isLiveTesla && outsideC == nil && insideC == nil
     }
 
     private func restoreLastChargeSnapshot() {
@@ -162,6 +223,14 @@ final class EtubuVehicleTelemetry: ObservableObject {
         }
         if let lim = ud.object(forKey: Self.lastLimitKey) as? Int {
             chargeLimitPercent = min(100, max(50, lim))
+        }
+        if let ts = ud.object(forKey: Self.lastChargeAtKey) as? Double, ts > 0 {
+            lastChargeAt = Date(timeIntervalSince1970: ts)
+        }
+        // Stale ise UI’da gösterme (disk kalsın, sonraki canlı örnek günceller).
+        if isChargeStale {
+            socPercent = nil
+            rangeKm = nil
         }
     }
 
@@ -193,7 +262,9 @@ final class EtubuVehicleTelemetry: ObservableObject {
         if let soc = socPercent { ud.set(soc, forKey: Self.lastSocKey) }
         if let range = rangeKm, range > 0 { ud.set(range, forKey: Self.lastRangeKey) }
         if let lim = chargeLimitPercent { ud.set(lim, forKey: Self.lastLimitKey) }
-        ud.set(Date().timeIntervalSince1970, forKey: Self.lastChargeAtKey)
+        let now = Date()
+        lastChargeAt = now
+        ud.set(now.timeIntervalSince1970, forKey: Self.lastChargeAtKey)
         ud.set(Self.vehicleSourceValue, forKey: Self.lastSourceKey)
     }
 
@@ -202,12 +273,18 @@ final class EtubuVehicleTelemetry: ObservableObject {
         // no-op: demo 42/180 gerçek son şarjı ezmesin
     }
 
-    /// Demo başlarken gerçek SoC/menzili sakla.
+    /// Demo başlarken gerçek SoC/menzil/iklim sakla.
     func beginDemoChargeOverlay(soc: Int = 42, rangeKm: Int = 180) {
         preDemoSoc = socPercent
         preDemoRangeKm = self.rangeKm
+        preDemoOutsideC = outsideC
+        preDemoInsideC = insideC
+        preDemoClimateOn = climateOn
         socPercent = soc
         self.rangeKm = rangeKm
+        outsideC = 18
+        insideC = 21
+        climateOn = true
     }
 
     /// Demo bitince araç cache’ine / önceki değerlere dön.
@@ -215,7 +292,6 @@ final class EtubuVehicleTelemetry: ObservableObject {
         if let pre = preDemoSoc {
             socPercent = pre
         } else {
-            // Bellekte yoksa yalnızca tesla kaynaklı UserDefaults
             let ud = UserDefaults.standard
             if ud.string(forKey: Self.lastSourceKey) == Self.vehicleSourceValue,
                let soc = ud.object(forKey: Self.lastSocKey) as? Int {
@@ -235,11 +311,21 @@ final class EtubuVehicleTelemetry: ObservableObject {
                 rangeKm = nil
             }
         }
+        outsideC = preDemoOutsideC
+        insideC = preDemoInsideC
+        climateOn = preDemoClimateOn
         preDemoSoc = nil
         preDemoRangeKm = nil
-        // Hâlâ demo kalıntısıysa temizle
+        preDemoOutsideC = nil
+        preDemoInsideC = nil
+        preDemoClimateOn = nil
         if socPercent == 42, rangeKm == 180,
            UserDefaults.standard.string(forKey: Self.lastSourceKey) != Self.vehicleSourceValue {
+            socPercent = nil
+            rangeKm = nil
+        }
+        // Stale cache’i UI’dan düş
+        if isChargeStale {
             socPercent = nil
             rangeKm = nil
         }

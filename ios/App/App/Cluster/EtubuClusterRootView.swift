@@ -645,9 +645,12 @@ struct EtubuClusterRootView: View {
                     tpmsGrid
                 case .telemetry:
                     VStack(alignment: .leading, spacing: 8) {
-                        panelValueRow(telemetry.socPercent.map { "\($0)%" } ?? "—")
+                        panelValueRow(telemetry.displaySocPercent.map { "\($0)%" } ?? "—")
                         panelValueRow(telemetry.powerKw.map { "\($0) kW" } ?? "—")
                         panelValueRow({
+                            if telemetry.isAwaitingClimate {
+                                return EtubuClusterL10n.t("awaitingClimate")
+                            }
                             let out = telemetry.outsideC.map { String(format: "%.0f°", $0) } ?? "—"
                             let inn = telemetry.insideC.map { String(format: "%.0f°", $0) } ?? "—"
                             return "\(out) / \(inn)"
@@ -785,14 +788,25 @@ struct EtubuClusterRootView: View {
                 .font(EtubuClusterFonts.ui(15, weight: .semibold))
                 .monospacedDigit()
                 .foregroundStyle(theme.primaryText.opacity(0.9))
-            Text(telemetry.outsideC.map { String(format: "%.0f°C", $0) } ?? "--°C")
-                .font(EtubuClusterFonts.ui(15, weight: .medium))
-                .foregroundStyle(theme.secondaryText)
+            if let out = telemetry.outsideC {
+                Text(String(format: "%.0f°C", out))
+                    .font(EtubuClusterFonts.ui(15, weight: .medium))
+                    .foregroundStyle(theme.secondaryText)
+            } else if telemetry.isAwaitingClimate {
+                Text(EtubuClusterL10n.t("awaitingClimate"))
+                    .font(EtubuClusterFonts.ui(11, weight: .medium))
+                    .foregroundStyle(theme.mutedText)
+            } else {
+                Text("--°C")
+                    .font(EtubuClusterFonts.ui(15, weight: .medium))
+                    .foregroundStyle(theme.secondaryText)
+            }
             if let inside = telemetry.insideC {
                 Text(String(format: "iç %.0f°C", inside))
                     .font(EtubuClusterFonts.ui(12, weight: .medium))
                     .foregroundStyle(theme.mutedText)
             }
+            speedSourceChip
             Text(telemetry.connectionQualityLabel)
                 .font(EtubuClusterFonts.ui(11, weight: .semibold))
                 .foregroundStyle(statusColor.opacity(0.9))
@@ -1098,6 +1112,7 @@ struct EtubuClusterRootView: View {
                     )
                 }
                 .clusterHotspot(.pair)
+                speedSourceChip
                 Spacer(minLength: 0)
                 if criticalAlertsOn {
                     Button {
@@ -1206,16 +1221,16 @@ struct EtubuClusterRootView: View {
                         .shadow(color: theme.glow, radius: 8)
                     HStack(spacing: 6) {
                         Image(systemName: "point.topleft.down.to.point.bottomright.curvepath")
-                        Text(telemetry.rangeKm.map { "\($0) km" } ?? "— km")
+                        Text(telemetry.displayRangeKm.map { "\($0) km" } ?? "— km")
                     }
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(theme.secondaryText)
                     HStack(spacing: 6) {
                         Image(systemName: "bolt.fill")
                             .foregroundStyle(theme.accent)
-                        Text(telemetry.socPercent.map { "\($0)%" } ?? "—")
-                        if telemetry.isShowingCachedCharge {
-                            Text("son")
+                        Text(telemetry.displaySocPercent.map { "\($0)%" } ?? "—")
+                        if let age = telemetry.chargeAgeShortLabel {
+                            Text(age)
                                 .font(EtubuClusterFonts.ui(10, weight: .medium))
                                 .foregroundStyle(theme.mutedText)
                         }
@@ -1225,7 +1240,7 @@ struct EtubuClusterRootView: View {
                             .overlay(alignment: .leading) {
                                 Capsule()
                                     .fill(theme.accent)
-                                    .frame(width: 56 * CGFloat(telemetry.socPercent ?? 0) / 100.0, height: 4)
+                                    .frame(width: 56 * CGFloat(telemetry.displaySocPercent ?? 0) / 100.0, height: 4)
                             }
                     }
                     .font(EtubuClusterFonts.ui(15, weight: .semibold))
@@ -1928,9 +1943,39 @@ struct EtubuClusterRootView: View {
     }
 
     private var batteryRangeLabel: String {
-        let soc = telemetry.socPercent.map { "\($0)%" } ?? "--%"
-        let range = telemetry.rangeKm.map { "\($0) km" } ?? "--km"
+        let soc = telemetry.displaySocPercent.map { "\($0)%" } ?? "--%"
+        let range = telemetry.displayRangeKm.map { "\($0) km" } ?? "--km"
+        if let age = telemetry.chargeAgeShortLabel {
+            return "\(soc) / \(range) · \(age)"
+        }
         return "\(soc) / \(range)"
+    }
+
+    private var speedSourceChip: some View {
+        Text(telemetry.speedSourceLabel)
+            .font(EtubuClusterFonts.ui(10, weight: .bold))
+            .tracking(0.4)
+            .foregroundStyle(theme.canvas)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(
+                Capsule().fill(sourceChipFill)
+            )
+            .accessibilityLabel(telemetry.speedSourceLabel)
+            .accessibilityIdentifier("etubu.source.chip")
+    }
+
+    private var sourceChipFill: Color {
+        if EtubuDemoDrive.isActive || telemetry.source == .demo {
+            return Color.orange.opacity(0.95)
+        }
+        switch telemetry.source {
+        case .tesla: return theme.accent
+        case .obd: return Color.cyan.opacity(0.9)
+        case .gps: return Color.white.opacity(0.35)
+        case .demo: return Color.orange.opacity(0.95)
+        case .none: return Color.white.opacity(0.2)
+        }
     }
 
     private var batteryPhoneLabel: String {

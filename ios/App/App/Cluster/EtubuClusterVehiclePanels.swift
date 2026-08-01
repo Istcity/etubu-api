@@ -13,6 +13,13 @@ struct EtubuTPMSGridView: View {
                 tireCell("RL", telemetry.tpmsRL)
                 tireCell("RR", telemetry.tpmsRR)
             }
+            if telemetry.isAwaitingTPMS {
+                Text(EtubuClusterL10n.t("awaitingTPMS"))
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.4))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
         }
     }
 

@@ -2715,6 +2715,11 @@ const I18n = (() => {
       st.key = key;
       st.at = now;
 
+      // Native cluster: Cap voice off — Swift EtubuWarnVoice owns phrases.
+      if (window.__ETUBU_NATIVE_CLUSTER__) {
+        return false;
+      }
+
       // TR: ElevenLabs warn clips (WarnVoice) — TTS only as fallback.
       try {
         if (

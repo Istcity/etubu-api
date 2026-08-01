@@ -89,15 +89,13 @@ final class EtubuDemoDrive: ObservableObject {
 
         let t = EtubuVehicleTelemetry.shared
         t.connectionState = .connected
-        t.source = .tesla
+        t.source = .demo
         t.statusMessage = "Demo · Küçükçekmece → İzmit"
         t.deviceLabel = "Demo"
         t.routeActive = true
         t.routeFrom = "İstanbul / Küçükçekmece"
         t.routeTo = "İzmit / Kocaeli"
         t.navDestination = "İzmit, Kocaeli"
-        t.outsideC = 18
-        t.insideC = 21
         t.beginDemoChargeOverlay(soc: 42, rangeKm: 180)
         t.powerHistory = []
         // İlk karede hemen hareket — UI / Maestro “D” + hız görsün.
@@ -302,7 +300,7 @@ final class EtubuDemoDrive: ObservableObject {
         t.longitude = coord.longitude
         t.headingDeg = heading
         t.lastUpdateAt = Date()
-        t.source = .tesla
+        t.source = .demo
         t.connectionState = .connected
         t.statusMessage = "Demo · Küçükçekmece → İzmit"
         t.deviceLabel = "Demo"
