@@ -135,8 +135,11 @@ enum EtubuLiveActivityController {
             primaryWarn: warnPrimary,
             aheadWarn2: warn2,
             remainingPoints: remaining.count,
-            socPercent: t.socPercent,
-            rangeKm: t.rangeKm
+            socPercent: t.displaySocPercent ?? t.socPercent,
+            rangeKm: t.displayRangeKm ?? t.rangeKm,
+            remainKm: t.effectiveRemainKm,
+            etaMinutes: t.navEtaMinutes.map { Int($0.rounded()) },
+            arrivalSocPercent: t.energyAtArrivalPercent
         )
     }
 

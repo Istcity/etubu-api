@@ -14,128 +14,46 @@ struct EtubuWidgetsBundle: WidgetBundle {
 struct EtubuLiveActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: EtubuDriveAttributes.self) { context in
-            // Lock screen / banner
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 8) {
-                    Image("EtubuLogo")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 22, height: 22)
-                    Spacer(minLength: 4)
-                    Text("\(context.state.kmh)")
-                        .font(.system(size: 26, weight: .bold, design: .rounded))
-                        .monospacedDigit()
-                        .minimumScaleFactor(0.65)
-                        .lineLimit(1)
-                    Text("km/h")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    Text(context.state.gear)
-                        .font(.headline.weight(.bold))
-                        .frame(minWidth: 16)
-                }
-                if let soc = context.state.socPercent {
-                    HStack(spacing: 6) {
-                        Text("\(soc)%")
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(.green)
-                        if let range = context.state.rangeKm {
-                            Text("· \(range) km")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                if !context.state.routeSummaryLine.isEmpty {
-                    Text(context.state.routeSummaryLine)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.cyan)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                }
-                if context.state.routeActive, context.state.hasRouteBrief {
-                    routeBriefRow(context.state)
-                }
-                if context.state.routeActive, !context.state.primaryWarn.isEmpty {
-                    Text(context.state.primaryWarn)
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.orange)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-                }
-                if context.state.routeActive, !context.state.aheadWarn2.isEmpty {
-                    Text(context.state.aheadWarn2)
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundStyle(.orange.opacity(0.75))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                }
-                tpmsRow(context.state, compact: false)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .activityBackgroundTint(Color.black.opacity(0.88))
-            .activitySystemActionForegroundColor(.cyan)
+            EtubuIslandCanvas(
+                state: context.state,
+                startedAt: context.attributes.startedAt,
+                style: .lockScreen
+            )
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .activityBackgroundTint(Color.black.opacity(0.92))
+            .activitySystemActionForegroundColor(Color(red: 1.0, green: 0.55, blue: 0.2))
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Image("EtubuLogo")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 28, height: 28)
-                        Text(context.state.gear)
-                            .font(.system(size: 16, weight: .bold))
+                    HStack(spacing: 5) {
+                        Image(systemName: context.state.routeActive ? "location.fill" : "bolt.car.fill")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(Color(red: 1.0, green: 0.55, blue: 0.25))
+                        Text(context.state.shortDestination)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
                     }
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    VStack(alignment: .trailing, spacing: 0) {
-                        Text("\(context.state.kmh)")
-                            .font(.system(size: 22, weight: .bold).monospacedDigit())
-                            .minimumScaleFactor(0.7)
-                            .lineLimit(1)
-                        if let soc = context.state.socPercent {
-                            Text("\(soc)%")
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundStyle(.green)
-                        } else {
-                            Text("km/h")
-                                .font(.system(size: 9, weight: .semibold))
-                                .foregroundStyle(.secondary)
-                        }
-                    }
+                    Text(Self.clockNow())
+                        .font(.system(size: 13, weight: .medium).monospacedDigit())
+                        .foregroundStyle(.white.opacity(0.85))
                 }
                 DynamicIslandExpandedRegion(.center) {
-                    VStack(spacing: 2) {
-                        if !context.state.routeSummaryLine.isEmpty {
-                            Text(context.state.routeSummaryLine)
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(.cyan)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.65)
-                        }
-                        if context.state.routeActive, context.state.hasRouteBrief {
-                            routeBriefRow(context.state)
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
+                    Color.clear.frame(height: 1)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    // Alt bant kısa — uyarı + lastik tek kompakt blokta kalsın (taşma yok).
-                    VStack(alignment: .leading, spacing: 3) {
-                        if context.state.routeActive, !context.state.primaryWarn.isEmpty {
-                            Text(context.state.primaryWarn)
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundStyle(.orange)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.7)
-                        }
-                        tpmsRow(context.state, compact: true)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 4)
-                    .padding(.top, 1)
-                    .padding(.bottom, 2)
+                    EtubuIslandCanvas(
+                        state: context.state,
+                        startedAt: context.attributes.startedAt,
+                        style: .island
+                    )
+                    .padding(.horizontal, 2)
+                    .padding(.top, 2)
+                    .padding(.bottom, 4)
                 }
             } compactLeading: {
                 Image("EtubuLogo")
@@ -143,39 +61,12 @@ struct EtubuLiveActivityWidget: Widget {
                     .scaledToFit()
                     .frame(width: 18, height: 18)
             } compactTrailing: {
-                if context.state.routeActive, !context.state.primaryWarn.isEmpty {
-                    Text(shortWarn(context.state.primaryWarn))
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(.orange)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.45)
-                        .frame(maxWidth: 56, alignment: .trailing)
-                } else if let soc = context.state.socPercent {
-                    Text("\(soc)%")
-                        .font(.system(size: 11, weight: .bold).monospacedDigit())
-                        .foregroundStyle(.green)
-                        .minimumScaleFactor(0.55)
-                        .lineLimit(1)
-                        .frame(maxWidth: 36, alignment: .trailing)
-                } else if context.state.routeActive, !context.state.routeTo.isEmpty {
-                    Text(shortDest(context.state.routeTo))
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(.cyan)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.5)
-                        .frame(maxWidth: 52, alignment: .trailing)
-                } else {
-                    Text("\(min(context.state.kmh, 999))")
-                        .font(.system(size: 11, weight: .bold).monospacedDigit())
-                        .minimumScaleFactor(0.45)
-                        .lineLimit(1)
-                        .frame(maxWidth: 28, alignment: .trailing)
-                }
+                compactTrailing(context.state)
             } minimal: {
                 if let soc = context.state.socPercent {
                     Text("\(soc)")
                         .font(.system(size: 10, weight: .bold).monospacedDigit())
-                        .foregroundStyle(.green)
+                        .foregroundStyle(Color(red: 0.35, green: 0.95, blue: 0.55))
                 } else {
                     Image("EtubuLogo")
                         .resizable()
@@ -183,16 +74,41 @@ struct EtubuLiveActivityWidget: Widget {
                         .frame(width: 14, height: 14)
                 }
             }
+            .keylineTint(Color(red: 1.0, green: 0.45, blue: 0.15))
             .widgetURL(URL(string: "com.etubu.app://drive"))
         }
     }
 
-    private func shortDest(_ raw: String) -> String {
-        let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let slash = t.split(separator: "/").last {
-            return String(slash).trimmingCharacters(in: .whitespaces).prefix(10).description
+    @ViewBuilder
+    private func compactTrailing(_ state: EtubuDriveAttributes.ContentState) -> some View {
+        if state.routeActive, !state.primaryWarn.isEmpty {
+            Text(shortWarn(state.primaryWarn))
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(.orange)
+                .lineLimit(1)
+                .minimumScaleFactor(0.45)
+                .frame(maxWidth: 56, alignment: .trailing)
+        } else if let eta = state.etaClockLabel {
+            Text(eta)
+                .font(.system(size: 11, weight: .bold).monospacedDigit())
+                .foregroundStyle(Color(red: 1.0, green: 0.6, blue: 0.25))
+                .minimumScaleFactor(0.55)
+                .lineLimit(1)
+                .frame(maxWidth: 44, alignment: .trailing)
+        } else if let soc = state.socPercent {
+            Text("\(soc)%")
+                .font(.system(size: 11, weight: .bold).monospacedDigit())
+                .foregroundStyle(Color(red: 0.35, green: 0.95, blue: 0.55))
+                .minimumScaleFactor(0.55)
+                .lineLimit(1)
+                .frame(maxWidth: 36, alignment: .trailing)
+        } else {
+            Text("\(min(state.kmh, 999))")
+                .font(.system(size: 11, weight: .bold).monospacedDigit())
+                .minimumScaleFactor(0.45)
+                .lineLimit(1)
+                .frame(maxWidth: 28, alignment: .trailing)
         }
-        return String(t.prefix(10))
     }
 
     private func shortWarn(_ raw: String) -> String {
@@ -203,74 +119,266 @@ struct EtubuLiveActivityWidget: Widget {
         return String(t.prefix(8))
     }
 
-    @ViewBuilder
-    private func routeBriefRow(_ state: EtubuDriveAttributes.ContentState) -> some View {
-        HStack(spacing: 8) {
-            briefChip("R", state.radarCount, .orange)
-            briefChip("K", state.corridorCount, .yellow)
-            briefChip("C", state.controlCount, .purple)
-            briefChip("Ş", state.chargeCount, .cyan)
-            briefChip("H", state.weatherCount, .blue)
+    private static func clockNow() -> String {
+        let f = DateFormatter()
+        f.dateFormat = "h:mm a"
+        f.amSymbol = "am"
+        f.pmSymbol = "pm"
+        return f.string(from: Date()).lowercased()
+    }
+}
+
+// MARK: - Golden-hour canvas (Island + lock screen)
+
+@available(iOS 16.2, *)
+private enum EtubuIslandStyle {
+    case island
+    case lockScreen
+}
+
+@available(iOS 16.2, *)
+private struct EtubuIslandCanvas: View {
+    let state: EtubuDriveAttributes.ContentState
+    let startedAt: Date
+    let style: EtubuIslandStyle
+
+    private var progress: CGFloat {
+        Self.tripProgress(state: state, startedAt: startedAt)
+    }
+
+    private var urgent: Bool {
+        !state.primaryWarn.isEmpty || (state.socPercent.map { $0 <= 15 } ?? false)
+    }
+
+    private var hero: (value: String, label: String) {
+        if !state.primaryWarn.isEmpty {
+            let short = state.primaryWarn.split(separator: "·").first.map(String.init) ?? state.primaryWarn
+            return (String(short.prefix(18)), state.primaryWarn)
+        }
+        if let eta = state.etaClockLabel {
+            return (eta, "Kalan süre")
+        }
+        if let km = state.remainKm, km > 0 {
+            let v = km >= 10 ? String(format: "%.0f", km) : String(format: "%.1f", km)
+            return (v, "km kalan")
+        }
+        return ("\(max(0, state.kmh))", "km/h · \(state.gear)")
+    }
+
+    private var leftCap: String {
+        if let soc = state.socPercent { return "\(soc)%" }
+        return state.gear
+    }
+
+    private var rightCap: String {
+        if let arr = state.arrivalSocPercent { return "\(arr)%" }
+        if let km = state.remainKm, km > 0 {
+            return km >= 10 ? String(format: "%.0f km", km) : String(format: "%.1f km", km)
+        }
+        if let range = state.rangeKm { return "\(range) km" }
+        return "—"
+    }
+
+    var body: some View {
+        VStack(spacing: style == .lockScreen ? 8 : 4) {
+            if style == .lockScreen {
+                headerRow
+            }
+
+            EtubuGoldenArc(
+                progress: progress,
+                leftLabel: leftCap,
+                rightLabel: rightCap,
+                leftSymbol: state.socPercent != nil ? "bolt.fill" : "flag.fill",
+                rightSymbol: state.arrivalSocPercent != nil ? "flag.checkered" : "mappin.and.ellipse",
+                urgent: urgent
+            )
+            .frame(height: style == .lockScreen ? 54 : 44)
+
+            VStack(spacing: 2) {
+                Text(hero.value)
+                    .font(.system(
+                        size: style == .lockScreen ? 34 : 28,
+                        weight: .bold,
+                        design: .rounded
+                    ).monospacedDigit())
+                    .foregroundStyle(.white)
+                    .minimumScaleFactor(0.7)
+                    .lineLimit(1)
+
+                Text(hero.label)
+                    .font(.system(size: style == .lockScreen ? 12 : 11, weight: .medium))
+                    .foregroundStyle(urgent
+                        ? Color(red: 1.0, green: 0.55, blue: 0.2)
+                        : .white.opacity(0.55))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+            .frame(maxWidth: .infinity)
+
+            if style == .lockScreen {
+                footerChips
+            }
+        }
+    }
+
+    private var headerRow: some View {
+        HStack(spacing: 6) {
+            Image(systemName: state.routeActive ? "location.fill" : "bolt.car.fill")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(Color(red: 1.0, green: 0.55, blue: 0.25))
+            Text(state.shortDestination)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+            Spacer(minLength: 4)
+            Text(EtubuLiveActivityWidget.clockLabel())
+                .font(.system(size: 13, weight: .medium).monospacedDigit())
+                .foregroundStyle(.white.opacity(0.8))
+        }
+    }
+
+    private var footerChips: some View {
+        HStack(spacing: 10) {
+            Label("\(state.kmh) km/h", systemImage: "gauge.with.dots.needle.67percent")
+            if let soc = state.socPercent {
+                Label("\(soc)%", systemImage: "bolt.fill")
+            }
+            Text(state.gear)
+                .fontWeight(.bold)
             Spacer(minLength: 0)
         }
+        .font(.system(size: 11, weight: .semibold))
+        .foregroundStyle(.white.opacity(0.55))
+        .labelStyle(.titleAndIcon)
     }
 
-    private func briefChip(_ letter: String, _ count: Int, _ color: Color) -> some View {
-        HStack(spacing: 2) {
-            Text(letter)
-                .font(.system(size: 9, weight: .heavy))
-                .foregroundStyle(color)
-            Text("\(count)")
-                .font(.system(size: 10, weight: .bold).monospacedDigit())
-                .foregroundStyle(.white.opacity(count > 0 ? 0.95 : 0.35))
+    static func tripProgress(state: EtubuDriveAttributes.ContentState, startedAt: Date) -> CGFloat {
+        if let eta = state.etaMinutes, eta >= 0 {
+            let remain = Double(eta) * 60
+            let elapsed = max(0, Date().timeIntervalSince(startedAt))
+            let total = max(elapsed + remain, 1)
+            return CGFloat(min(1, max(0, elapsed / total)))
         }
-    }
-
-    @ViewBuilder
-    private func tpmsRow(_ state: EtubuDriveAttributes.ContentState, compact: Bool) -> some View {
-        // Compact: tek satır FL 32 FR 32 · RL 33 RR 33 — DI alt bandına sığar.
-        HStack(spacing: compact ? 5 : 8) {
-            tpmsCell("FL", state.tpmsFL, compact: compact)
-            tpmsCell("FR", state.tpmsFR, compact: compact)
-            if compact {
-                Text("·")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.25))
-            } else {
-                Spacer(minLength: 4)
-            }
-            tpmsCell("RL", state.tpmsRL, compact: compact)
-            tpmsCell("RR", state.tpmsRR, compact: compact)
-            if compact { Spacer(minLength: 0) }
+        if let soc = state.socPercent {
+            return CGFloat(min(1, max(0, Double(soc) / 100.0)))
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        return CGFloat(min(1, max(0, Double(state.kmh) / 130.0)))
     }
+}
 
-    private func tpmsCell(_ label: String, _ psi: Int?, compact: Bool) -> some View {
-        Group {
-            if compact {
-                HStack(spacing: 2) {
-                    Text(label)
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundStyle(.secondary)
-                    Text(psi.map { "\($0)" } ?? "—")
-                        .font(.system(size: 11, weight: .bold).monospacedDigit())
-                        .minimumScaleFactor(0.65)
-                        .lineLimit(1)
+@available(iOS 16.2, *)
+private extension EtubuLiveActivityWidget {
+    static func clockLabel() -> String {
+        let f = DateFormatter()
+        f.dateFormat = "h:mm a"
+        f.amSymbol = "am"
+        f.pmSymbol = "pm"
+        return f.string(from: Date()).lowercased()
+    }
+}
+
+// MARK: - Arc (sun-path / golden-hour)
+
+@available(iOS 16.2, *)
+private struct EtubuGoldenArc: View {
+    var progress: CGFloat
+    var leftLabel: String
+    var rightLabel: String
+    var leftSymbol: String
+    var rightSymbol: String
+    var urgent: Bool
+
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            let h = geo.size.height
+            let inset: CGFloat = 28
+            let track = arcPath(in: CGSize(width: w, height: h), inset: inset)
+
+            ZStack {
+                // Soft glow under the hot zone
+                track
+                    .stroke(
+                        AngularGradient(
+                            colors: [
+                                Color(red: 0.15, green: 0.35, blue: 0.95).opacity(0.15),
+                                Color(red: 1.0, green: 0.45, blue: 0.12).opacity(urgent ? 0.55 : 0.35),
+                                Color(red: 0.2, green: 0.35, blue: 0.9).opacity(0.15),
+                            ],
+                            center: .center
+                        ),
+                        style: StrokeStyle(lineWidth: 10, lineCap: .round)
+                    )
+                    .blur(radius: 6)
+                    .opacity(0.85)
+
+                // Base track
+                track
+                    .stroke(
+                        Color.white.opacity(0.12),
+                        style: StrokeStyle(lineWidth: 4, lineCap: .round)
+                    )
+
+                // Colored progress
+                track
+                    .trim(from: 0, to: max(0.02, min(1, progress)))
+                    .stroke(
+                        AngularGradient(
+                            colors: [
+                                Color(red: 0.25, green: 0.45, blue: 1.0),
+                                Color(red: 0.45, green: 0.75, blue: 1.0),
+                                Color(red: 1.0, green: 0.75, blue: 0.25),
+                                Color(red: 1.0, green: 0.35, blue: 0.1),
+                            ],
+                            center: .center,
+                            angle: .degrees(200)
+                        ),
+                        style: StrokeStyle(lineWidth: 4.5, lineCap: .round)
+                    )
+
+                // Knob
+                Circle()
+                    .fill(.white)
+                    .frame(width: 9, height: 9)
+                    .shadow(color: Color(red: 1.0, green: 0.5, blue: 0.15).opacity(0.9), radius: 4)
+                    .position(pointOnArc(progress: progress, size: CGSize(width: w, height: h), inset: inset))
+
+                // End caps
+                HStack {
+                    Label(leftLabel, systemImage: leftSymbol)
+                    Spacer()
+                    Label(rightLabel, systemImage: rightSymbol)
                 }
-                .fixedSize(horizontal: true, vertical: false)
-            } else {
-                VStack(spacing: 1) {
-                    Text(label)
-                        .font(.system(size: 8, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                    Text(psi.map { "\($0)" } ?? "—")
-                        .font(.system(size: 11, weight: .bold).monospacedDigit())
-                        .minimumScaleFactor(0.7)
-                        .lineLimit(1)
-                }
-                .frame(maxWidth: .infinity)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.7))
+                .labelStyle(.titleAndIcon)
+                .padding(.horizontal, 2)
+                .frame(maxHeight: .infinity, alignment: .bottom)
             }
         }
+    }
+
+    /// Upward sun-path arc (∩).
+    private func arcPath(in size: CGSize, inset: CGFloat) -> Path {
+        let start = CGPoint(x: inset, y: size.height * 0.72)
+        let end = CGPoint(x: size.width - inset, y: size.height * 0.72)
+        let control = CGPoint(x: size.width / 2, y: size.height * 0.08)
+        var p = Path()
+        p.move(to: start)
+        p.addQuadCurve(to: end, control: control)
+        return p
+    }
+
+    private func pointOnArc(progress: CGFloat, size: CGSize, inset: CGFloat) -> CGPoint {
+        let t = max(0, min(1, progress))
+        let start = CGPoint(x: inset, y: size.height * 0.72)
+        let end = CGPoint(x: size.width - inset, y: size.height * 0.72)
+        let control = CGPoint(x: size.width / 2, y: size.height * 0.08)
+        // Quadratic Bezier
+        let mt = 1 - t
+        let x = mt * mt * start.x + 2 * mt * t * control.x + t * t * end.x
+        let y = mt * mt * start.y + 2 * mt * t * control.y + t * t * end.y
+        return CGPoint(x: x, y: y)
     }
 }

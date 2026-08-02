@@ -9,7 +9,7 @@ public struct EtubuDriveAttributes: ActivityAttributes {
         public var gear: String
         public var rpm: Int
         public var voice: String
-        public var source: String // gps | obd | tesla
+        public var source: String // gps | obd | tesla | demo
         public var tpmsFL: Int?
         public var tpmsFR: Int?
         public var tpmsRL: Int?
@@ -29,6 +29,10 @@ public struct EtubuDriveAttributes: ActivityAttributes {
         public var remainingPoints: Int
         public var socPercent: Int?
         public var rangeKm: Int?
+        /// Golden-hour style Island metrics
+        public var remainKm: Double?
+        public var etaMinutes: Int?
+        public var arrivalSocPercent: Int?
 
         public init(
             kmh: Int,
@@ -52,7 +56,10 @@ public struct EtubuDriveAttributes: ActivityAttributes {
             aheadWarn2: String = "",
             remainingPoints: Int = 0,
             socPercent: Int? = nil,
-            rangeKm: Int? = nil
+            rangeKm: Int? = nil,
+            remainKm: Double? = nil,
+            etaMinutes: Int? = nil,
+            arrivalSocPercent: Int? = nil
         ) {
             self.kmh = kmh
             self.gear = gear
@@ -76,6 +83,9 @@ public struct EtubuDriveAttributes: ActivityAttributes {
             self.remainingPoints = remainingPoints
             self.socPercent = socPercent
             self.rangeKm = rangeKm
+            self.remainKm = remainKm
+            self.etaMinutes = etaMinutes
+            self.arrivalSocPercent = arrivalSocPercent
         }
 
         public var routeSummaryLine: String {
@@ -90,6 +100,23 @@ public struct EtubuDriveAttributes: ActivityAttributes {
 
         public var hasRouteBrief: Bool {
             routeActive && (radarCount + corridorCount + chargeCount + controlCount + weatherCount) > 0
+        }
+
+        public var shortDestination: String {
+            let t = routeTo.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !t.isEmpty else { return "Etubu" }
+            if let slash = t.split(separator: "/").last {
+                return String(slash).trimmingCharacters(in: .whitespaces).prefix(14).description
+            }
+            return String(t.prefix(14))
+        }
+
+        /// `HH:MM` remaining when ETA known.
+        public var etaClockLabel: String? {
+            guard let m = etaMinutes, m >= 0 else { return nil }
+            let h = m / 60
+            let mm = m % 60
+            return String(format: "%02d:%02d", h, mm)
         }
     }
 
