@@ -269,8 +269,9 @@
     voiceSelect.innerHTML = "";
     const full = unlocked();
     const order =
-      AudioEngine.getVoiceGroupOrder?.() || ["ev", "exhaust", "race", "fx"];
+      AudioEngine.getVoiceGroupOrder?.() || ["theme", "ev"];
     const labelKeys = {
+      theme: "voiceGroupTheme",
       ev: "voiceGroupEv",
       exhaust: "voiceGroupExhaust",
       race: "voiceGroupRace",

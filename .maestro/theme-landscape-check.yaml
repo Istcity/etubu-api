@@ -1,0 +1,59 @@
+appId: com.etubu.app
+---
+# Tema mağazası + landscape smoke
+- launchApp:
+    clearState: true
+    permissions:
+      all: allow
+      notifications: deny
+    arguments:
+      etubuSkipOnboarding: true
+      etubuForcePremium: true
+- runFlow: setup-legal.yaml
+- tapOn:
+    id: "etubu.settings.open"
+- extendedWaitUntil:
+    visible: "Uygulama hakkında"
+    timeout: 10000
+- scrollUntilVisible:
+    element: "Tema mağazası"
+    direction: DOWN
+    timeout: 25000
+- scrollUntilVisible:
+    element:
+      id: "etubu.theme.tesla"
+    direction: DOWN
+    timeout: 20000
+- assertVisible:
+    id: "etubu.theme.tesla"
+- assertVisible:
+    text: ".*Tema.*"
+- takeScreenshot: qa-theme-store
+- assertVisible:
+    id: "etubu.remote.open"
+    optional: true
+- tapOn:
+    id: "etubu.settings.done"
+    optional: true
+- tapOn:
+    text: "Tamam"
+    optional: true
+- swipe:
+    direction: DOWN
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 1500
+- setOrientation: LANDSCAPE_LEFT
+- waitForAnimationToEnd:
+    timeout: 2000
+- assertVisible: "km/h"
+- assertVisible:
+    id: "etubu.dial"
+- assertVisible:
+    id: "etubu.remote.open"
+    optional: true
+- takeScreenshot: qa-landscape
+- setOrientation: PORTRAIT
+- waitForAnimationToEnd:
+    timeout: 1500
+- assertVisible: "km/h"

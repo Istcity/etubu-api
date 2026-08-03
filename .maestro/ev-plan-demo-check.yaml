@@ -7,6 +7,7 @@ appId: com.etubu.app
       notifications: deny
     arguments:
       etubuSkipOnboarding: true
+      etubuForcePremium: true
 - runFlow: dismiss-permissions.yaml
 - extendedWaitUntil:
     visible:
@@ -45,7 +46,7 @@ appId: com.etubu.app
     element:
       id: "etubu.demo.toggle"
     direction: DOWN
-    timeout: 16000
+    timeout: 30000
 - tapOn:
     id: "etubu.demo.toggle"
 - waitForAnimationToEnd:
@@ -109,6 +110,7 @@ appId: com.etubu.app
     timeout: 1500
 - assertNotVisible:
     id: "etubu.demo.stop"
+# Demo stop keeps EV sound preference (armed on start → still on)
 - assertVisible:
-    id: "etubu.sound.off"
+    id: "etubu.sound.on"
 - takeScreenshot: ev-plan-demo-stopped

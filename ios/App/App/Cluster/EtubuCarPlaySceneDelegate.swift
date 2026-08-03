@@ -2,11 +2,12 @@ import CarPlay
 import Combine
 import UIKit
 
-/// CarPlay EV-charging foundation: live speed / SoC / range + nearby Superchargers.
+/// CarPlay EV-charging foundation (NOT shipping).
 ///
-/// Apple must grant `com.apple.developer.carplay-charging` on the App ID before the
-/// app appears on CarPlay. Request via https://developer.apple.com/contact/carplay/
-/// then add the boolean entitlement to `App.entitlements`.
+/// No `com.apple.developer.carplay-charging` entitlement is present — Apple will not
+/// surface this scene on CarPlay until the entitlement is granted and added to
+/// `App.entitlements`. Request via https://developer.apple.com/contact/carplay/
+/// Do not present user-facing CarPlay entry points until then.
 final class EtubuCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
     private var interfaceController: CPInterfaceController?
     private var cancellables = Set<AnyCancellable>()

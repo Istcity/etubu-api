@@ -32,7 +32,7 @@ public class EtubuNativePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "trafikPost", returnType: CAPPluginReturnPromise),
     ]
 
-    private let unlockLifetimeId = "etubu.unlock.lifetime"
+    private let unlockLifetimeId = "com.etubu.premium"
     private let unlockYearlyId = "etubu.catalog.yearly"
     private let unlockYearlyAltId = "etubu.unlock.yearly"
     private let adfreeId = "etubu.ads.remove"
@@ -112,7 +112,8 @@ public class EtubuNativePlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     @objc func showBannerAds(_ call: CAPPluginCall) {
-        call.resolve(["shown": false, "reason": "AdMob not wired yet"])
+        // AdMob not integrated — refuse rather than ship placeholder creatives.
+        call.resolve(["shown": false, "reason": "AdMob disabled (not wired)"])
     }
 
     @objc func hideAds(_ call: CAPPluginCall) {

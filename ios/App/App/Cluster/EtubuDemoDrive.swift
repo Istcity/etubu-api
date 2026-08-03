@@ -117,10 +117,11 @@ final class EtubuDemoDrive: ObservableObject {
         EtubuRouteBridge.primeWarningAudio()
         // Cap www (AudioEngine) stub’dan çıkmış olsun — demoda EV ses şart.
         EtubuCapBridgeViewController.armWebContent()
-        // EV ses + uyarı beep context — silent-mode’dan çık.
-        UserDefaults.standard.set("calm-ev", forKey: "etubu.cluster.voice")
+        // EV ses + uyarı beep context — tema paketi (RevHeadz: tema = ses).
+        let demoVoice = ClusterTheme.stored.driveVoiceKey
+        UserDefaults.standard.set(demoVoice, forKey: "etubu.cluster.voice")
         EtubuClusterAudioBridge.startDrive(kmh: 28, gear: "D", source: "demo", powerKw: 42)
-        EtubuClusterAudioBridge.setSoundEnabled(true, voice: "calm-ev")
+        EtubuClusterAudioBridge.setSoundEnabled(true, voice: demoVoice)
         NotificationCenter.default.post(name: .etubuDemoSoundArmed, object: nil)
         // Dururken levha yok — ilk step hareket limitini basar
         EtubuOsmSpeedLimit.shared.applyDemoLimit(50, highway: "residential")
@@ -180,8 +181,8 @@ final class EtubuDemoDrive: ObservableObject {
         EtubuDriveWarnings.shared.clearCriticalAlerts()
         EtubuDriveWarnings.shared.routeCoords = []
         EtubuOsmSpeedLimit.shared.clearDemoOverride()
+        // Stop engines only — do not force silent-mode (preserves mute/on preference).
         EtubuClusterAudioBridge.endDrive()
-        UserDefaults.standard.set("silent-mode", forKey: "etubu.cluster.voice")
         NotificationCenter.default.post(name: .etubuDemoSoundDisarmed, object: nil)
         if #available(iOS 16.2, *) {
             Task { await EtubuLiveActivityController.end() }
@@ -489,7 +490,7 @@ final class EtubuDemoDrive: ObservableObject {
         let item = EtubuWarnItem(
             id: next.id,
             kind: next.kind,
-            title: next.kindTitleTR,
+            title: next.kindTitle,
             distanceLabel: distLabel,
             stage: stage,
             meta: next.label
@@ -500,7 +501,7 @@ final class EtubuDemoDrive: ObservableObject {
             return EtubuWarnItem(
                 id: h.id,
                 kind: h.kind,
-                title: h.kindTitleTR,
+                title: h.kindTitle,
                 distanceLabel: d >= 1000 ? String(format: "%.0f km", d / 1000) : "\(Int(d)) m",
                 stage: .far,
                 meta: h.label

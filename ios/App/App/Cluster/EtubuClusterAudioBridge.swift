@@ -53,6 +53,10 @@ enum EtubuClusterAudioBridge {
             .replacingOccurrences(of: "'", with: "")
             .replacingOccurrences(of: "\n", with: "")
         UserDefaults.standard.set(safe, forKey: "etubu.cluster.voice")
+        if safe != "silent-mode", isSoundWanted {
+            EtubuNativeDriveAudio.shared.start(voice: safe)
+            EtubuNativeDriveAudio.shared.setMuted(false)
+        }
         evalJS("""
         (function(){
           try {
@@ -79,7 +83,10 @@ enum EtubuClusterAudioBridge {
 
     /// Fast on/off — prefers `AudioEngine.setMuted` so the icon responds immediately.
     private static let soundOnKey = "etubu.cluster.evSoundOn"
-    static let defaultDriveVoice = "calm-ev"
+    /// Tema = ses paketi; sessizden çıkınca mevcut temanın driveVoiceKey.
+    static var defaultDriveVoice: String {
+        ClusterTheme.stored.driveVoiceKey
+    }
 
     static var isSoundWanted: Bool {
         get { UserDefaults.standard.object(forKey: soundOnKey) as? Bool ?? false }
@@ -88,6 +95,10 @@ enum EtubuClusterAudioBridge {
 
     /// Bumped on endDrive so late Cap retries / demo asyncAfter no-op.
     private static var driveGeneration: UInt64 = 0
+    /// Demo/cold-start: native owns until Cap is proven warm (never both muted).
+    private static var preferNativeOwner = false
+    private static var capWarmStreak = 0
+    private static var ownershipHeartbeat: DispatchWorkItem?
 
     static func setSoundEnabled(_ on: Bool, voice: String? = nil) {
         let key = (voice ?? storedVoice)
@@ -102,9 +113,10 @@ enum EtubuClusterAudioBridge {
                 EtubuLiveActivityController.ensureAudioSession(mixWithOthers: true)
             }
             armPowerRegenHook()
-            // Native fallback — Cap soğukken de EV hum duyulsun.
+            // Native primary until Cap warm — cold Cap must never leave silence.
             EtubuNativeDriveAudio.shared.start(voice: resolved)
             EtubuNativeDriveAudio.shared.setMuted(false)
+            capWarmStreak = 0
             evalJS("""
             (function(){
               try {
@@ -123,23 +135,20 @@ enum EtubuClusterAudioBridge {
                 var same = window.AudioEngine._voiceKey === key;
                 if (running && same && window.AudioEngine.setMuted) {
                   window.AudioEngine.setMuted(false);
-                  window.__etubuCapAudioWarm = true;
                   return;
                 }
                 if (window.AudioEngine.start) window.AudioEngine.start(key);
                 if (window.AudioEngine.setMuted) window.AudioEngine.setMuted(false);
-                window.__etubuCapAudioWarm = true;
                 localStorage.setItem('etubu_voice', key);
               } catch (e) {}
             })();
             """)
-            // Cap ısındığında native'i kıs — çift ses olmasın.
-            let gen = driveGeneration
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                guard gen == driveGeneration, isSoundWanted else { return }
-                handoffNativeIfCapWarm()
-            }
+            startOwnershipHeartbeat()
         } else {
+            liveDriveSoundArmed = false
+            preferNativeOwner = false
+            capWarmStreak = 0
+            stopOwnershipHeartbeat()
             EtubuNativeDriveAudio.shared.setMuted(true)
             evalJS("""
             (function(){
@@ -156,12 +165,16 @@ enum EtubuClusterAudioBridge {
 
     static func startDrive(kmh: Int, gear: String, source: String, powerKw: Int? = nil) {
         let voice = storedVoice == "silent-mode" ? defaultDriveVoice : storedVoice
+        // Demo: native stays primary (Cap often cold under opaque cluster).
+        preferNativeOwner = (source == "demo")
         setSoundEnabled(true, voice: voice)
         EtubuNativeDriveAudio.shared.start(voice: voice)
+        EtubuNativeDriveAudio.shared.setMuted(false)
         EtubuNativeDriveAudio.shared.setSpeed(kmh: kmh, powerKw: powerKw)
         // Cap stub → index-app geçişi bitmeden AudioEngine yok; demoda agresif yeniden dene.
-        ensureDriveEngine(voice: voice, retriesLeft: source == "demo" ? 18 : 6)
-        pushDrive(kmh: kmh, powerKw: powerKw, source: source, forceImmediate: source == "demo")
+        ensureDriveEngine(voice: voice, retriesLeft: source == "demo" ? 18 : 12)
+        pushDrive(kmh: kmh, powerKw: powerKw, source: source, forceImmediate: source == "demo" || source == "tesla")
+        startOwnershipHeartbeat()
         if #available(iOS 16.2, *) {
             Task {
                 let t = EtubuVehicleTelemetry.shared
@@ -173,6 +186,24 @@ enum EtubuClusterAudioBridge {
                     tpmsRR: t.tpmsRR.psi.map { Int($0.rounded()) }
                 )
             }
+        }
+    }
+
+    private static var liveDriveSoundArmed = false
+
+    /// Tesla bağlıyken kullanıcı ses açtıysa Cap/native motorunu ayakta tut (demo parity).
+    static func ensureLiveDriveSound(kmh: Int, powerKw: Int?, gear: String) {
+        guard isSoundWanted else {
+            liveDriveSoundArmed = false
+            pushDrive(kmh: kmh, powerKw: powerKw, source: "tesla")
+            return
+        }
+        if !liveDriveSoundArmed {
+            liveDriveSoundArmed = true
+            startDrive(kmh: kmh, gear: gear, source: "tesla", powerKw: powerKw)
+        } else {
+            pushDrive(kmh: kmh, powerKw: powerKw, source: "tesla")
+            EtubuNativeDriveAudio.shared.setSpeed(kmh: kmh, powerKw: powerKw)
         }
     }
 
@@ -209,6 +240,13 @@ enum EtubuClusterAudioBridge {
         let key = (safe.isEmpty || safe == "silent-mode") ? defaultDriveVoice : safe
         AppDelegate.activateDriveAudioSession()
         EtubuCapBridgeViewController.armWebContent()
+        // Keep native audible while Cap boots.
+        if !EtubuNativeDriveAudio.shared.isEngineAlive {
+            EtubuNativeDriveAudio.shared.start(voice: key)
+        }
+        if preferNativeOwner || !EtubuNativeDriveAudio.shared.isAudible {
+            EtubuNativeDriveAudio.shared.setMuted(false)
+        }
         evalJSReturning("""
         (function(){
           try {
@@ -226,25 +264,35 @@ enum EtubuClusterAudioBridge {
               AE.start(want);
             }
             if (AE.setMuted) AE.setMuted(false);
-            return AE._running ? 'ok' : 'started';
+            var ctx = AE._ctx || AE.ctx || AE._audioContext || AE.audioContext;
+            var ctxOk = !ctx || !ctx.state || ctx.state === 'running';
+            if (AE._running && !AE._muted && ctxOk) return 'ok';
+            return AE._running ? 'started' : 'cold';
           } catch (e) { return 'err'; }
         })();
         """, timeout: 4) { result in
             guard gen == driveGeneration, isSoundWanted else { return }
             let s = result ?? ""
-            if s == "ok" || s == "started" {
-                handoffNativeIfCapWarm()
+            if s == "ok" {
+                reconcileAudioOwnership()
                 return
             }
+            // Cap not proven warm — native must stay audible.
+            EtubuNativeDriveAudio.shared.setMuted(false)
             guard retriesLeft > 0 else { return }
-            engineRetryWork?.cancel()
-            let work = DispatchWorkItem {
-                guard gen == driveGeneration, isSoundWanted else { return }
-                ensureDriveEngine(voice: key, retriesLeft: retriesLeft - 1)
-            }
-            engineRetryWork = work
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: work)
+            scheduleEngineRetry(voice: key, retriesLeft: retriesLeft - 1, delay: 0.35)
         }
+    }
+
+    private static func scheduleEngineRetry(voice: String, retriesLeft: Int, delay: Double) {
+        let gen = driveGeneration
+        engineRetryWork?.cancel()
+        let work = DispatchWorkItem {
+            guard gen == driveGeneration, isSoundWanted else { return }
+            ensureDriveEngine(voice: voice, retriesLeft: retriesLeft)
+        }
+        engineRetryWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
     }
 
     private static func flushDrive() {
@@ -266,6 +314,9 @@ enum EtubuClusterAudioBridge {
         if soundOn {
             if !EtubuNativeDriveAudio.shared.isEngineAlive {
                 EtubuNativeDriveAudio.shared.start(voice: voiceKey)
+            }
+            // Demo / Cap-cold: native must stay audible (never both muted).
+            if preferNativeOwner || !EtubuNativeDriveAudio.shared.isAudible {
                 EtubuNativeDriveAudio.shared.setMuted(false)
             }
             EtubuNativeDriveAudio.shared.setSpeed(kmh: d.kmh, powerKw: d.powerKw)
@@ -298,29 +349,31 @@ enum EtubuClusterAudioBridge {
             var prev = (typeof window.__etubuPrevKmh === 'number') ? window.__etubuPrevKmh : \(d.kmh);
             var trend = \(d.kmh) - prev;
             if (\(isDemo ? "true" : "false") && AE.snapSpeed) {
-              try { AE.snapSpeed(\(d.kmh)); } catch (eS) {}
-            }
-            if (AE.setSpeed) {
+              // snapSpeed yumuşatıldı — flywheel continuum bozulmasın
+              try { AE.setSpeed(\(d.kmh), { source: 'demo', powerKw: \(p), trend: trend }); } catch (eS) {}
+            } else if (AE.setSpeed) {
               AE.setSpeed(\(d.kmh), {
                 source: '\(src)',
                 powerKw: \(p),
                 trend: trend
               });
-              if (AE._running && AE._applyParams) {
-                try { AE._applyParams(AE._smoothKmh != null ? AE._smoothKmh : \(d.kmh), \(isDemo ? "true" : "false")); } catch (e3) {}
-              }
+            }
+            if (AE._running && AE._applyParams) {
+              // force=false: AudioParam iptali yok → kesintisiz ICE tepkisi
+              try { AE._applyParams(AE._smoothKmh != null ? AE._smoothKmh : \(d.kmh), false); } catch (e3) {}
             }
             window.__etubuPrevKmh = \(d.kmh);
-            if (AE._running) window.__etubuCapAudioWarm = true;
           } catch (e) {}
         })();
         """)
         if soundOn {
-            handoffNativeIfCapWarm()
+            reconcileAudioOwnership()
         }
         if isDemo, soundOn {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                 guard gen == driveGeneration, isSoundWanted else { return }
+                // Demo: keep native unmuted even if Cap also runs.
+                EtubuNativeDriveAudio.shared.setMuted(false)
                 evalJS("""
                 (function(){
                   try {
@@ -330,19 +383,46 @@ enum EtubuClusterAudioBridge {
                     if (AE.setMuted) AE.setMuted(false);
                     if (AE.snapSpeed) AE.snapSpeed(\(d.kmh));
                     if (AE.setSpeed) AE.setSpeed(\(d.kmh), { source: 'demo', powerKw: \(p), trend: 4 });
-                    if (AE._running) window.__etubuCapAudioWarm = true;
                   } catch (e) {}
                 })();
                 """)
-                handoffNativeIfCapWarm()
             }
         }
     }
 
-    /// Cap AudioEngine ısındığında native loop'u kıs — çift motor sesi olmasın.
-    private static func handoffNativeIfCapWarm() {
+    private static func startOwnershipHeartbeat() {
+        stopOwnershipHeartbeat()
         guard isSoundWanted else { return }
         let gen = driveGeneration
+        let work = DispatchWorkItem {
+            guard gen == driveGeneration, isSoundWanted else { return }
+            reconcileAudioOwnership()
+            // Reschedule
+            ownershipHeartbeat = nil
+            startOwnershipHeartbeat()
+        }
+        ownershipHeartbeat = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.55, execute: work)
+    }
+
+    private static func stopOwnershipHeartbeat() {
+        ownershipHeartbeat?.cancel()
+        ownershipHeartbeat = nil
+    }
+
+    /// Cap preferred when proven warm; native fallback otherwise. Never leave both muted.
+    private static func reconcileAudioOwnership() {
+        guard isSoundWanted else { return }
+        let gen = driveGeneration
+        if preferNativeOwner {
+            // Demo path: native owns; Cap may also play but native never muted.
+            if !EtubuNativeDriveAudio.shared.isEngineAlive {
+                let voice = storedVoice == "silent-mode" ? defaultDriveVoice : storedVoice
+                EtubuNativeDriveAudio.shared.start(voice: voice)
+            }
+            EtubuNativeDriveAudio.shared.setMuted(false)
+            return
+        }
         evalJSReturning("""
         (function(){
           try {
@@ -350,13 +430,29 @@ enum EtubuClusterAudioBridge {
             if (!AE || !AE._running || AE._muted) return 'cold';
             var ctx = AE._ctx || AE.ctx || AE._audioContext || AE.audioContext;
             if (ctx && ctx.state && ctx.state !== 'running') return 'cold';
+            // Master closed / silent graph counts as cold
+            if (typeof AE.isMuted === 'function' && AE.isMuted()) return 'cold';
             return 'warm';
           } catch (e) { return 'cold'; }
         })();
         """, timeout: 2) { result in
             guard gen == driveGeneration, isSoundWanted else { return }
             if result == "warm" {
-                EtubuNativeDriveAudio.shared.setMuted(true)
+                capWarmStreak += 1
+                // Require two consecutive warms before muting native (avoids false warm → silence).
+                if capWarmStreak >= 2 {
+                    EtubuNativeDriveAudio.shared.setMuted(true)
+                } else {
+                    EtubuNativeDriveAudio.shared.setMuted(false)
+                }
+            } else {
+                capWarmStreak = 0
+                // Cap suspended/soğuk → native yedek (handoff boşluğu = duyulan kesilme)
+                if !EtubuNativeDriveAudio.shared.isEngineAlive {
+                    let voice = storedVoice == "silent-mode" ? defaultDriveVoice : storedVoice
+                    EtubuNativeDriveAudio.shared.start(voice: voice)
+                }
+                EtubuNativeDriveAudio.shared.setMuted(false)
             }
         }
     }
@@ -373,12 +469,15 @@ enum EtubuClusterAudioBridge {
     }
 
     /// Mirror native premium unlock state into the web layer.
+    /// Idempotent: Cap WebView may not be ready on first call — callers re-inject on appear / onChange.
     static func setPremium(_ unlocked: Bool) {
+        let flag = unlocked ? "true" : "false"
         evalJS("""
         (function(){
           try {
-            window.__etubuPremium = \(unlocked ? "true" : "false");
-            if (window.EtubuNative) { window.EtubuNative.premium = \(unlocked ? "true" : "false"); }
+            window.__etubuPremium = \(flag);
+            if (window.EtubuNative) { window.EtubuNative.premium = \(flag); }
+            try { window.dispatchEvent(new CustomEvent('etubuPremium', { detail: { unlocked: \(flag) } })); } catch (e1) {}
           } catch (e) {}
         })();
         """)
@@ -394,10 +493,10 @@ enum EtubuClusterAudioBridge {
             window.__etubuLang = '\(safe)';
             if (window.sessionStorage) {
               sessionStorage.setItem('etubu_lang', '\(safe)');
-              // Native cluster: rota özelliklerini dil değişiminde kapatma.
-              sessionStorage.setItem('etubu_force_tr_route', '1');
-              window.__etubuForceTrRoute = 1;
-              try { localStorage.setItem('etubu_force_tr_route', '1'); } catch(e0) {}
+              var forceTr = \(EtubuRegion.lastKnownInTurkey ? "1" : "0");
+              sessionStorage.setItem('etubu_force_tr_route', forceTr);
+              window.__etubuForceTrRoute = +forceTr;
+              try { localStorage.setItem('etubu_force_tr_route', forceTr); } catch(e0) {}
             }
             if (window.RouteGuard && window.RouteGuard.syncVisibility) {
               window.RouteGuard.syncVisibility();
@@ -410,14 +509,14 @@ enum EtubuClusterAudioBridge {
         """)
     }
 
-    /// Demo / native uyarı bip + kısa TTS (RouteGuard alertBeep ile aynı fikir).
+    /// Uyarı bip + TTS (mesafe söylenmez — yalnızca tür/başlık).
     private static var lastWarnCueKey = ""
     private static var lastWarnCueAt = Date.distantPast
 
     static func playWarnCue(id: String, kind: String, stage: String, phrase: String) {
-        // Uyarı sesi yalnızca ayarlardan kapatılır — ana ekran EV mute’u etkilemez.
         let beepsOn = UserDefaults.standard.object(forKey: "etubu_radar_beeps") as? Bool ?? true
-        let ttsOn = UserDefaults.standard.object(forKey: "etubu_radar_tts") as? Bool ?? true
+        let ttsPref = UserDefaults.standard.object(forKey: "etubu_radar_tts") as? Bool ?? true
+        let ttsOn = ttsPref && EtubuAppLanguage.current.warnTtsEnabled
         guard beepsOn || ttsOn else { return }
 
         let key = "\(id)|\(stage)"
@@ -428,45 +527,17 @@ enum EtubuClusterAudioBridge {
 
         let urgent = (stage == "critical" || stage == "near")
         let beeps = (beepsOn && urgent) ? 2 : (beepsOn ? 1 : 0)
-        let safePhrase = phrase
+        // Mesafe (m/km/dk) TTS’e girmez — yalnızca bildirim metni.
+        let speakPhrase = Self.stripDistanceFromPhrase(phrase)
+        let safePhrase = speakPhrase
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "'", with: "\\'")
             .replacingOccurrences(of: "\n", with: " ")
         AppDelegate.activateDriveAudioSession()
 
-        // Prefer native ElevenLabs clips (demo works even if Cap WKWebView isn't ready).
-        if ttsOn, EtubuWarnVoice.speak(phrase, key: key, urgent: urgent) {
-            // Still fire beeps via JS if Cap is up; voice already handled natively.
-            if beeps > 0 {
-                evalJS("""
-                (function(){
-                  try {
-                    if (window.RadarAlert && window.RadarAlert.primeAudio) window.RadarAlert.primeAudio();
-                    var Ctx = window.AudioContext || window.webkitAudioContext;
-                    if (!Ctx) return;
-                    if (!window.__etubuBeepCtx) window.__etubuBeepCtx = new Ctx();
-                    var ctx = window.__etubuBeepCtx;
-                    if (ctx.state === 'suspended') ctx.resume();
-                    var now = ctx.currentTime;
-                    var freq = \(urgent ? 1180 : 880);
-                    for (var i = 0; i < \(beeps); i++) {
-                      var o = ctx.createOscillator();
-                      var g = ctx.createGain();
-                      o.type = 'sine';
-                      o.frequency.value = freq;
-                      var t0 = now + i * \(urgent ? 0.16 : 0.2);
-                      g.gain.setValueAtTime(0.0001, t0);
-                      g.gain.exponentialRampToValueAtTime(\(urgent ? 0.22 : 0.16), t0 + 0.02);
-                      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.11);
-                      o.connect(g);
-                      g.connect(ctx.destination);
-                      o.start(t0);
-                      o.stop(t0 + 0.13);
-                    }
-                  } catch (e) {}
-                })();
-                """)
-            }
+        if ttsOn, !speakPhrase.isEmpty,
+           EtubuWarnVoice.speak(speakPhrase, key: key, urgent: urgent) {
+            if beeps > 0 { Self.fireBeeps(count: beeps, urgent: urgent) }
             return
         }
 
@@ -520,9 +591,63 @@ enum EtubuClusterAudioBridge {
         """)
     }
 
+    private static func fireBeeps(count: Int, urgent: Bool) {
+        guard count > 0 else { return }
+        evalJS("""
+        (function(){
+          try {
+            if (window.RadarAlert && window.RadarAlert.primeAudio) window.RadarAlert.primeAudio();
+            var Ctx = window.AudioContext || window.webkitAudioContext;
+            if (!Ctx) return;
+            if (!window.__etubuBeepCtx) window.__etubuBeepCtx = new Ctx();
+            var ctx = window.__etubuBeepCtx;
+            if (ctx.state === 'suspended') ctx.resume();
+            var now = ctx.currentTime;
+            var freq = \(urgent ? 1180 : 880);
+            for (var i = 0; i < \(count); i++) {
+              var o = ctx.createOscillator();
+              var g = ctx.createGain();
+              o.type = 'sine';
+              o.frequency.value = freq;
+              var t0 = now + i * \(urgent ? 0.16 : 0.2);
+              g.gain.setValueAtTime(0.0001, t0);
+              g.gain.exponentialRampToValueAtTime(\(urgent ? 0.22 : 0.16), t0 + 0.02);
+              g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.11);
+              o.connect(g);
+              g.connect(ctx.destination);
+              o.start(t0);
+              o.stop(t0 + 0.13);
+            }
+          } catch (e) {}
+        })();
+        """)
+    }
+
+    /// "Radar 250 m" / "1.2 km" gibi mesafe parçalarını TTS’ten çıkar.
+    private static func stripDistanceFromPhrase(_ phrase: String) -> String {
+        var s = phrase
+        let patterns = [
+            #"\b\d+[.,]?\d*\s*(m|metre|meters?|km|kilometre|kilometers?|ft|mi|dk|min|mins?)\b"#,
+            #"\b\d+\s*/\s*\d+\b"#, // 95/80 hız oranı
+        ]
+        for p in patterns {
+            if let re = try? NSRegularExpression(pattern: p, options: .caseInsensitive) {
+                let range = NSRange(s.startIndex..<s.endIndex, in: s)
+                s = re.stringByReplacingMatches(in: s, options: [], range: range, withTemplate: "")
+            }
+        }
+        return s
+            .replacingOccurrences(of: #"\s{2,}"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     static func endDrive() {
         driveGeneration &+= 1
-        isSoundWanted = false
+        // Stop playback only — do not clear isSoundWanted (demo stop must not erase mute/on).
+        preferNativeOwner = false
+        capWarmStreak = 0
+        liveDriveSoundArmed = false
+        stopOwnershipHeartbeat()
         engineRetryWork?.cancel()
         engineRetryWork = nil
         driveFlushWork?.cancel()
@@ -543,11 +668,29 @@ enum EtubuClusterAudioBridge {
     }
 
     static func setTheme(_ key: String) {
+        // Visual scene + drive pack (tema = ses)
+        let themeVoice: String = {
+            if let t = ClusterTheme.allCases.first(where: { $0.webKey == key || $0.rawValue == key }) {
+                return t.driveVoiceKey
+            }
+            return ClusterTheme.stored.driveVoiceKey
+        }()
+        if isSoundWanted {
+            UserDefaults.standard.set(themeVoice, forKey: "etubu.cluster.voice")
+            EtubuNativeDriveAudio.shared.start(voice: themeVoice)
+        }
         evalJS("""
         (function(){
           try {
             if (window.Scene && window.Scene.setMode) window.Scene.setMode('\(key)');
             localStorage.setItem('etubu_visual', '\(key)');
+            var pack = '\(themeVoice)';
+            if (window.AudioEngine) {
+              if (window.AudioEngine.setThemePack) window.AudioEngine.setThemePack(pack);
+              else if (window.AudioEngine.start && window.AudioEngine._running) {
+                window.AudioEngine.start(pack);
+              }
+            }
           } catch (e) {}
         })();
         """)

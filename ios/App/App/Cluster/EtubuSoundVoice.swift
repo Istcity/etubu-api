@@ -1,6 +1,6 @@
 import Foundation
 
-/// Jul-29 AudioEngine.VOICES catalog for native cluster settings.
+/// Tema başına bir sürüş sesi (RevHeadz prensibi: fiziksel yük; katalog şişirme yok).
 struct EtubuSoundVoice: Identifiable, Hashable {
     var id: String { key }
     let key: String
@@ -8,46 +8,40 @@ struct EtubuSoundVoice: Identifiable, Hashable {
     let group: String
     let groupLabelKey: String
 
-    static let all: [EtubuSoundVoice] = [
-        .init(key: "silent-mode", labelKey: "voiceSilentMode", group: "ev", groupLabelKey: "voiceGroupEv"),
-        .init(key: "calm-ev", labelKey: "voiceCalm", group: "ev", groupLabelKey: "voiceGroupEv"),
-        .init(key: "sport-ev", labelKey: "voiceSport", group: "ev", groupLabelKey: "voiceGroupEv"),
-        .init(key: "ion-whisper", labelKey: "voiceIonWhisper", group: "ev", groupLabelKey: "voiceGroupEv"),
-
-        .init(key: "exhaust-v8", labelKey: "voiceExhaustV8", group: "exhaust", groupLabelKey: "voiceGroupExhaust"),
-        .init(key: "exhaust-turbo", labelKey: "voiceExhaustTurbo", group: "exhaust", groupLabelKey: "voiceGroupExhaust"),
-        .init(key: "exhaust-diesel", labelKey: "voiceExhaustDiesel", group: "exhaust", groupLabelKey: "voiceGroupExhaust"),
-        .init(key: "asphalt-roar", labelKey: "voiceAsphaltRoar", group: "exhaust", groupLabelKey: "voiceGroupExhaust"),
-        .init(key: "thunder-bass", labelKey: "voiceThunder", group: "exhaust", groupLabelKey: "voiceGroupExhaust"),
-        .init(key: "cruiser-vtwin", labelKey: "voiceCruiserVtwin", group: "exhaust", groupLabelKey: "voiceGroupExhaust"),
-
-        .init(key: "formula-scream", labelKey: "voiceFormulaScream", group: "race", groupLabelKey: "voiceGroupRace"),
-        .init(key: "sportbike-rr", labelKey: "voiceSportbikeRr", group: "race", groupLabelKey: "voiceGroupRace"),
-        .init(key: "boost-launch", labelKey: "voiceBoostLaunch", group: "race", groupLabelKey: "voiceGroupRace"),
-        .init(key: "volt-shift", labelKey: "voiceVoltShift", group: "race", groupLabelKey: "voiceGroupRace"),
-
-        .init(key: "jet-hum", labelKey: "voiceJet", group: "fx", groupLabelKey: "voiceGroupFx"),
-        .init(key: "pulse-drive", labelKey: "voicePulse", group: "fx", groupLabelKey: "voiceGroupFx"),
-
-        .init(key: "load-throttle", labelKey: "voiceLoadThrottle", group: "sim", groupLabelKey: "voiceGroupSim"),
-        .init(key: "shift-cage", labelKey: "voiceShiftCage", group: "sim", groupLabelKey: "voiceGroupSim"),
-
-        .init(key: "piston-sigma", labelKey: "voicePistonSigma", group: "proc", groupLabelKey: "voiceGroupProc"),
-        .init(key: "intake-eq", labelKey: "voiceIntakeEq", group: "proc", groupLabelKey: "voiceGroupProc"),
-
-        .init(key: "ramp-forge", labelKey: "voiceRampForge", group: "grain", groupLabelKey: "voiceGroupGrain"),
-        .init(key: "grain-stage", labelKey: "voiceGrainStage", group: "grain", groupLabelKey: "voiceGroupGrain"),
-    ]
+    /// Sessiz + her `ClusterTheme` için bir paket.
+    static let all: [EtubuSoundVoice] = {
+        var list: [EtubuSoundVoice] = [
+            .init(key: "silent-mode", labelKey: "voiceSilentMode", group: "theme", groupLabelKey: "voiceGroupTheme"),
+        ]
+        for theme in ClusterTheme.allCases {
+            list.append(.init(
+                key: theme.driveVoiceKey,
+                labelKey: "themeName.\(theme.rawValue)",
+                group: "theme",
+                groupLabelKey: "voiceGroupTheme"
+            ))
+        }
+        return list
+    }()
 
     static var groups: [(group: String, labelKey: String, voices: [EtubuSoundVoice])] {
-        let order = ["ev", "exhaust", "race", "fx", "sim", "proc", "grain"]
-        return order.compactMap { g in
-            let voices = all.filter { $0.group == g }
-            guard let first = voices.first else { return nil }
-            return (g, first.groupLabelKey, voices)
-        }
+        [(group: "theme", labelKey: "voiceGroupTheme", voices: all)]
     }
 
-    var localizedLabel: String { EtubuClusterL10n.t(labelKey) }
+    /// Tema değişince kullanılacak ses anahtarı (sessiz değilse).
+    static func voiceKey(for theme: ClusterTheme, soundOn: Bool) -> String {
+        soundOn ? theme.driveVoiceKey : "silent-mode"
+    }
+
+    var localizedLabel: String {
+        if key == "silent-mode" { return EtubuClusterL10n.t(labelKey) }
+        if let theme = ClusterTheme(rawValue: key) {
+            // Honesty: theme label + shared timbre pack (not 14 unique WAV banks).
+            let pack = EtubuClusterL10n.t("pack.\(theme.driveBasePack)")
+            return "\(theme.title) · \(pack)"
+        }
+        return EtubuClusterL10n.t(labelKey)
+    }
+
     var localizedGroup: String { EtubuClusterL10n.t(groupLabelKey) }
 }

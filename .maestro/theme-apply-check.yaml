@@ -1,0 +1,50 @@
+appId: com.etubu.app
+---
+# Tema uygula → dial kullanılabilir
+- launchApp:
+    clearState: true
+    permissions:
+      all: allow
+      notifications: deny
+    arguments:
+      etubuSkipOnboarding: true
+      etubuForcePremium: true
+- runFlow: setup-legal.yaml
+- tapOn:
+    id: "etubu.settings.open"
+- extendedWaitUntil:
+    visible: "Uygulama hakkında"
+    timeout: 10000
+- scrollUntilVisible:
+    element: "Tema mağazası"
+    direction: DOWN
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      id: "etubu.theme.tesla"
+    direction: DOWN
+    timeout: 25000
+- scrollUntilVisible:
+    element:
+      id: "etubu.theme.aurora"
+    direction: DOWN
+    timeout: 20000
+- tapOn:
+    id: "etubu.theme.aurora"
+- waitForAnimationToEnd:
+    timeout: 800
+- tapOn:
+    id: "etubu.settings.done"
+    optional: true
+- tapOn:
+    text: "Tamam"
+    optional: true
+- swipe:
+    direction: DOWN
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 1500
+- assertVisible: "km/h"
+- assertVisible:
+    id: "etubu.dial"
+- takeScreenshot: qa-theme-apply

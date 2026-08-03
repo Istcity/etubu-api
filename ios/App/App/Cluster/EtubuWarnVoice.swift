@@ -18,6 +18,7 @@ enum EtubuWarnVoice {
     /// Speak a HUD/demo phrase using modular clips. Returns true if handled.
     @discardableResult
     static func speak(_ text: String, key: String? = nil, urgent: Bool = false) -> Bool {
+        guard EtubuAppLanguage.current.warnTtsEnabled else { return false }
         let ttsOn = UserDefaults.standard.object(forKey: "etubu_radar_tts") as? Bool ?? true
         guard ttsOn else { return false }
         let msg = text.trimmingCharacters(in: .whitespacesAndNewlines)

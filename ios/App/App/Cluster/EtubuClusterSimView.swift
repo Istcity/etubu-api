@@ -10,36 +10,35 @@ extension Notification.Name {
 /// İzinler (konum + Bluetooth) ilk ekranda istenir.
 struct EtubuClusterSimView: View {
     var theme: ClusterTheme
-    /// Kept for call-site compatibility (spotlight removed).
-    var hotspots: [EtubuClusterHotspotID: CGRect] = [:]
-    var canvasSize: CGSize = .zero
     var onFinished: () -> Void
 
     @State private var page = 0
     @ObservedObject private var permissions = EtubuSimPermissionState.shared
 
-    private let pages: [OnboardPage] = [
-        OnboardPage(
-            icon: "sparkles",
-            title: "Etubu",
-            body: "Tesla’nızın hız, vites, menzil ve yol uyarılarını tek ekranda, araç içi kadran gibi gösterir. Kaydırarak kısa tura başlayın."
-        ),
-        OnboardPage(
-            icon: "antenna.radiowaves.left.and.right",
-            title: "Araç bağlantısı",
-            body: "Bluetooth ile VIN üzerinden Tesla’ya bağlanır. Pair rozetinden eşleştirin; bir kez tanımlandıktan sonra otomatik yeniden bağlanır."
-        ),
-        OnboardPage(
-            icon: "point.topleft.down.to.point.bottomright.curvepath",
-            title: "Rota & kritik uyarılar",
-            body: "Türkiye’de il/ilçe arayıp rota çizin. Radar, hız koridoru, şarj, hava ve kontrol noktaları haritada ve Dynamic Island’da görünür; sesli uyarılar müzik üstünde çalar."
-        ),
-        OnboardPage(
-            icon: "waveform",
-            title: "Ses, tema & hazır",
-            body: "EV Sound hızlanma/yavaşlamaya duyarlıdır. Temaları kadrandan kaydırın; çentik efektleri temaya özeldir. Ayarlardan her şeyi yönetebilirsiniz."
-        ),
-    ]
+    private var pages: [OnboardPage] {
+        [
+            OnboardPage(
+                icon: "sparkles",
+                title: EtubuClusterL10n.t("simPage1Title"),
+                body: EtubuClusterL10n.t("simPage1Body")
+            ),
+            OnboardPage(
+                icon: "antenna.radiowaves.left.and.right",
+                title: EtubuClusterL10n.t("simPage2Title"),
+                body: EtubuClusterL10n.t("simPage2Body")
+            ),
+            OnboardPage(
+                icon: "point.topleft.down.to.point.bottomright.curvepath",
+                title: EtubuClusterL10n.t("simPage3Title"),
+                body: EtubuClusterL10n.t("simPage3Body")
+            ),
+            OnboardPage(
+                icon: "waveform",
+                title: EtubuClusterL10n.t("simPage4Title"),
+                body: EtubuClusterL10n.t("simPage4Body")
+            ),
+        ]
+    }
 
     var body: some View {
         ZStack {
@@ -52,7 +51,7 @@ struct EtubuClusterSimView: View {
 
             VStack(spacing: 0) {
                 HStack {
-                    Text("Atla")
+                    Text(EtubuClusterL10n.t("simSkip"))
                         .font(EtubuClusterFonts.ui(15, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.8))
                         .padding(.horizontal, 18)
@@ -63,7 +62,7 @@ struct EtubuClusterSimView: View {
                         .onTapGesture {
                             finish(requestRemainder: false)
                         }
-                        .accessibilityLabel("Atla")
+                        .accessibilityLabel(EtubuClusterL10n.t("simSkip"))
                         .accessibilityAddTraits(.isButton)
                         .accessibilityIdentifier("etubu.sim.skip")
                         .accessibilityAction {
@@ -155,6 +154,21 @@ struct EtubuClusterSimView: View {
                         .padding(.top, 4)
                 }
 
+                if index == 2 {
+                    Text(EtubuClusterL10n.t("premiumFreeNote"))
+                        .font(EtubuClusterFonts.ui(12, weight: .semibold))
+                        .foregroundStyle(theme.accent)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .frame(maxWidth: .infinity)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(theme.accent.opacity(0.12))
+                        )
+                        .accessibilityIdentifier("etubu.sim.premium.note")
+                }
+
                 Spacer(minLength: 12)
             }
             .padding(.horizontal, 24)
@@ -166,13 +180,13 @@ struct EtubuClusterSimView: View {
         VStack(alignment: .leading, spacing: 8) {
             permRow(
                 ok: permissions.locationReady,
-                title: "Konum",
-                detail: "Rota, harita ve koridor ortalaması"
+                title: EtubuClusterL10n.t("simPermLocation"),
+                detail: EtubuClusterL10n.t("simPermLocationDetail")
             )
             permRow(
                 ok: permissions.bluetoothAsked,
-                title: "Bluetooth",
-                detail: "Tesla BLE bağlantısı"
+                title: EtubuClusterL10n.t("simPermBluetooth"),
+                detail: EtubuClusterL10n.t("simPermBluetoothDetail")
             )
         }
         .padding(14)
@@ -213,7 +227,7 @@ struct EtubuClusterSimView: View {
     private var bottomCTA: some View {
         let isLast = page >= pages.count - 1
         return EtubuSimUIKitButton(
-            title: isLast ? "Başla" : "Devam",
+            title: isLast ? EtubuClusterL10n.t("simStart") : EtubuClusterL10n.t("simContinue"),
             accessibilityId: isLast ? "etubu.sim.start" : "etubu.sim.continue",
             accent: UIColor(theme.accent)
         ) {

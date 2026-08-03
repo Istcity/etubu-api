@@ -5,6 +5,7 @@ enum EtubuClusterHotspotID: String, Hashable, CaseIterable {
     case pair
     case dial
     case route
+    case remote
     case settings
     case sound
 }

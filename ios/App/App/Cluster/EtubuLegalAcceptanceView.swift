@@ -36,11 +36,14 @@ struct EtubuLegalAcceptanceView: View {
 
     @State private var checked = false
     @State private var accepting = false
+    /// Refresh body when `EtubuAppLanguage` changes.
+    @State private var langTick = 0
 
     var body: some View {
         GeometryReader { geo in
             let topInset = max(geo.safeAreaInsets.top, Self.windowTopInset(), 12)
             let bottomInset = max(geo.safeAreaInsets.bottom, Self.windowBottomInset(), 12)
+            let _ = langTick
 
             ZStack {
                 LinearGradient(
@@ -61,11 +64,11 @@ struct EtubuLegalAcceptanceView: View {
                             .font(EtubuClusterFonts.ui(14, weight: .bold))
                             .tracking(4)
                             .foregroundStyle(theme.accent)
-                        Text("Hüküm ve Koşullar")
+                        Text(EtubuClusterL10n.t("legalTitle"))
                             .font(EtubuClusterFonts.ui(24, weight: .bold))
                             .foregroundStyle(.white)
                             .multilineTextAlignment(.center)
-                        Text("Metni okuyun, ardından onaylayın")
+                        Text(EtubuClusterL10n.t("legalSubtitle"))
                             .font(EtubuClusterFonts.ui(13, weight: .semibold))
                             .foregroundStyle(.white.opacity(0.75))
                             .multilineTextAlignment(.center)
@@ -102,7 +105,7 @@ struct EtubuLegalAcceptanceView: View {
                                 Image(systemName: checked ? "checkmark.square.fill" : "square")
                                     .font(.system(size: 24, weight: .semibold))
                                     .foregroundStyle(checked ? theme.accent : .white.opacity(0.9))
-                                Text("Okudum, anladım. Sürüş ve yasal sorumluluğun bana ait olduğunu kabul ediyorum.")
+                                Text(EtubuClusterL10n.t("legalCheckbox"))
                                     .font(EtubuClusterFonts.ui(14, weight: .semibold))
                                     .foregroundStyle(.white)
                                     .multilineTextAlignment(.leading)
@@ -126,17 +129,18 @@ struct EtubuLegalAcceptanceView: View {
                         .disabled(accepting)
                         .accessibilityElement(children: .combine)
                         .accessibilityAddTraits(.isButton)
-                        .accessibilityLabel("Okudum, anladım")
+                        .accessibilityLabel(EtubuClusterL10n.t("legalCheckboxA11y"))
                         .accessibilityIdentifier("etubu.legal.checkbox")
 
                         Button {
                             guard !accepting else { return }
-                            if !checked { checked = true }
+                            // Require explicit checkbox — Maestro always taps checkbox first.
+                            guard checked else { return }
                             accepting = true
                             EtubuLegalAcceptance.accept()
                             onAccepted()
                         } label: {
-                            Text(accepting ? "Başlatılıyor…" : "Kabul et ve devam et")
+                            Text(accepting ? EtubuClusterL10n.t("legalStarting") : EtubuClusterL10n.t("legalAccept"))
                                 .font(EtubuClusterFonts.ui(17, weight: .bold))
                                 .foregroundStyle(checked && !accepting ? .black : .white.opacity(0.45))
                                 .frame(maxWidth: .infinity)
@@ -151,7 +155,7 @@ struct EtubuLegalAcceptanceView: View {
                         // Do not use .disabled — Maestro can “tap” a disabled control without
                         // invoking the action (leaves legal stuck on the accept screen).
                         .accessibilityIdentifier("etubu.legal.accept")
-                        .accessibilityLabel("Kabul et ve devam et")
+                        .accessibilityLabel(EtubuClusterL10n.t("legalAccept"))
                         .accessibilityAddTraits(.isButton)
                     }
                     .padding(.horizontal, 18)
@@ -164,51 +168,23 @@ struct EtubuLegalAcceptanceView: View {
         .ignoresSafeArea()
         .preferredColorScheme(.dark)
         .statusBarHidden(false)
+        .onReceive(NotificationCenter.default.publisher(for: .etubuLanguageDidChange)) { _ in
+            langTick &+= 1
+        }
     }
 
     private var legalBody: some View {
         VStack(alignment: .leading, spacing: 12) {
-            section(
-                "1. Amaç ve kapsam",
-                "Etubu; Tesla aracıyla Bluetooth üzerinden alınan telemetriyi, rota ve yol uyarısı bilgilerini araç içi kadran tarzında gösteren yardımcı bir uygulamadır. Uygulama sürüşü yönetmez, araca komut göndermez ve resmi bir navigasyon veya güvenlik sistemi değildir."
-            )
-            section(
-                "2. Veri kaynakları",
-                "Uygulamada gösterilen radar, hız koridoru, kontrol noktası, yol ve hız limiti bilgileri kamuya açık, resmi veya açık veri kaynaklarından derlenir. Bunlar arasında Emniyet Genel Müdürlüğü (EGM) yayınları, OpenStreetMap (ODbL lisanslı açık harita verisi), hava durumu servisleri ve benzeri kaynaklar yer alabilir. Kaynaklar değişebilir, gecikebilir, eksik veya hatalı olabilir."
-            )
-            section(
-                "2a. OpenStreetMap atıfı ve lisans",
-                """
-                © OpenStreetMap contributors. Yol, hız limiti ve ilgili coğrafi verilerin bir kısmı OpenStreetMap’ten alınır ve Open Database License (ODbL) ile sunulur.
+            section(EtubuClusterL10n.t("legalSec1Title"), EtubuClusterL10n.t("legalSec1Body"))
+            section(EtubuClusterL10n.t("legalSec2Title"), EtubuClusterL10n.t("legalSec2Body"))
+            section(EtubuClusterL10n.t("legalSec2aTitle"), EtubuClusterL10n.t("legalSec2aBody"))
+            section(EtubuClusterL10n.t("legalSec3Title"), EtubuClusterL10n.t("legalSec3Body"))
+            section(EtubuClusterL10n.t("legalSec4Title"), EtubuClusterL10n.t("legalSec4Body"))
+            section(EtubuClusterL10n.t("legalSec5Title"), EtubuClusterL10n.t("legalSec5Body"))
+            section(EtubuClusterL10n.t("legalSec6Title"), EtubuClusterL10n.t("legalSec6Body"))
+            section(EtubuClusterL10n.t("legalSec7Title"), EtubuClusterL10n.t("legalSec7Body"))
 
-                Lisans: https://www.openstreetmap.org/copyright
-                ODbL: https://opendatacommons.org/licenses/odbl/
-
-                OSM verisini kopyalayan, dağıtan veya uyarlayan herkes ODbL koşullarına (atıf + share-alike) uymakla yükümlüdür.
-                """
-            )
-            section(
-                "3. Sorumluluk beyanı",
-                "Etubu, Tesla Inc. veya bağlı kuruluşlarıyla resmi bir ortaklık, onay veya bağlantı içinde değildir. “Tesla” yalnızca uyumluluk bağlamında anılır. Uygulama “olduğu gibi” sunulur; doğruluk, kesintisizlik veya belirli bir amaca uygunluk konusunda açık veya zımni garanti verilmez."
-            )
-            section(
-                "4. Kullanıcının yasal sorumluluğu",
-                "Trafik kurallarına uymak, hız limitlerine riayet etmek, dikkat dağıtıcı cihaz kullanımını önlemek ve güvenli sürüş tamamen kullanıcının / sürücünün yasal sorumluluğundadır. Uygulamadaki uyarılar, Türkiye hız tabloları, harita, Dynamic Island / Live Activity bildirimleri ve sesli uyarılar yalnızca yardımcı bilgidir; trafik levhaları, yol durumu ve sürücü dikkatinin yerini tutmaz."
-            )
-            section(
-                "5. Yanlış / eksik bilgi",
-                "Hız limiti, radar konumu, koridor, şarj veya hava uyarısı yanlış, eksik veya güncel olmayabilir. Buna dayanarak alınan kararlardan, cezai veya idari yaptırımlardan, kazalardan ve maddi/manevi zararlardan uygulama geliştiricisi sorumlu tutulamaz."
-            )
-            section(
-                "6. Gizlilik",
-                "VIN ve bağlantı anahtarları cihazınızda tutulur. Konum, rota ve telemetri işlevleri için gerekli veriler işlenebilir. Verilerinizi üçüncü taraflara satmayız. Apple / App Store ödemeleri Apple’ın kurallarına tabidir."
-            )
-            section(
-                "7. Kabul",
-                "Aşağıdaki “Okudum, anladım” kutusunu işaretleyerek bu hükümleri okuduğunuzu, anladığınızı ve sürüş ile yasal sorumluluğun size ait olduğunu kabul etmiş olursunuz."
-            )
-
-            Text("Son güncelleme: 31 Temmuz 2026")
+            Text(EtubuClusterL10n.t("legalUpdated"))
                 .font(EtubuClusterFonts.ui(11, weight: .medium))
                 .foregroundStyle(theme.mutedText)
                 .padding(.top, 4)

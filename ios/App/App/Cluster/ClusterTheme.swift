@@ -43,6 +43,26 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
         }
     }
 
+    /// TPMS araç kontur rengi — dolgu yok, tema aksanı / yumuşak vurgu.
+    var tpmsCarStroke: Color {
+        switch self {
+        case .tesla:
+            return Color.white.opacity(0.82)
+        case .plaidBoost:
+            return Color(red: 1.0, green: 0.78, blue: 0.35).opacity(0.9)
+        default:
+            return accent.opacity(0.88)
+        }
+    }
+
+    /// Eski dolgu API’si — kontur rengine yönlendir.
+    var tpmsCarFill: Color { tpmsCarStroke }
+
+    /// TPMS lastik — gövdeden daha koyu (outline modunda kullanılmıyor).
+    var tpmsTireFill: Color {
+        Color.black.opacity(0.88)
+    }
+
     var accentSoft: Color {
         switch self {
         case .tesla: return Color(white: 0.72)
@@ -298,17 +318,36 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
     /// Landscape omits the separate power bar — kW lives on the dial.
     var prefersRingPower: Bool { true }
 
-    /// Key expected by web `Scene.setMode`.
+    /// Key expected by web `Scene.setMode` — unique per theme (no visual-mode collisions).
     var webKey: String {
         switch self {
         case .cyberLime: return "cyber-lime"
         case .electricIce: return "electric-ice"
-        case .solarFlare, .plaidBoost: return "solar-flare"
+        case .solarFlare: return "solar-flare"
+        case .plaidBoost: return "plaid-boost"
         case .violetStorm: return "violet-storm"
         case .deepOcean: return "deep-ocean"
-        case .midnight: return "aurora"
-        case .tesla: return "aurora"
+        case .tesla: return "tesla"
+        case .midnight: return "midnight"
         default: return rawValue
+        }
+    }
+
+    /// RevHeadz modeli: tema = bir ses paketi (yüzlerce ses yok).
+    /// Anahtar AudioEngine / NativeDriveAudio profiline çözülür.
+    var driveVoiceKey: String { rawValue }
+
+    /// EV karakter bankası — soft / sport / boost (paylaşılan WAV, farklı yük eğrisi).
+    var driveBasePack: String {
+        switch self {
+        case .tesla, .midnight, .deepOcean, .tunnel:
+            return "calm-ev"
+        case .aurora, .electricIce, .cyberLime:
+            return "ion-whisper"
+        case .plasma, .neon, .violetStorm, .warp:
+            return "sport-ev"
+        case .redline, .solarFlare, .plaidBoost:
+            return "boost-launch"
         }
     }
 

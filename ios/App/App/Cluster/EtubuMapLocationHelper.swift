@@ -14,9 +14,12 @@ final class EtubuMapLocationHelper: NSObject, ObservableObject, CLLocationManage
         m.desiredAccuracy = kCLLocationAccuracyBestForNavigation
         // Hız köprüsü için yeterince sık; 2 m thrash yaratıyordu.
         m.distanceFilter = 8
+        m.activityType = .automotiveNavigation
+        m.pausesLocationUpdatesAutomatically = false
         return m
     }()
     private var started = false
+    private var backgroundArmed = false
 
     var isLocationEnabled: Bool {
         if UserDefaults.standard.object(forKey: Self.locationEnabledKey) == nil { return true }
@@ -50,11 +53,43 @@ final class EtubuMapLocationHelper: NSObject, ObservableObject, CLLocationManage
         }
     }
 
+    /// Rota / sürüş aktifken arka planda GPS + uyarı tick.
+    func enableBackgroundForRouteIfNeeded() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            guard self.isLocationEnabled else { return }
+            self.startIfNeeded()
+            let status = self.manager.authorizationStatus
+            if status == .authorizedWhenInUse {
+                // Always iste — arka plan location mode için.
+                self.manager.requestAlwaysAuthorization()
+            }
+            guard status == .authorizedAlways || status == .authorizedWhenInUse else { return }
+            self.backgroundArmed = true
+            self.manager.allowsBackgroundLocationUpdates = true
+            self.manager.showsBackgroundLocationIndicator = true
+            self.manager.pausesLocationUpdatesAutomatically = false
+            self.manager.startUpdatingLocation()
+        }
+    }
+
+    func disableBackgroundUpdates() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.backgroundArmed = false
+            self.manager.allowsBackgroundLocationUpdates = false
+            self.manager.showsBackgroundLocationIndicator = false
+        }
+    }
+
     /// GPS ve heading’i durdur; navigasyon oku için konum bilgisini temizle.
     func stop() {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.started = false
+            self.backgroundArmed = false
+            self.manager.allowsBackgroundLocationUpdates = false
+            self.manager.showsBackgroundLocationIndicator = false
             self.manager.stopUpdatingLocation()
             self.manager.stopUpdatingHeading()
             EtubuVehicleTelemetry.shared.clearMapLocation()
@@ -78,6 +113,9 @@ final class EtubuMapLocationHelper: NSObject, ObservableObject, CLLocationManage
             manager.startUpdatingLocation()
             manager.startUpdatingHeading()
             started = true
+            if backgroundArmed || EtubuVehicleTelemetry.shared.routeActive {
+                enableBackgroundForRouteIfNeeded()
+            }
         }
     }
 
@@ -89,6 +127,7 @@ final class EtubuMapLocationHelper: NSObject, ObservableObject, CLLocationManage
         DispatchQueue.main.async {
             // Demo kendi rota koordinatlarını yazar — gerçek GPS ile ezme.
             if EtubuDemoDrive.isActive { return }
+            EtubuRegion.updateFrom(lat: lat, lng: lng)
             let t = EtubuVehicleTelemetry.shared
             t.applyMapLocation(
                 lat: lat,
@@ -109,6 +148,10 @@ final class EtubuMapLocationHelper: NSObject, ObservableObject, CLLocationManage
               } catch(e) {}
             })();
             """)
+            // Timer arka planda durabilir — konum callback’inden uyarı tick.
+            if t.routeActive || EtubuDriveWarnings.shared.hazards.isEmpty == false {
+                EtubuDriveWarnings.shared.tickFromLocation()
+            }
         }
     }
 

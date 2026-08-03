@@ -132,7 +132,7 @@ struct EtubuTripAnalyticsView: View {
             HStack(spacing: 8) {
                 Text(String(format: "%.1f km", trip.distanceKm))
                 Text("·")
-                Text(String(format: "%.0f ort", trip.avgKmh))
+                Text(String(format: EtubuClusterL10n.t("tripAvgShortFmt"), trip.avgKmh))
                 if let wh = trip.whPerKm {
                     Text("·")
                     Text(String(format: "%.0f Wh/km", wh))

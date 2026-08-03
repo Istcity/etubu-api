@@ -1,5 +1,6 @@
 /**
- * YolSafe / EGM rota koruması — TR + Türkçe.
+ * YolSafe / rota koruması — global (OSM hız, OCM şarj, Open-Meteo hava; EGM radar TR).
+ * TTS uyarı klipleri yalnızca UI Türkçe iken.
  * Tek kutu autocomplete (il/ilçe eşleştirme), üst özet kartı,
  * ekran uyarısı + bip + kısa TTS (kritik yaklaşma).
  */
@@ -105,33 +106,50 @@ const RouteGuard = (() => {
     return METROPOLITAN_FOLDS.has(fold(cityName));
   }
 
-  /** Büyükşehir adı tek başına yazıldı — ilçe seçilmeden rota kurulamaz */
-  function needsDistrictPick(text) {
-    const q = fold(text);
-    if (!q || q.length < 2) return false;
-    if (
-      q === fold(t("routeMyLocation")) ||
-      q === "konumum" ||
-      q === "konum" ||
-      q === "my location" ||
-      q === "location"
-    ) {
-      return false;
-    }
-    const tokens = q.split(" ").filter(Boolean);
-    if (tokens.length !== 1) return false;
-    if (!isMetropolitan(tokens[0])) return false;
-    return placeIndex.some((p) => fold(p.cityName) === q);
+  /** Native ile aynı: ilçe zorunlu değil — şehir merkezi / OSM resolve yeterli. */
+  function needsDistrictPick(_text) {
+    return false;
   }
 
+  /** Rota UI + yol üstü bilgi — dil bağımsız; EGM radar yalnızca TR rotasında. */
   function isTurkeyTurkish() {
-    const lang = typeof I18n !== "undefined" ? I18n.lang : "tr";
-    // UI Türkçe ise rota özelliği açık (EGM TR verisi)
-    if (lang === "tr") return true;
+    return true;
+  }
+
+  /** Kalkış+varış TR kutusu içindeyse EGM + TR seed; aksi halde OSM/OSRM. */
+  function isDomesticRoute(from, to) {
+    const fl = Number(from?.lat);
+    const fn = Number(from?.lng);
+    const tl = Number(to?.lat);
+    const tn = Number(to?.lng);
+    if (![fl, fn, tl, tn].every(Number.isFinite)) return EtubuRegionHint.inTurkey();
+    return inTurkeyBounds(fl, fn) && inTurkeyBounds(tl, tn);
+  }
+
+  const EtubuRegionHint = {
+    /** Kayıt / force yoksa false — yurt dışı cold start EGM/TR seed’e düşmez. */
+    inTurkey() {
+      try {
+        if (typeof window.__etubuForceTrRoute !== "undefined") {
+          return !!Number(window.__etubuForceTrRoute);
+        }
+        const v =
+          (window.sessionStorage && sessionStorage.getItem("etubu_force_tr_route")) ||
+          (window.localStorage && localStorage.getItem("etubu_force_tr_route"));
+        if (v != null) return v === "1" || v === "true";
+      } catch (_) {}
+      return false;
+    },
+  };
+
+  /** TTS klip sesleri yalnızca UI Türkçe iken. */
+  function isTurkishSpeechLang() {
     try {
-      if (sessionStorage.getItem("etubu_force_tr_route") === "1") return true;
-    } catch (_) {}
-    return false;
+      const lang = typeof I18n !== "undefined" ? I18n.lang : "tr";
+      return String(lang || "").toLowerCase().startsWith("tr");
+    } catch (_) {
+      return false;
+    }
   }
 
   function inTurkeyBounds(lat, lng) {
@@ -224,6 +242,7 @@ const RouteGuard = (() => {
   }
 
   function speakCue(key, text, urgent = false) {
+    if (!isTurkishSpeechLang()) return;
     if (typeof I18n !== "undefined" && I18n.speak) {
       I18n.speak(text, { key, urgent });
       return;
@@ -608,9 +627,12 @@ const RouteGuard = (() => {
 
     const tokens = q.split(" ").filter(Boolean);
 
-    // Büyükşehir adı tek başına → ilçe seçilmeli
+    // Büyükşehir / il adı tek başına → Merkez veya ilk eşleşme (ilçe şartı yok)
     if (tokens.length === 1 && isMetropolitan(tokens[0])) {
-      if (placeIndex.some((p) => fold(p.cityName) === q)) return null;
+      const cityHits = placeIndex.filter((p) => fold(p.cityName) === q);
+      if (cityHits.length) {
+        return cityHits.find((h) => h.isMerkez) || cityHits[0];
+      }
     }
 
     if (tokens.length >= 2) {
@@ -627,14 +649,6 @@ const RouteGuard = (() => {
 
     const distExact = hits.find((h) => fold(h.districtName) === q);
     if (distExact) return distExact;
-
-    if (
-      tokens.length === 1 &&
-      isMetropolitan(hits[0]?.cityName) &&
-      fold(hits[0].cityName) === q
-    ) {
-      return null;
-    }
 
     return hits[0];
   }
@@ -769,10 +783,59 @@ const RouteGuard = (() => {
       isMerkez: !!p.isMerkez,
       isMetropolitan: !!p.isMetropolitan || isMetropolitan(p.cityName),
       nearLabel: p.nearLabel || "",
+      lat: p.lat != null ? Number(p.lat) : null,
+      lng: p.lng != null ? Number(p.lng) : null,
+      districtId: p.districtId != null ? String(p.districtId) : "",
     };
   }
 
+  async function nominatimSearchPlaces(query, limit = 12) {
+    const t = String(query || "").trim();
+    if (t.length < 2) return [];
+    try {
+      const lang =
+        (typeof window.__etubuLang === "string" && window.__etubuLang) ||
+        (typeof I18n !== "undefined" ? I18n.lang : "en") ||
+        "en";
+      const url =
+        "https://nominatim.openstreetmap.org/search?format=json&limit=" +
+        encodeURIComponent(String(limit)) +
+        "&q=" +
+        encodeURIComponent(t);
+      const res = await fetch(url, {
+        headers: {
+          "Accept-Language": lang,
+          "User-Agent": "Etubu/1.0 (com.etubu.app)",
+        },
+      });
+      if (!res.ok) return [];
+      const arr = await res.json();
+      return (arr || []).map((hit) => ({
+        cityId: "",
+        cityName: "",
+        districtId: "",
+        districtName: "",
+        lat: Number(hit.lat),
+        lng: Number(hit.lon),
+        label: hit.display_name || t,
+        isMerkez: false,
+        search: fold(hit.display_name || t),
+        isMyLocation: false,
+      }));
+    } catch (_) {
+      return [];
+    }
+  }
+
   async function suggestForBridge(query, forFrom) {
+    if (!EtubuRegionHint.inTurkey()) {
+      const hits = await nominatimSearchPlaces(query, 12);
+      if (forFrom) {
+        const mine = myLocationPlace();
+        if (mine) return [mapPlaceForBridge(mine), ...hits.map(mapPlaceForBridge)].filter(Boolean);
+      }
+      return hits.map(mapPlaceForBridge);
+    }
     await buildPlaceIndex().catch(() => {});
     const q = fold(query);
     // Cap / native: higher limit so city → full districts, district → city+district
@@ -785,8 +848,11 @@ const RouteGuard = (() => {
   }
 
   async function resolveForBridge(text) {
+    if (!EtubuRegionHint.inTurkey()) {
+      const hits = await nominatimSearchPlaces(text, 1);
+      return mapPlaceForBridge(hits[0] || null);
+    }
     await buildPlaceIndex().catch(() => {});
-    if (needsDistrictPick(text)) return null;
     return mapPlaceForBridge(resolvePlace(text));
   }
 
@@ -854,14 +920,6 @@ const RouteGuard = (() => {
             return;
           }
           if (fold(input.value).length >= 2) {
-            if (needsDistrictPick(input.value)) {
-              setStatus(
-                isMetropolitan(input.value)
-                  ? `${input.value.trim()} — ilçe seçin (ör. Ankara Çankaya)`
-                  : t("routePickDistrict") || "İlçe seçin"
-              );
-              return;
-            }
             const p = resolvePlace(input.value);
             if (p) {
               input.value = p.label;
@@ -877,9 +935,7 @@ const RouteGuard = (() => {
         e.preventDefault();
         const p = isFrom() && !fold(input.value)
           ? myLocationPlace()
-          : needsDistrictPick(input.value)
-            ? null
-            : resolvePlace(input.value);
+          : resolvePlace(input.value);
         if (p) {
           input.value = p.label;
           setPlace(p);
@@ -1199,6 +1255,7 @@ const RouteGuard = (() => {
   }
 
   function parseSeedHazards(coords) {
+    if (!EtubuRegionHint.inTurkey()) return [];
     const seeds =
       typeof RadarAlert !== "undefined" && RadarAlert.getCameras
         ? RadarAlert.getCameras()
@@ -1220,6 +1277,70 @@ const RouteGuard = (() => {
       });
     }
     return list;
+  }
+
+  /** OSM Overpass — uluslararası rota uyarıları (speed_camera / average_speed). */
+  async function fetchOverpassCamerasAlong(coords) {
+    const samples = sampleAlongRoute(coords, 45000).slice(0, 8);
+    if (!samples.length) return [];
+    const endpoints = [
+      "https://overpass-api.de/api/interpreter",
+      "https://overpass.kumi.systems/api/interpreter",
+    ];
+    const radiusM = 12000;
+    const out = [];
+    await Promise.all(
+      samples.map(async (s) => {
+        const q =
+          `[out:json][timeout:15];(` +
+          `node["highway"="speed_camera"](around:${radiusM},${s.lat},${s.lng});` +
+          `node["enforcement"="maxspeed"](around:${radiusM},${s.lat},${s.lng});` +
+          `node["enforcement"="average_speed"](around:${radiusM},${s.lat},${s.lng});` +
+          `node["camera:type"="section"](around:${radiusM},${s.lat},${s.lng});` +
+          `);out body;`;
+        for (const url of endpoints) {
+          try {
+            const ctrl = new AbortController();
+            const timer = setTimeout(() => ctrl.abort(), 14000);
+            const res = await fetch(url, {
+              method: "POST",
+              headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+              body: "data=" + encodeURIComponent(q),
+              signal: ctrl.signal,
+            });
+            clearTimeout(timer);
+            if (!res.ok) continue;
+            const json = await res.json();
+            for (const el of json?.elements || []) {
+              const lat = Number(el.lat);
+              const lng = Number(el.lon);
+              if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+              const tags = el.tags || {};
+              const isCorridor =
+                tags.enforcement === "average_speed" ||
+                tags["camera:type"] === "section" ||
+                tags.traffic_sign === "average_speed";
+              const near = nearestRouteIdx(coords, lat, lng);
+              const maxD = isCorridor ? 3500 : 2800;
+              if (near.d > maxD) continue;
+              out.push({
+                id: `osm-${el.id || `${lat}-${lng}`}`,
+                kind: isCorridor ? "corridor" : "radar",
+                lat,
+                lng,
+                label: isCorridor ? t("radarCorridor") : t("routeRadar"),
+                maxspeed: tags.maxspeed ? parseInt(tags.maxspeed, 10) : null,
+                routeIdx: near.idx,
+              });
+            }
+            return;
+          } catch (_) {
+            /* try next endpoint */
+          }
+        }
+      })
+    );
+    return out;
   }
 
   async function fetchOverpassCharging(coords) {
@@ -1359,17 +1480,9 @@ const RouteGuard = (() => {
       applyMyLocationAsFrom();
     }
     if (!fromPlace) {
-      if (needsDistrictPick(fromInput?.value || "")) {
-        setStatus(`${(fromInput?.value || "").trim()} — ilçe seçin`);
-        return;
-      }
       fromPlace = resolvePlace(fromInput?.value || "");
     }
     if (!toPlace) {
-      if (needsDistrictPick(toInput?.value || "")) {
-        setStatus(`${(toInput?.value || "").trim()} — ilçe seçin (ör. Ankara Çankaya)`);
-        return;
-      }
       toPlace = resolvePlace(toInput?.value || "");
     }
     if (!fromPlace || !toPlace) {
@@ -1387,25 +1500,28 @@ const RouteGuard = (() => {
     expandUi();
     try {
       ensureBeepCtx();
+      const domestic = isDomesticRoute(fromPlace, toPlace);
       let json = null;
-      try {
-        json = await proxyPost({
-          action: "createRoute",
-          fromLatitude: String(fromPlace.lat),
-          fromLongitude: String(fromPlace.lng),
-          toLatitude: String(toPlace.lat),
-          toLongitude: String(toPlace.lng),
-          fromDistrictId: String(fromPlace.districtId),
-          toDistrictId: String(toPlace.districtId),
-          fromLabel: fromPlace.label || "",
-          toLabel: toPlace.label || "",
-        });
-      } catch (_) {
-        json = null;
+      if (domestic) {
+        try {
+          json = await proxyPost({
+            action: "createRoute",
+            fromLatitude: String(fromPlace.lat),
+            fromLongitude: String(fromPlace.lng),
+            toLatitude: String(toPlace.lat),
+            toLongitude: String(toPlace.lng),
+            fromDistrictId: String(fromPlace.districtId),
+            toDistrictId: String(toPlace.districtId),
+            fromLabel: fromPlace.label || "",
+            toLabel: toPlace.label || "",
+          });
+        } catch (_) {
+          json = null;
+        }
       }
       let data = json?.ok && json.data ? json.data : null;
       if (!data?.Coordinates?.length) {
-        // Proxy/EGM düşerse tarayıcıdan OSRM
+        // Yurt dışı veya EGM düşerse — OSRM (OSM routing)
         data = await fetchOsrmRoute(fromPlace, toPlace);
       }
       attachRouteCities(data);
@@ -1414,10 +1530,16 @@ const RouteGuard = (() => {
       if (!coords.length) throw new Error("noroute");
       routeCoords = coords;
 
-      // Önce resmi noktalarla hemen göster — şarj/hava arka planda
-      const official = parseOfficialHazards(data, coords);
-      const seeds = parseSeedHazards(coords);
-      const baseHazards = mergeHazards(official, seeds);
+      // TR: resmi + seed; yurt dışı: OSM Overpass kameraları
+      const official = domestic ? parseOfficialHazards(data, coords) : [];
+      const seeds = domestic ? parseSeedHazards(coords) : [];
+      let baseHazards = mergeHazards(official, seeds);
+      if (!domestic || !baseHazards.length) {
+        try {
+          const osmCams = await fetchOverpassCamerasAlong(coords);
+          baseHazards = mergeHazards(baseHazards, osmCams);
+        } catch (_) {}
+      }
       hazards = baseHazards;
       active = true;
       lastAlertKey = "";
@@ -1894,12 +2016,6 @@ const RouteGuard = (() => {
     const toRaw = String(toLabel || "").trim();
     if (!toRaw || toRaw.length < 2) {
       return { ok: false, message: t("routeNeedBoth") };
-    }
-    if (needsDistrictPick(fromRaw)) {
-      return { ok: false, message: `${fromRaw.trim()} — ilçe seçin` };
-    }
-    if (needsDistrictPick(toRaw)) {
-      return { ok: false, message: `${toRaw.trim()} — ilçe seçin (ör. Ankara Çankaya)` };
     }
     const fromIsMine =
       fold(fromRaw) === fold(t("routeMyLocation")) ||

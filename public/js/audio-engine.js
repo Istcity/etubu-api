@@ -1,47 +1,59 @@
 /**
- * ETUBU AudioEngine — Tesla / Chromium Web Audio mimarisi
+ * ETUBU AudioEngine — Tesla / RevHeadz-inspired Web Audio
  *
- * - Tek AudioContext
- * - EV/ICE: 2–3 WAV loop (idle / mid / high) hız bandında crossfade
- * - playbackRate 0.85–1.3 (chipmunk önleme); gaz/fren + powerKw
- * - GPS/OBD/Tesla → asimetrik rAF lerp → kısa τ
+ * - Tema ≈ ses paketi (~14 ClusterTheme → 4 EV base pack)
+ * - powerKw birincil (throttle/regen); kmh ikincil pitch/tavan
+ * - Asimetrik flywheel: gaz hızlı, lift/coast yavaş
+ * - idle ↔ drive ↔ regen crossfade (regen: ev_modely_rev_body_loop)
  */
 class EtubuAudioEngine {
   constructor() {
-    this.DEFAULT_VOICE = "asphalt-roar";
-    this.VOICE_GROUP_ORDER = ["ev", "exhaust", "race", "fx", "sim", "proc", "grain"];
+    this.DEFAULT_VOICE = "calm-ev";
+    this.VOICE_GROUP_ORDER = ["theme", "ev"];
+    /** ClusterTheme.rawValue / webKey → base pack (ClusterTheme.driveBasePack) */
+    this.THEME_PACK_MAP = {
+      tesla: "calm-ev",
+      midnight: "calm-ev",
+      deepOcean: "calm-ev",
+      "deep-ocean": "calm-ev",
+      tunnel: "calm-ev",
+      aurora: "ion-whisper",
+      electricIce: "ion-whisper",
+      "electric-ice": "ion-whisper",
+      cyberLime: "ion-whisper",
+      "cyber-lime": "ion-whisper",
+      plasma: "sport-ev",
+      neon: "sport-ev",
+      violetStorm: "sport-ev",
+      "violet-storm": "sport-ev",
+      warp: "sport-ev",
+      redline: "boost-launch",
+      solarFlare: "boost-launch",
+      "solar-flare": "boost-launch",
+      plaidBoost: "boost-launch",
+      "plaid-boost": "boost-launch",
+    };
+    this.BASE_PACKS = ["calm-ev", "ion-whisper", "sport-ev", "boost-launch"];
     this.VOICES = [
-      { key: "silent-mode", label: "Sessiz", theme: "glow", group: "ev" },
+      { key: "silent-mode", label: "Sessiz", theme: "glow", group: "theme" },
+      { key: "tesla", label: "Tesla", theme: "tesla", group: "theme" },
+      { key: "aurora", label: "Aurora", theme: "glow", group: "theme" },
+      { key: "plasma", label: "Plasma", theme: "plasma", group: "theme" },
+      { key: "redline", label: "Redline", theme: "redline", group: "theme" },
+      { key: "cyberLime", label: "Cyber Lime", theme: "cyber-lime", group: "theme" },
+      { key: "electricIce", label: "Electric Ice", theme: "electric-ice", group: "theme" },
+      { key: "solarFlare", label: "Solar Flare", theme: "solar-flare", group: "theme" },
+      { key: "neon", label: "Neon", theme: "neon", group: "theme" },
+      { key: "violetStorm", label: "Violet Storm", theme: "violet-storm", group: "theme" },
+      { key: "deepOcean", label: "Deep Ocean", theme: "deep-ocean", group: "theme" },
+      { key: "midnight", label: "Midnight", theme: "midnight", group: "theme" },
+      { key: "tunnel", label: "Tunnel", theme: "tunnel", group: "theme" },
+      { key: "warp", label: "Warp", theme: "warp", group: "theme" },
+      { key: "plaidBoost", label: "Plaid Boost", theme: "plaid-boost", group: "theme" },
       { key: "calm-ev", label: "Yumuşak", theme: "glow", group: "ev" },
-      { key: "sport-ev", label: "Dinamik", theme: "plasma", group: "ev" },
       { key: "ion-whisper", label: "İyon", theme: "neon", group: "ev" },
-
-      { key: "exhaust-v8", label: "Motor", theme: "plasma", group: "exhaust" },
-      { key: "exhaust-turbo", label: "Turbo", theme: "warp", group: "exhaust" },
-      { key: "exhaust-diesel", label: "Dizel", theme: "grid", group: "exhaust" },
-      { key: "asphalt-roar", label: "Asfalt", theme: "alev", group: "exhaust" },
-      { key: "thunder-bass", label: "Gök", theme: "pulse", group: "exhaust" },
-      { key: "cruiser-vtwin", label: "V-Twin", theme: "alev", group: "exhaust" },
-
-      { key: "formula-scream", label: "Formula", theme: "redline", group: "race" },
-      { key: "sportbike-rr", label: "1200 RR", theme: "warp", group: "race" },
-      { key: "boost-launch", label: "Fırlatma", theme: "plasma", group: "race" },
-      { key: "volt-shift", label: "Vites", theme: "circuit", group: "race" },
-
-      { key: "jet-hum", label: "Jet", theme: "warp", group: "fx" },
-      { key: "pulse-drive", label: "Nabız", theme: "pulse", group: "fx" },
-
-      /* RevHeadz dersi — fiziksel yük / vites simülasyonu */
-      { key: "load-throttle", label: "Gaz Yükü", theme: "alev", group: "sim" },
-      { key: "shift-cage", label: "Vites Kafesi", theme: "redline", group: "sim" },
-
-      /* Engine Sound Generator dersi — prosedürel / matematiksel */
-      { key: "piston-sigma", label: "Piston Σ", theme: "grid", group: "proc" },
-      { key: "intake-eq", label: "Emme EQ", theme: "circuit", group: "proc" },
-
-      /* REV / Igniter dersi — yoğun katmanlı bank */
-      { key: "ramp-forge", label: "Ramp Forge", theme: "plasma", group: "grain" },
-      { key: "grain-stage", label: "Grain Stage", theme: "warp", group: "grain" },
+      { key: "sport-ev", label: "Dinamik", theme: "plasma", group: "ev" },
+      { key: "boost-launch", label: "Fırlatma", theme: "plasma", group: "ev" },
     ];
 
     /**
@@ -55,6 +67,7 @@ class EtubuAudioEngine {
         windGain: 0, filterHz: 900, filterQ: 0.55, master: 1.3,
         drive: "ev_id3_body_loop.wav", driveGain: 0.72,
         drive2: "ev_hum_soft_loop.wav", drive2Gain: 0.28,
+        regen: "ev_modely_rev_body_loop.wav", regenGain: 0.62,
         loops: {
           idle: "bands/ev_idle_v2.wav",
           mid: "bands/ev_mid_v2.wav",
@@ -69,6 +82,7 @@ class EtubuAudioEngine {
         windGain: 0, filterHz: 1200, filterQ: 0.65, master: 1.38,
         drive: "ev_modely_body_loop.wav", driveGain: 0.74,
         drive2: "ev_hum_sport_loop.wav", drive2Gain: 0.3,
+        regen: "ev_modely_rev_body_loop.wav", regenGain: 0.68,
         loops: {
           idle: "bands/ev_idle_v2.wav",
           mid: "bands/ev_mid_v2.wav",
@@ -83,6 +97,7 @@ class EtubuAudioEngine {
         windGain: 0, filterHz: 1400, filterQ: 0.7, master: 1.32,
         drive: "ev_hum_sport_loop.wav", driveGain: 0.7,
         drive2: "ev_modely_body_loop.wav", drive2Gain: 0.22,
+        regen: "ev_modely_rev_body_loop.wav", regenGain: 0.58,
         loops: {
           idle: "bands/ev_idle_alt.wav",
           mid: "bands/ev_mid_v2.wav",
@@ -97,6 +112,7 @@ class EtubuAudioEngine {
         windGain: 0, filterHz: 1150, filterQ: 0.65, master: 1.36,
         drive: "ev_modely_body_loop.wav", driveGain: 0.7,
         drive2: "ev_hum_soft_loop.wav", drive2Gain: 0.26,
+        regen: "ev_modely_rev_body_loop.wav", regenGain: 0.64,
         loops: {
           idle: "bands/ev_idle_v2.wav",
           mid: "bands/ev_mid_v2.wav",
@@ -111,6 +127,7 @@ class EtubuAudioEngine {
         windGain: 0, filterHz: 1500, filterQ: 0.7, master: 1.44,
         drive: "ev_modely_rev_body_loop.wav", driveGain: 0.78,
         drive2: "ev_hum_sport_loop.wav", drive2Gain: 0.24,
+        regen: "ev_modely_rev_body_loop.wav", regenGain: 0.72,
         loops: {
           idle: "bands/ev_idle_v2.wav",
           mid: "bands/ev_mid_v2.wav",
@@ -310,17 +327,17 @@ class EtubuAudioEngine {
     };
 
     this.SAMPLE_BASE = "assets/audio/loops/";
-    this.SAMPLE_VER = "20260730a";
-    /** Natural pitch window — avoid chipmunk / slow-mo extremes */
-    this.RATE_MIN = 0.85;
-    this.RATE_MAX = 1.3;
-    /** Hızlanma = yavaşlama: simetrik anlık takip */
-    this.LERP_UP = 0.9;
-    this.LERP_DOWN = 0.9;
-    this.TAU_UP = 0.018;
-    this.TAU_DOWN = 0.018;
-    this.TAU = 0.03;
-    this.LERP = 0.9;
+    this.SAMPLE_VER = "20260802seam2";
+    /** Continuous ICE-like window — flywheel RPM drives rate (BOOM/VNS style) */
+    this.RATE_MIN = 0.72;
+    this.RATE_MAX = 1.55;
+    /** Accel catches quickly; decel coasts like engine braking */
+    this.LERP_UP = 0.72;
+    this.LERP_DOWN = 0.26;
+    this.TAU_UP = 0.022;
+    this.TAU_DOWN = 0.09;
+    this.TAU = 0.045;
+    this.LERP = 0.5;
     this.ENABLE_WIND = false;
     this.ENABLE_ROAD = false;
     this.AUDIBLE_FLOOR = 0.1;
@@ -338,6 +355,7 @@ class EtubuAudioEngine {
 
     this._voiceGraph = null;
     this._voiceKey = null;
+    this._packKey = null;
     this._running = false;
     this._muted = false;
     this._unlocked = false;
@@ -366,12 +384,20 @@ class EtubuAudioEngine {
     /** Sadece ICE: son vites + geçiş blip’i */
     this._lastGear = 0;
     this._shiftKick = 0;
-    /** 0..1 gaz/ivme yükü — hızlanmada motor anında kabarır */
+    /** 0..1 gaz yükü — powerKw birincil */
     this._throttleLoad = 0;
-    /** 0..1 fren/yavaşlama yükü — düşüşte ses aynı hızda iner */
+    /** 0..1 regen yükü — negatif powerKw */
+    this._regenLoad = 0;
+    /** 0..1 fren/yavaşlama (lift secondary) */
     this._brakeLoad = 0;
     this._extTrend = 0;
     this._lastApplyMs = 0;
+    /** Son Tesla/OBD güç (kW) — RevHeadz throttle/regen kaynağı */
+    this._lastPowerKw = 0;
+    /** Sürekli motor RPM (0..1) — kesintisiz flywheel; vites basamağı yok */
+    this._engineRpm = 0.12;
+    this._lastKmhSample = 0;
+    this._accelMs = 0;
 
     this._bufferCache = new Map();
     this._noiseBuffer = null;
@@ -388,6 +414,49 @@ class EtubuAudioEngine {
 
   getVoiceGroupOrder() {
     return this.VOICE_GROUP_ORDER;
+  }
+
+  /** Theme rawValue / webKey / base pack → PROFILES key */
+  _resolvePackKey(key) {
+    if (!key || key === "silent-mode") return this.DEFAULT_VOICE;
+    if (this.THEME_PACK_MAP[key]) return this.THEME_PACK_MAP[key];
+    if (this.BASE_PACKS.includes(key)) return key;
+    if (this.PROFILES[key]) return key;
+    const camel = String(key).replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+    if (this.THEME_PACK_MAP[camel]) return this.THEME_PACK_MAP[camel];
+    return this.DEFAULT_VOICE;
+  }
+
+  /** Accept theme key, base pack, or silent; unknown → calm-ev */
+  _resolveVoiceKey(key) {
+    if (key === "silent-mode") return "silent-mode";
+    if (!key) return this.DEFAULT_VOICE;
+    if (this.VOICES.some((v) => v.key === key)) return key;
+    if (this.THEME_PACK_MAP[key] || this.PROFILES[key]) return key;
+    const camel = String(key).replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+    if (this.THEME_PACK_MAP[camel] || this.VOICES.some((v) => v.key === camel)) return camel;
+    return this.DEFAULT_VOICE;
+  }
+
+  /**
+   * Tema değişince paket çöz + graph’ı yeniden kur (çalışıyorsa).
+   * @param {string} themeKey ClusterTheme.rawValue veya webKey
+   */
+  setThemePack(themeKey) {
+    const safe = this._resolveVoiceKey(themeKey);
+    if (safe === "silent-mode") {
+      if (this._running) this.start("silent-mode");
+      return this._packKey || this.DEFAULT_VOICE;
+    }
+    const pack = this._resolvePackKey(safe);
+    if (this._running) {
+      if (this._packKey === pack && this._voiceKey === safe) return pack;
+      this.start(safe);
+    } else {
+      this._voiceKey = safe;
+      this._packKey = pack;
+    }
+    return pack;
   }
 
   setLocaleLabels(map) {
@@ -704,23 +773,25 @@ class EtubuAudioEngine {
       this._stopRestoreTimer = null;
     }
 
-    const resolved = this.VOICES.some((v) => v.key === key)
-      ? key
-      : this.DEFAULT_VOICE;
+    const resolved = this._resolveVoiceKey(key);
 
     if (resolved !== "silent-mode") {
       this._muted = false;
     }
 
+    const packKey =
+      resolved === "silent-mode" ? null : this._resolvePackKey(resolved);
+
     // Oscillator start — hâlâ kullanıcı jest yığınında (caller await etmeden çağırdıysa)
     const next =
       resolved === "silent-mode"
         ? this._buildSilentGraph()
-        : this._buildVoiceGraph(resolved);
+        : this._buildVoiceGraph(packKey || this.DEFAULT_VOICE);
 
     const old = this._voiceGraph;
     this._voiceGraph = next;
     this._voiceKey = resolved;
+    this._packKey = packKey;
     this._running = true;
     this._lastGear = 0;
     this._shiftKick = 0;
@@ -825,7 +896,7 @@ class EtubuAudioEngine {
     }, 120);
   }
 
-  /** GPS/OBD/Tesla — hızlanma ve yavaşlamada aynı hızda yakala; powerKw opsiyonel */
+  /** GPS/OBD/Tesla — powerKw birincil throttle/regen; kmh ikincil pitch/tavan */
   setSpeed(kmh, meta) {
     this._targetKmh = Math.max(0, Number(kmh) || 0);
     if (meta?.source === "obd") this.setSpeedSource("obd");
@@ -835,27 +906,38 @@ class EtubuAudioEngine {
     const trend = Number(meta?.trend);
     this._extTrend = Number.isFinite(trend) ? trend : 0;
     const lag = this._targetKmh - this._smoothKmh;
-    // Gaz (+) / fren (−) yükü — ikisi de sesi besler
+
+    // RevHeadz: powerKw → throttle / regen (birincil)
+    const powerKw = Number(meta?.powerKw);
+    let targetThrottle = 0;
+    let targetRegen = 0;
+    if (Number.isFinite(powerKw)) {
+      this._lastPowerKw = powerKw;
+      if (powerKw > 0) {
+        targetThrottle = Math.max(0, Math.min(1, powerKw / 220));
+      } else if (powerKw < 0) {
+        targetRegen = Math.max(0, Math.min(1, -powerKw / 80));
+      }
+    }
+    // Hız lag/trend — ikincil asist (güç yokken)
     const fromLagUp = Math.max(0, Math.min(1, lag / 5));
     const fromLagDown = Math.max(0, Math.min(1, -lag / 5));
     const fromTrendUp = Math.max(0, Math.min(1, this._extTrend / 4));
     const fromTrendDown = Math.max(0, Math.min(1, -this._extTrend / 4));
-    this._throttleLoad = Math.max(fromLagUp, fromTrendUp);
-    this._brakeLoad = Math.max(fromLagDown, fromTrendDown);
-
-    // Tesla / OBD power — negatif = regen, pozitif = gaz (motor taklidi için kritik)
-    const powerKw = Number(meta?.powerKw);
-    if (Number.isFinite(powerKw)) {
-      if (powerKw < -1) {
-        const regen = Math.min(1, Math.abs(powerKw) / 90);
-        this._brakeLoad = Math.max(this._brakeLoad, regen);
-        this._throttleLoad = Math.min(this._throttleLoad, Math.max(0, 1 - regen));
-      } else if (powerKw > 2) {
-        this._throttleLoad = Math.max(this._throttleLoad, Math.min(1, powerKw / 140));
-      }
+    if (!(Number.isFinite(powerKw) && Math.abs(powerKw) > 1)) {
+      targetThrottle = Math.max(targetThrottle, fromLagUp, fromTrendUp);
+      targetRegen = Math.max(targetRegen, fromLagDown * 0.55, fromTrendDown * 0.45);
     }
+    // Asimetrik: gaz hızlı yükselir, lift yavaş iner
+    const thrRise = targetThrottle >= this._throttleLoad - 0.01;
+    this._throttleLoad +=
+      (targetThrottle - this._throttleLoad) * (thrRise ? 0.62 : 0.16);
+    const regRise = targetRegen >= this._regenLoad - 0.01;
+    this._regenLoad +=
+      (targetRegen - this._regenLoad) * (regRise ? 0.48 : 0.2);
+    this._brakeLoad = Math.max(fromLagDown * 0.35, this._regenLoad * 0.85);
 
-    // Her iki yönde de hedefi hemen yakala — motor sesi hızlanmaya yapışsın
+    // Hız yakalama — pitch için secondary
     if (Math.abs(lag) > 0.08) {
       const catchUp = meta?.source === "demo" || Math.abs(this._extTrend) > 2 ? 0.96 : 0.92;
       this._smoothKmh += lag * catchUp;
@@ -868,18 +950,20 @@ class EtubuAudioEngine {
     if (this._throttleLoad > 0.04) {
       this._gearInfo = {
         ...this._gearInfo,
-        rpm: Math.min(1, this._gearInfo.rpm + this._throttleLoad * 0.38),
+        rpm: Math.min(1, this._gearInfo.rpm + this._throttleLoad * 0.42),
       };
-    } else if (this._brakeLoad > 0.05) {
+    } else if (this._regenLoad > 0.05) {
       this._gearInfo = {
         ...this._gearInfo,
-        rpm: Math.max(0.08, this._gearInfo.rpm - this._brakeLoad * 0.28),
+        rpm: Math.max(0.1, this._gearInfo.rpm * (1 - this._regenLoad * 0.12) + this._regenLoad * 0.35),
       };
     }
-    // Cap / native: daha sık uygula — hızlanma/yavaşlama net duyulsun
     const now = performance.now();
     const busy =
-      Math.abs(lag) > 0.12 || this._throttleLoad > 0.05 || this._brakeLoad > 0.05;
+      Math.abs(lag) > 0.12 ||
+      this._throttleLoad > 0.05 ||
+      this._regenLoad > 0.05 ||
+      this._brakeLoad > 0.05;
     if (this._running && now - (this._lastApplyMs || 0) >= 32 && busy) {
       this._applyParams(this._smoothKmh, false);
       this._lastApplyMs = now;
@@ -1245,6 +1329,7 @@ class EtubuAudioEngine {
       if (this.ENABLE_ROAD && p.road) files.add(p.road);
       if (p.drive) files.add(p.drive);
       if (p.drive2) files.add(p.drive2);
+      if (p.regen) files.add(p.regen);
       if (p.loops) {
         if (p.loops.idle) files.add(p.loops.idle);
         if (p.loops.mid) files.add(p.loops.mid);
@@ -1257,7 +1342,8 @@ class EtubuAudioEngine {
   /* ---------- voice graphs ---------- */
 
   _currentProfile() {
-    return this.PROFILES[this._voiceKey] || this.PROFILES[this.DEFAULT_VOICE];
+    const pack = this._packKey || this._resolvePackKey(this._voiceKey);
+    return this.PROFILES[pack] || this.PROFILES[this.DEFAULT_VOICE];
   }
 
   _buildSilentGraph() {
@@ -1266,7 +1352,8 @@ class EtubuAudioEngine {
 
   _buildVoiceGraph(key) {
     const ctx = this._ctx;
-    const profile = this.PROFILES[key] || this.PROFILES[this.DEFAULT_VOICE];
+    const pack = this._resolvePackKey(key);
+    const profile = this.PROFILES[pack] || this.PROFILES[this.DEFAULT_VOICE];
     const cabin = this._cabinSmooth();
     const bus = ctx.createGain();
     bus.gain.value = cabin ? 0.88 : 1;
@@ -1431,6 +1518,14 @@ class EtubuAudioEngine {
         }).catch(() => {});
       }
     }
+    // Regen body — throttle lift / negative kW
+    const regenFile = profile.regen || "ev_modely_rev_body_loop.wav";
+    this._attachSampleLayer(graph, "regen", regenFile, {
+      filterHz: Math.min(cabin ? 1900 : 2300, (profile.filterHz || 1200) * 1.1),
+      filterQ: cabin ? 0.35 : 0.5,
+      fadeScale: 0.02,
+      minLoop: 0.3,
+    }).catch(() => {});
 
     return graph;
   }
@@ -1477,20 +1572,35 @@ class EtubuAudioEngine {
     return t * t * (3 - 2 * t);
   }
 
-  /** Hıza göre idle↔mid↔high crossfade ağırlıkları (normalize). */
-  _bandWeights(kmh, edges) {
+  /**
+   * Band position: power-primary (throttle/regen) + kmh secondary ceiling.
+   * pos ≈ 0 idle … 1 high; regen biases mid→high character.
+   */
+  _bandWeights(kmh, edges, loadPos) {
     const mid0 = edges?.midStart ?? 12;
     const high0 = edges?.highStart ?? 72;
-    const fade = 20;
-    let idle = 1 - this._smoothstep((kmh - (mid0 - fade)) / fade);
-    let high = this._smoothstep((kmh - (high0 - fade * 0.75)) / (fade * 1.15));
-    let mid = this._smoothstep((kmh - (mid0 - fade * 0.5)) / fade);
-    mid = Math.min(mid, 1 - high * 0.92);
+    const speedPos = Math.max(0, Math.min(1, kmh / Math.max(40, this._maxKmh)));
+    // throttle/regen primary (0.65) + speed ceiling (0.35)
+    const pos =
+      loadPos != null && Number.isFinite(loadPos)
+        ? Math.max(0, Math.min(1, loadPos * 0.65 + speedPos * 0.35))
+        : speedPos;
+    // Map 0..1 → pseudo-kmh along profile edges for smoothstep reuse
+    const feel = mid0 + pos * Math.max(20, high0 + 40 - mid0);
+    const fade = 42;
+    let idle = 1 - this._smoothstep((feel - (mid0 - fade)) / fade);
+    let high = this._smoothstep((feel - (high0 - fade * 0.85)) / (fade * 1.35));
+    let mid = this._smoothstep((feel - (mid0 - fade * 0.55)) / fade);
+    mid = Math.min(mid, 1 - high * 0.88);
     mid = Math.max(0, mid);
     idle = Math.max(0, idle);
     high = Math.max(0, high);
     const sum = idle + mid + high || 1;
-    return { idle: idle / sum, mid: mid / sum, high: high / sum };
+    const i = idle / sum;
+    const m = mid / sum;
+    const h = high / sum;
+    const e = i * i + m * m + h * h || 1;
+    return { idle: (i * i) / e, mid: (m * m) / e, high: (h * h) / e };
   }
 
   async _attachSampleLayer(graph, kind, file, opts = {}) {
@@ -1506,7 +1616,7 @@ class EtubuAudioEngine {
           const t = ctx.currentTime;
           prev.gain.gain.cancelScheduledValues(t);
           prev.gain.gain.setValueAtTime(Math.max(0.0001, prev.gain.gain.value), t);
-          prev.gain.gain.linearRampToValueAtTime(0.0001, t + 0.08);
+          prev.gain.gain.linearRampToValueAtTime(0.0001, t + 0.22);
           setTimeout(() => {
             try {
               prev.src.stop();
@@ -1514,7 +1624,7 @@ class EtubuAudioEngine {
             try {
               prev.src.disconnect();
             } catch (_) {}
-          }, 120);
+          }, 260);
         } catch (_) {}
       }
 
@@ -1572,7 +1682,7 @@ class EtubuAudioEngine {
         return;
       }
       const rising = this._targetKmh >= this._smoothKmh - 0.05;
-      const lerp = this.LERP_UP; // simetrik
+      const lerp = rising ? this.LERP_UP : this.LERP_DOWN;
       this._smoothKmh += (this._targetKmh - this._smoothKmh) * lerp;
       if (Math.abs(this._targetKmh - this._smoothKmh) < 0.05) {
         this._smoothKmh = this._targetKmh;
@@ -1580,22 +1690,55 @@ class EtubuAudioEngine {
       if (this._targetKmh < 0.35 && this._smoothKmh < 0.6) this._smoothKmh = 0;
 
       const lag = this._targetKmh - this._smoothKmh;
-      const fromLagUp = Math.max(0, Math.min(1, lag / 6));
-      const fromLagDown = Math.max(0, Math.min(1, -lag / 6));
-      const fromTrendUp = Math.max(0, Math.min(1, this._extTrend / 6));
-      const fromTrendDown = Math.max(0, Math.min(1, -this._extTrend / 6));
-      const targetThrottle = Math.max(fromLagUp, fromTrendUp);
-      const targetBrake = Math.max(fromLagDown, fromTrendDown);
+      const powerKw = this._lastPowerKw;
+      let targetThrottle = 0;
+      let targetRegen = 0;
+      if (Number.isFinite(powerKw) && Math.abs(powerKw) > 0.5) {
+        if (powerKw > 0) targetThrottle = Math.max(0, Math.min(1, powerKw / 220));
+        else targetRegen = Math.max(0, Math.min(1, -powerKw / 80));
+      } else {
+        const fromLagUp = Math.max(0, Math.min(1, lag / 5));
+        const fromLagDown = Math.max(0, Math.min(1, -lag / 7));
+        const fromTrendUp = Math.max(0, Math.min(1, this._extTrend / 5));
+        const fromTrendDown = Math.max(0, Math.min(1, -this._extTrend / 7));
+        targetThrottle = Math.max(fromLagUp, fromTrendUp);
+        targetRegen = Math.max(fromLagDown * 0.5, fromTrendDown * 0.4);
+      }
+      // Gaz hızlı; lift / regen yavaş (flywheel)
       this._throttleLoad +=
-        (targetThrottle - this._throttleLoad) * (targetThrottle > this._throttleLoad ? 0.75 : 0.35);
-      this._brakeLoad +=
-        (targetBrake - this._brakeLoad) * (targetBrake > this._brakeLoad ? 0.75 : 0.35);
+        (targetThrottle - this._throttleLoad) *
+        (targetThrottle > this._throttleLoad ? 0.58 : 0.14);
+      this._regenLoad +=
+        (targetRegen - this._regenLoad) *
+        (targetRegen > this._regenLoad ? 0.45 : 0.18);
+      this._brakeLoad = Math.max(this._regenLoad * 0.9, Math.max(0, -lag / 8) * 0.3);
 
-      // ~50–60 Hz — gaz ve fren aynı
+      // Flywheel RPM: throttle primary, speed secondary ceiling, regen blend
+      const speedRpm = this._norm(this._smoothKmh);
+      const targetRpm = Math.max(
+        0.08,
+        Math.min(
+          1,
+          this._throttleLoad * 0.72 +
+            speedRpm * 0.28 +
+            this._regenLoad * 0.38 -
+            (this._throttleLoad < 0.05 && this._regenLoad < 0.05
+              ? (1 - speedRpm) * 0.06
+              : 0)
+        )
+      );
+      const rpmRise = targetRpm >= this._engineRpm - 0.01;
+      const rpmLerp = rpmRise ? 0.22 : 0.065;
+      this._engineRpm += (targetRpm - this._engineRpm) * rpmLerp;
+
       const now = typeof ts === "number" ? ts : performance.now();
       const cabin = this._cabinSmooth();
-      const busy = this._throttleLoad > 0.08 || this._brakeLoad > 0.08 || Math.abs(lag) > 0.4;
-      const gap = cabin ? (busy ? 22 : 36) : busy ? 16 : 28;
+      const busy =
+        this._throttleLoad > 0.06 ||
+        this._regenLoad > 0.06 ||
+        this._brakeLoad > 0.06 ||
+        Math.abs(lag) > 0.35;
+      const gap = cabin ? (busy ? 20 : 34) : busy ? 14 : 26;
       if (now - (this._lastApplyMs || 0) >= gap) {
         this._lastApplyMs = now;
         this._applyParams(this._smoothKmh, false);
@@ -1712,30 +1855,36 @@ class EtubuAudioEngine {
       return;
     }
     const load = Math.max(0, Math.min(1, this._throttleLoad || 0));
+    const regen = Math.max(0, Math.min(1, this._regenLoad || 0));
     const brake = Math.max(0, Math.min(1, this._brakeLoad || 0));
-    const rising = this._targetKmh >= kmh - 0.1;
+    const rising =
+      this._targetKmh >= kmh - 0.1 || load > regen + 0.05 || load > brake + 0.05;
     const cabin = this._cabinSmooth();
-    // Simetrik tau — yavaşlamada da aynı hız
-    const tauBase = this.TAU_UP;
-    const tau = force ? (cabin ? 0.028 : 0.016) : cabin ? 0.028 : tauBase;
+    const tauBase = rising ? this.TAU_UP : this.TAU_DOWN;
+    const tau = force ? (cabin ? 0.032 : 0.02) : cabin ? Math.max(0.032, tauBase) : tauBase;
+    const rateTau = force ? tau : rising ? tau : tau * 1.35;
     const norm = this._norm(kmh);
-    const feelNorm = Math.min(
-      1,
-      Math.max(0, norm + load * (cabin ? 0.18 : 0.26) - brake * (cabin ? 0.12 : 0.18))
+    // Power-primary feel; speed secondary ceiling
+    const loadPos = Math.max(0, Math.min(1, load * 0.85 + regen * 0.55 + norm * 0.2));
+    const feelNorm = Math.max(
+      0,
+      Math.min(1, load * 0.7 + norm * 0.3 + regen * 0.25 - (load < 0.04 ? brake * 0.08 : 0))
     );
-    const gearInfo = this._gearFromNorm(feelNorm, p);
-    let rpm = Math.min(1, gearInfo.rpm + load * (cabin ? 0.28 : 0.36) - brake * (cabin ? 0.2 : 0.28));
-    rpm = Math.max(0.08, Math.min(1, rpm));
+    let rpm = Math.max(0.08, Math.min(1, this._engineRpm || 0.12));
+    if (!(this._engineRpm > 0)) {
+      rpm = Math.min(1, 0.1 + feelNorm * 0.9 + load * 0.35 + regen * 0.2);
+      this._engineRpm = rpm;
+    }
 
-    // ICE: vites değişince kısa RPM düşüşü (geçiş hissi); EV’de yok
+    const gearInfo = this._gearFromNorm(feelNorm, p);
     if (p.ice) {
       if (this._lastGear > 0 && gearInfo.gear !== this._lastGear) {
-        this._shiftKick = cabin ? 0.55 : 1;
+        this._shiftKick = cabin ? 0.12 : 0.18;
       }
       this._lastGear = gearInfo.gear;
-      this._shiftKick = Math.max(0, (this._shiftKick || 0) * (force ? 0 : cabin ? 0.88 : 0.78));
+      this._shiftKick = Math.max(0, (this._shiftKick || 0) * (force ? 0 : 0.92));
       if (this._shiftKick > 0.02) {
-        rpm = Math.max(0.08, rpm - this._shiftKick * (cabin ? 0.28 : 0.45));
+        rpm = Math.max(0.08, rpm - this._shiftKick * 0.12);
       }
     } else {
       this._lastGear = 0;
@@ -1746,16 +1895,15 @@ class EtubuAudioEngine {
 
     const vol = Math.max(0.16, this._volume) * (p.master || 1) * (cabin ? 1.05 : 1.2);
     const floor = this.AUDIBLE_FLOOR * vol;
-    const punch = 1 + load * (cabin ? 0.35 : 0.65);
-    const hasSample = !!(n.drive || n.drive2 || n.loopIdle || n.loopMid || n.loopHigh);
+    const punch = 1 + load * (cabin ? 0.35 : 0.65) + regen * 0.28;
+    const hasSample = !!(n.drive || n.drive2 || n.loopIdle || n.loopMid || n.loopHigh || n.regen);
     const sampleLed = !!p.sampleLed && hasSample;
-    // Kabin: prosedürel (cızırtılı) düşük, sample baskın
     const oscScale = sampleLed ? (cabin ? (feelNorm < 0.08 ? 0.35 : 0.22) : feelNorm < 0.08 ? 0.85 : 0.55) : 1;
 
-    const idleW = Math.max(0, 1 - feelNorm * 3.2);
-    const midW = Math.min(1, Math.max(0, (feelNorm - 0.008) / 0.26 + load * 0.4));
+    const idleW = Math.max(0, 1 - feelNorm * 3.2 - load * 0.8);
+    const midW = Math.min(1, Math.max(0, (feelNorm - 0.008) / 0.26 + load * 0.45 + regen * 0.2));
 
-    const idleHz = p.idleHz * (0.9 + rpm * 0.4 + load * 0.1);
+    const idleHz = p.idleHz * (0.9 + rpm * 0.4 + load * 0.12 + regen * 0.08);
     const midHz = p.midHz + rpm * p.midSpan;
     const bodyHz = idleHz * 2.05;
     const bodyMul = (p.bodyMul != null ? p.bodyMul : 0.2) * oscScale;
@@ -1766,7 +1914,6 @@ class EtubuAudioEngine {
     this._targetParam(n.mid.osc.frequency, midHz, tau, force);
     this._targetParam(n.body.osc.frequency, bodyHz, tau, force);
 
-    // Filtre tavanı — kabinde daha düşük (cızzırtı kes)
     const filtCap = Math.min(cabin ? 2200 : 3000, (p.filterHz || 1200) * (cabin ? 1.15 : 1.35));
     this._targetParam(
       n.idle.filter.frequency,
@@ -1786,8 +1933,7 @@ class EtubuAudioEngine {
       midW > 0.02 ? floor * 0.45 : 0.0001,
       midW * p.midGain * vol * punch * oscScale
     );
-    // Park / rölanti: sürüş açıkken motör duyulsun
-    if (feelNorm < 0.06) {
+    if (feelNorm < 0.06 && load < 0.05 && regen < 0.05) {
       idleGain = Math.max(idleGain, floor * 1.1, 0.1 * vol);
     }
 
@@ -1795,7 +1941,7 @@ class EtubuAudioEngine {
     this._targetParam(n.mid.gain.gain, midGain, tau, force);
     this._targetParam(
       n.body.gain.gain,
-      Math.max(0.0001, (0.03 + midW * 0.08 + load * 0.05) * vol * bodyMul),
+      Math.max(0.0001, (0.03 + midW * 0.08 + load * 0.05 + regen * 0.04) * vol * bodyMul),
       tau,
       force
     );
@@ -1819,13 +1965,13 @@ class EtubuAudioEngine {
     if (n.sub) {
       this._targetParam(
         n.sub.osc.frequency,
-        Math.max(28, idleHz * 0.48 + load * 6),
+        Math.max(28, idleHz * 0.48 + load * 6 + regen * 4),
         tau,
         force
       );
       this._targetParam(
         n.sub.gain.gain,
-        Math.max(0.0001, (0.04 + midW * 0.1 + load * 0.12) * vol * subMul),
+        Math.max(0.0001, (0.04 + midW * 0.1 + load * 0.12 + regen * 0.08) * vol * subMul),
         tau,
         force
       );
@@ -1834,26 +1980,25 @@ class EtubuAudioEngine {
     if (n.wind) {
       this._targetParam(n.wind.gain.gain, 0.0001, tau, force);
     }
-    // Islık / EMF katmanları yok — varsa sustur
     if (n.whistle) this._targetParam(n.whistle.gain.gain, 0.0001, 0.05, true);
     if (n.emf) this._targetParam(n.emf.gain.gain, 0.0001, 0.05, true);
 
     if (n.road) this._targetParam(n.road.gain.gain, 0.0001, tau, force);
 
-    // Playback rate — 0.85…1.3 (doğal aralık; chipmunk yok)
-    const rateRaw = 0.88 + rpm * 0.38 + load * 0.08 - brake * 0.06;
-    const rate = Math.max(this.RATE_MIN || 0.85, Math.min(this.RATE_MAX || 1.3, rateRaw));
-    const rateTau = Math.max(cabin ? 0.028 : 0.018, tau);
+    // Playback rate — flywheel + throttle primary, speed secondary
+    const rateRaw = 0.76 + rpm * 0.55 + load * 0.18 + norm * 0.12 + regen * 0.1;
+    const rate = Math.max(this.RATE_MIN || 0.72, Math.min(this.RATE_MAX || 1.55, rateRaw));
 
     const bands = graph.bands || this._resolveLoopBands(p);
+    const driveDuck = 1 - regen * 0.55;
     if (bands && (n.loopIdle || n.loopMid || n.loopHigh)) {
-      const w = this._bandWeights(kmh, bands.edges);
+      const w = this._bandWeights(kmh, bands.edges, loadPos);
       const applyBand = (node, weight, baseGain, rateMul) => {
         if (!node?.src) return;
         const level = Math.max(
           weight > 0.02 ? floor * 0.35 : 0.0001,
-          weight * baseGain * vol * punch * (cabin ? 1 : 1.05) +
-            (feelNorm < 0.05 && weight > 0.4 ? 0.12 * vol : 0)
+          weight * baseGain * vol * punch * driveDuck * (cabin ? 1 : 1.05) +
+            (feelNorm < 0.05 && weight > 0.4 && load < 0.08 ? 0.12 * vol : 0)
         );
         this._targetParam(node.gain.gain, level, tau, force);
         this._targetRate(node.src.playbackRate, rate * rateMul, rateTau, force);
@@ -1872,11 +2017,12 @@ class EtubuAudioEngine {
     } else {
       if (n.drive) {
         const driveLevel = Math.max(
-          floor * 0.65,
-          (idleW * 0.55 + midW * 1.25 + load * 0.5 + (feelNorm < 0.05 ? 0.3 : 0)) *
+          floor * 0.65 * driveDuck,
+          (idleW * 0.55 + midW * 1.25 + load * 0.55 + (feelNorm < 0.05 ? 0.3 : 0)) *
             (p.driveGain || 0.5) *
             vol *
             punch *
+            driveDuck *
             (cabin ? 1.0 : 1)
         );
         this._targetParam(n.drive.gain.gain, driveLevel, tau, force);
@@ -1891,11 +2037,12 @@ class EtubuAudioEngine {
 
       if (n.drive2) {
         const d2 = Math.max(
-          floor * 0.2,
+          floor * 0.2 * driveDuck,
           (idleW * 0.35 + midW * 1.0 + load * 0.35 + (feelNorm < 0.05 ? 0.15 : 0)) *
             (p.drive2Gain || 0.25) *
             vol *
             punch *
+            driveDuck *
             (cabin ? 0.94 : 1)
         );
         this._targetParam(n.drive2.gain.gain, d2, tau, force);
@@ -1907,6 +2054,27 @@ class EtubuAudioEngine {
           force
         );
       }
+    }
+
+    // Regen layer — crossfade in with negative power
+    if (n.regen?.src) {
+      const regenLevel = Math.max(
+        regen > 0.04 ? floor * 0.4 : 0.0001,
+        regen * (p.regenGain || 0.62) * vol * (1 + regen * 0.35) * (cabin ? 0.95 : 1.05)
+      );
+      this._targetParam(n.regen.gain.gain, regenLevel, tau, force);
+      this._targetRate(
+        n.regen.src.playbackRate,
+        Math.max(this.RATE_MIN || 0.72, Math.min(this.RATE_MAX || 1.55, rate * 0.96 + regen * 0.08)),
+        rateTau,
+        force
+      );
+      this._targetParam(
+        n.regen.filter.frequency,
+        Math.min(cabin ? 2000 : 2400, (p.filterHz || 1200) * (0.7 + rpm * 0.3 + regen * 0.15)),
+        tau,
+        force
+      );
     }
 
     this._syncHtmlFallbackGain();

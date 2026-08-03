@@ -134,13 +134,18 @@ const Ads = (() => {
       return;
     }
 
-    showRails();
+    // Native cluster / Cap: AdMob is not wired — never show stub “ads” or call dead plugin.
+    try {
+      if (
+        window.__ETUBU_NATIVE_CLUSTER__ ||
+        window.Capacitor?.isNativePlatform?.()
+      ) {
+        hideAll();
+        return;
+      }
+    } catch (_) {}
 
-    // Native AdMob
-    if (window.EtubuNative?.showBannerAds) {
-      window.EtubuNative.showBannerAds();
-      return;
-    }
+    showRails();
 
     // Sol rail her zaman kapalı
     const leftRail = document.querySelector(".ad-rail--left");

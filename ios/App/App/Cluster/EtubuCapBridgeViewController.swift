@@ -92,6 +92,12 @@ final class EtubuCapBridgeViewController: CAPBridgeViewController {
             (function(){
               window.__ETUBU_NATIVE_CLUSTER__=true;
               window.__ETUBU_GPS_ARMED__=true;
+              try {
+                var forceTr = \(EtubuRegion.lastKnownInTurkey ? "1" : "0");
+                localStorage.setItem('etubu_force_tr_route', forceTr);
+                sessionStorage.setItem('etubu_force_tr_route', forceTr);
+                window.__etubuForceTrRoute = +forceTr;
+              } catch (e) {}
               // Already on full app — leave alone.
               if (window.RouteGuard && window.RouteGuard.buildRoute) return 'ready';
               if (document.getElementById('routeGuard')) return 'loading';
@@ -104,13 +110,27 @@ final class EtubuCapBridgeViewController: CAPBridgeViewController {
             })();
             """
         ) { [weak self] result, _ in
+            guard let self else { return }
             let s = (result as? String) ?? ""
             if s == "ready" { return }
+            // Stub stuck — force Cap localURL navigation (JS replace can race unload).
+            if retriesLeft <= 4, s == "load" || s == "replace" || s.isEmpty {
+                self.forceLoadIndexApp()
+            }
             // Stub → index-app navigation or scripts still loading — retry briefly.
             if retriesLeft > 0, s == "load" || s == "replace" || s == "loading" || s.isEmpty {
-                self?.scheduleArmRetry(retriesLeft: retriesLeft - 1, delay: 0.4)
+                self.scheduleArmRetry(retriesLeft: retriesLeft - 1, delay: 0.45)
             }
         }
+    }
+
+    /// Direct Cap asset load when stub `location.replace` does not surface RouteGuard.
+    private func forceLoadIndexApp() {
+        guard let wv = webView else { return }
+        let base = bridge?.config.localURL ?? URL(string: "https://localhost")!
+        let url = base.appendingPathComponent("index-app.html")
+        if wv.url?.lastPathComponent == "index-app.html" { return }
+        wv.load(URLRequest(url: url))
     }
 
     private func scheduleArmRetry(retriesLeft: Int, delay: TimeInterval = 0.25) {

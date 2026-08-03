@@ -2,67 +2,71 @@ import SwiftUI
 
 struct EtubuTPMSGridView: View {
     @ObservedObject var telemetry: EtubuVehicleTelemetry
-
-    private let coldPsi: Double = 42
+    /// Burun yukarı çizim (dik + yatay sol kart).
+    var noseUp: Bool = true
+    var compact: Bool = false
+    private var theme: ClusterTheme { ClusterTheme.stored }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 2) {
             ZStack {
-                // Araç silueti (ince)
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
-                    .frame(width: 36, height: 56)
-                VStack(spacing: 10) {
-                    HStack(spacing: 18) {
-                        tireRadial("FL", telemetry.tpmsFL)
-                        tireRadial("FR", telemetry.tpmsFR)
-                    }
-                    HStack(spacing: 18) {
-                        tireRadial("RL", telemetry.tpmsRL)
-                        tireRadial("RR", telemetry.tpmsRR)
+                // Kontur-only (şeffaf dolgu) — tema canvas arkadan görünür
+                Image(noseUp ? "EtubuCarTopUp" : "EtubuCarTop")
+                    .renderingMode(.template)
+                    .resizable()
+                    .interpolation(.high)
+                    .antialiased(true)
+                    .scaledToFit()
+                    .foregroundStyle(theme.tpmsCarStroke)
+                    .accessibilityHidden(true)
+
+                GeometryReader { geo in
+                    let w = geo.size.width
+                    let h = geo.size.height
+                    if noseUp {
+                        psiText(telemetry.tpmsFL, corner: "FL").position(x: w * 0.05, y: h * 0.20)
+                        psiText(telemetry.tpmsFR, corner: "FR").position(x: w * 0.95, y: h * 0.20)
+                        psiText(telemetry.tpmsRL, corner: "RL").position(x: w * 0.05, y: h * 0.80)
+                        psiText(telemetry.tpmsRR, corner: "RR").position(x: w * 0.95, y: h * 0.80)
+                    } else {
+                        psiText(telemetry.tpmsFL, corner: "FL").position(x: w * 0.20, y: h * 0.05)
+                        psiText(telemetry.tpmsFR, corner: "FR").position(x: w * 0.20, y: h * 0.95)
+                        psiText(telemetry.tpmsRL, corner: "RL").position(x: w * 0.80, y: h * 0.05)
+                        psiText(telemetry.tpmsRR, corner: "RR").position(x: w * 0.80, y: h * 0.95)
                     }
                 }
             }
             .frame(maxWidth: .infinity)
+            .aspectRatio(noseUp ? (680.0 / 1408.0) : (1408.0 / 680.0), contentMode: .fit)
+            // Yatay eski 188 → 132 (−%30)
+            .frame(maxHeight: 132)
+            .background(Color.clear)
+            .accessibilityIdentifier("etubu.tpms.grid")
+
             if telemetry.isAwaitingTPMS {
                 Text(EtubuClusterL10n.t("awaitingTPMS"))
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(.white.opacity(0.4))
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
+                    .accessibilityIdentifier("etubu.tpms.awaiting")
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func tireRadial(_ name: String, _ tire: EtubuTireReading) -> some View {
-        let psi = tire.psi
-        let fill: CGFloat = {
-            guard let psi else { return 0 }
-            return min(1, max(0.08, CGFloat(psi / coldPsi)))
+    private func psiText(_ tire: EtubuTireReading, corner: String) -> some View {
+        let label: String = {
+            if let psi = tire.psi { return String(format: "%.0f", psi) }
+            return "-"
         }()
-        let warn = tire.warning || (psi.map { $0 < 32 || $0 > 48 } ?? false)
-        let tint: Color = {
-            if psi == nil { return .white.opacity(0.2) }
-            if warn { return .orange }
-            return Color(red: 0.35, green: 0.92, blue: 0.55)
-        }()
-        return VStack(spacing: 3) {
-            ZStack {
-                Circle()
-                    .stroke(Color.white.opacity(0.12), lineWidth: 3)
-                Circle()
-                    .trim(from: 0, to: fill)
-                    .stroke(tint, style: StrokeStyle(lineWidth: 3, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                Text(psi.map { String(format: "%.0f", $0) } ?? "—")
-                    .font(.system(size: 11, weight: warn ? .bold : .semibold, design: .rounded).monospacedDigit())
-                    .foregroundStyle(psi == nil ? .white.opacity(0.35) : .white.opacity(0.95))
-            }
-            .frame(width: 34, height: 34)
-            Text(name)
-                .font(.system(size: 9, weight: .bold))
-                .foregroundStyle(.white.opacity(0.4))
-        }
+        let warn = tire.warning || (tire.psi.map { $0 < 32 || $0 > 48 } ?? false)
+        return Text(label)
+            .font(.system(size: compact ? 12 : 14, weight: warn ? .bold : .semibold, design: .rounded).monospacedDigit())
+            .foregroundStyle(warn ? Color.orange : Color.white.opacity(0.92))
+            .shadow(color: .black.opacity(0.7), radius: 2, y: 1)
+            .accessibilityLabel("\(corner) \(label)")
+            .accessibilityIdentifier("etubu.tpms.\(corner.lowercased())")
     }
 }
 
@@ -144,11 +148,7 @@ struct EtubuChargeDetailChip: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(
-                Capsule().fill(
-                    telemetry.isCharging ? Color.green.opacity(0.18) : Color.white.opacity(0.06)
-                )
-            )
+            .background(Color.clear)
         }
     }
 }
@@ -159,15 +159,18 @@ struct EtubuClosuresChip: View {
     var body: some View {
         HStack(spacing: 8) {
             if let locked = telemetry.locked {
-                Label(locked ? "Kilitli" : "Açık", systemImage: locked ? "lock.fill" : "lock.open.fill")
+                Label(
+                    locked ? EtubuClusterL10n.t("lockLocked") : EtubuClusterL10n.t("lockOpen"),
+                    systemImage: locked ? "lock.fill" : "lock.open.fill"
+                )
                     .foregroundStyle(locked ? Color.white.opacity(0.55) : Color.orange)
             }
             if telemetry.anyDoorOpen {
-                Label("Kapı", systemImage: "door.left.hand.open")
+                Label(EtubuClusterL10n.t("door"), systemImage: "door.left.hand.open")
                     .foregroundStyle(.orange)
             }
             if telemetry.sentryActive == true {
-                Label("Sentry", systemImage: "eye.fill")
+                Label(EtubuClusterL10n.t("sentry"), systemImage: "eye.fill")
                     .foregroundStyle(.red.opacity(0.85))
             }
         }
@@ -194,7 +197,6 @@ struct EtubuPowerHistorySparkline: View {
                     }
                     .stroke(Color.white.opacity(compact ? 0.12 : 0.15), style: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
 
-                    // Regen (negatif) — yeşil
                     Path { path in
                         var started = false
                         for (i, v) in samples.enumerated() {
@@ -209,7 +211,6 @@ struct EtubuPowerHistorySparkline: View {
                         style: StrokeStyle(lineWidth: lw, lineCap: .round, lineJoin: .round)
                     )
 
-                    // Drive (pozitif) — turuncu/accent
                     Path { path in
                         var started = false
                         for (i, v) in samples.enumerated() {
@@ -237,22 +238,36 @@ struct EtubuPowerHistorySparkline: View {
     }
 }
 
-/// Radar / corridor alert toggles — mirrored into Cap localStorage for web RadarAlert.
+/// Radar / corridor alert toggles — bip açık; TTS mesafe söylemez.
 struct EtubuRadarSettingsView: View {
     @AppStorage("etubu_radar_beeps") private var beeps = true
     @AppStorage("etubu_radar_tts") private var tts = true
     @AppStorage("etubu_radar_cards") private var cards = true
     @AppStorage("etubu_radar_corridor") private var corridor = true
+    @ObservedObject private var premium = EtubuPremiumManager.shared
 
     var body: some View {
-        Section("Uyarı sesleri (yalnızca burada)") {
-            Toggle("Bip sesleri", isOn: $beeps)
-            Toggle("Sesli uyarı (TTS)", isOn: $tts)
-            Toggle("Uyarı kartları", isOn: $cards)
-            Toggle("Hız koridoru paneli", isOn: $corridor)
-            Text("Ana ekrandaki hoparlör ikonu yalnızca EV sürüş sesini aç/kapatır; uyarı seslerini kapatmaz.")
+        Section {
+            Toggle(EtubuClusterL10n.t("warnBeeps"), isOn: $beeps)
+                .disabled(!premium.isPremium)
+            if EtubuAppLanguage.current.warnTtsEnabled {
+                Toggle(EtubuClusterL10n.t("warnTts"), isOn: $tts)
+                    .disabled(!premium.isPremium)
+            }
+            Toggle(EtubuClusterL10n.t("warnCards"), isOn: $cards)
+                .disabled(!premium.isPremium)
+            Toggle(EtubuClusterL10n.t("warnCorridor"), isOn: $corridor)
+                .disabled(!premium.isPremium)
+            Text(premium.isPremium ? EtubuClusterL10n.t("warnSoundsHint") : EtubuClusterL10n.t("premiumLockedWarn"))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
+        } header: {
+            HStack {
+                Text(EtubuClusterL10n.t("warnSoundsSection"))
+                if !premium.isPremium {
+                    EtubuPremiumBadge(compact: true)
+                }
+            }
         }
         .onChange(of: beeps) { _, _ in sync() }
         .onChange(of: tts) { _, _ in sync() }
@@ -262,18 +277,19 @@ struct EtubuRadarSettingsView: View {
     }
 
     private func sync() {
+        let p = premium.isPremium
         EtubuClusterAudioBridge.evalJS("""
         (function(){
           try {
-            localStorage.setItem('etubu_radar_beeps', '\(beeps ? "1" : "0")');
-            localStorage.setItem('etubu_radar_tts', '\(tts ? "1" : "0")');
-            localStorage.setItem('etubu_radar_cards', '\(cards ? "1" : "0")');
-            localStorage.setItem('etubu_radar_corridor', '\(corridor ? "1" : "0")');
+            localStorage.setItem('etubu_radar_beeps', '\(p && beeps ? "1" : "0")');
+            localStorage.setItem('etubu_radar_tts', '\(p && tts ? "1" : "0")');
+            localStorage.setItem('etubu_radar_cards', '\(p && cards ? "1" : "0")');
+            localStorage.setItem('etubu_radar_corridor', '\(p && corridor ? "1" : "0")');
             window.__etubuRadarPrefs = {
-              beeps: \(beeps),
-              tts: \(tts),
-              cards: \(cards),
-              corridor: \(corridor)
+              beeps: \(p && beeps),
+              tts: \(p && tts),
+              cards: \(p && cards),
+              corridor: \(p && corridor)
             };
           } catch(e) {}
         })();

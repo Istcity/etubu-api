@@ -1,0 +1,27 @@
+appId: com.etubu.app
+---
+# Checkbox yok → kabul etmez → cluster yok
+- launchApp:
+    clearState: true
+    permissions:
+      all: allow
+      notifications: deny
+    arguments:
+      etubuSkipOnboarding: true
+- runFlow: dismiss-permissions.yaml
+- extendedWaitUntil:
+    visible:
+      id: "etubu.legal.checkbox"
+    timeout: 20000
+- assertVisible:
+    id: "etubu.legal.accept"
+# Kabul’e dokun (checkbox işaretsiz) — cluster açılmamalı
+- tapOn:
+    id: "etubu.legal.accept"
+- waitForAnimationToEnd:
+    timeout: 1200
+- assertVisible:
+    id: "etubu.legal.checkbox"
+- assertNotVisible:
+    id: "etubu.settings.open"
+- takeScreenshot: qa-legal-reject

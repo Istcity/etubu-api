@@ -156,11 +156,13 @@ private struct EtubuIslandCanvas: View {
             return (String(short.prefix(18)), state.primaryWarn)
         }
         if let eta = state.etaClockLabel {
-            return (eta, "Kalan süre")
+            let label = state.islandEtaLabel.isEmpty ? "Time left" : state.islandEtaLabel
+            return (eta, label)
         }
         if let km = state.remainKm, km > 0 {
             let v = km >= 10 ? String(format: "%.0f", km) : String(format: "%.1f", km)
-            return (v, "km kalan")
+            let label = state.islandKmRemainLabel.isEmpty ? "km left" : state.islandKmRemainLabel
+            return (v, label)
         }
         return ("\(max(0, state.kmh))", "km/h · \(state.gear)")
     }

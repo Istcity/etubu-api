@@ -1,0 +1,25 @@
+appId: com.etubu.app
+---
+# Shared: dismiss system dialogs + accept legal gate
+- runFlow: dismiss-permissions.yaml
+- extendedWaitUntil:
+    visible:
+      id: "etubu.legal.checkbox"
+    timeout: 20000
+- tapOn:
+    id: "etubu.legal.checkbox"
+- waitForAnimationToEnd:
+    timeout: 400
+- tapOn:
+    id: "etubu.legal.accept"
+    optional: true
+- tapOn:
+    point: "50%,90%"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 1500
+- runFlow: dismiss-permissions.yaml
+- extendedWaitUntil:
+    visible:
+      id: "etubu.settings.open"
+    timeout: 25000

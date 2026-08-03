@@ -14,6 +14,7 @@ const I18n = (() => {
       audioUnlockBody: "Tarayıcı kuralları gereği sürüş sesi ilk dokunuşta açılır. Tesla ekranında bir kez dokunun.",
       audioUnlockBtn: "Başlat",
       trialFree: "Sitemize destek olmak için reklamlara tıklayabilirsiniz",
+      premiumFreeNote: "Ücretsiz: kadran + OSM hız. Premium: rota, radar/koridor, temalar, canlı harita.",
       trialLeft: "Sitemize destek olmak için reklamlara tıklayabilirsiniz",
       trialDone: "Tüm özellikler ücretsiz · reklam destekli",
       trialKmDetail: "Tüm özellikler ücretsiz · reklam destekli",
@@ -358,6 +359,7 @@ const I18n = (() => {
       audioUnlockBody: "Browsers require a tap before audio can start. On Tesla, tap once to unlock driving sounds.",
       audioUnlockBtn: "Start",
       trialFree: "Click the ads to support our site",
+      premiumFreeNote: "Free: dial + OSM speed. Premium: route, radar/corridor, themes, live map.",
       trialLeft: "Click the ads to support our site",
       trialDone: "All features free · ad-supported",
       trialKmDetail: "All features free · ad-supported",
@@ -702,6 +704,7 @@ const I18n = (() => {
       audioUnlockBody: "Browser erfordern einen Tipp, bevor Ton starten kann. Im Tesla einmal tippen, um Fahrgeräusche freizuschalten.",
       audioUnlockBtn: "Start",
       trialFree: "Klicken Sie auf die Werbung, um unsere Seite zu unterstützen",
+      premiumFreeNote: "Kostenlos: Cluster + OSM-Tempo. Premium: Route, Radar/Korridor, Themes, Live-Karte.",
       trialLeft: "Klicken Sie auf die Werbung, um unsere Seite zu unterstützen",
       trialDone: "Alle Funktionen kostenlos · werbefinanziert",
       trialKmDetail: "Alle Funktionen kostenlos · werbefinanziert",
@@ -1046,6 +1049,7 @@ const I18n = (() => {
       audioUnlockBody: "Les navigateurs exigent un toucher avant le son. Sur Tesla, touchez une fois pour débloquer les sons de conduite.",
       audioUnlockBtn: "Démarrer",
       trialFree: "Cliquez sur les publicités pour soutenir notre site",
+      premiumFreeNote: "Gratuit : cadran + OSM. Premium : itinéraire, radar/corridor, thèmes, carte live.",
       trialLeft: "Cliquez sur les publicités pour soutenir notre site",
       trialDone: "Toutes les fonctions gratuites · financé par la pub",
       trialKmDetail: "Toutes les fonctions gratuites · financé par la pub",
@@ -1390,6 +1394,7 @@ const I18n = (() => {
       audioUnlockBody: "Los navegadores requieren un toque antes del audio. En Tesla, toca una vez para desbloquear los sonidos de conducción.",
       audioUnlockBtn: "Iniciar",
       trialFree: "Haz clic en los anuncios para apoyar nuestro sitio",
+      premiumFreeNote: "Gratis: dial + OSM. Premium: ruta, radar/corredor, temas, mapa en vivo.",
       trialLeft: "Haz clic en los anuncios para apoyar nuestro sitio",
       trialDone: "Todas las funciones gratis · con anuncios",
       trialKmDetail: "Todas las funciones gratis · con anuncios",
@@ -1734,6 +1739,7 @@ const I18n = (() => {
       audioUnlockBody: "ブラウザは音声開始前にタップが必要です。Teslaでは一度タップして走行音を解除してください。",
       audioUnlockBtn: "開始",
       trialFree: "サイト支援のため広告をクリックしてください",
+      premiumFreeNote: "無料: ダイヤル + OSM速度。Premium: ルート、レーダー/区間、テーマ、ライブ地図。",
       trialLeft: "サイト支援のため広告をクリックしてください",
       trialDone: "全機能無料 · 広告サポート",
       trialKmDetail: "全機能無料 · 広告サポート",
@@ -2078,6 +2084,7 @@ const I18n = (() => {
       audioUnlockBody: "Браузеры требуют нажатия перед запуском звука. В Tesla нажмите один раз, чтобы разблокировать звуки вождения.",
       audioUnlockBtn: "Старт",
       trialFree: "Нажмите на рекламу, чтобы поддержать наш сайт",
+      premiumFreeNote: "Бесплатно: циферблат + OSM. Premium: маршрут, радар/коридор, темы, живая карта.",
       trialLeft: "Нажмите на рекламу, чтобы поддержать наш сайт",
       trialDone: "Все функции бесплатно · с рекламой",
       trialKmDetail: "Все функции бесплатно · с рекламой",
@@ -2511,24 +2518,21 @@ const I18n = (() => {
         "calm-ev": t("voiceCalm"),
         "sport-ev": t("voiceSport"),
         "ion-whisper": t("voiceIonWhisper"),
-        "exhaust-v8": t("voiceExhaustV8"),
-        "exhaust-turbo": t("voiceExhaustTurbo"),
-        "exhaust-diesel": t("voiceExhaustDiesel"),
-        "asphalt-roar": t("voiceAsphaltRoar"),
-        "thunder-bass": t("voiceThunder"),
-        "cruiser-vtwin": t("voiceCruiserVtwin"),
-        "formula-scream": t("voiceFormulaScream"),
-        "sportbike-rr": t("voiceSportbikeRr"),
         "boost-launch": t("voiceBoostLaunch"),
-        "volt-shift": t("voiceVoltShift"),
-        "jet-hum": t("voiceJet"),
-        "pulse-drive": t("voicePulse"),
-        "load-throttle": t("voiceLoadThrottle"),
-        "shift-cage": t("voiceShiftCage"),
-        "piston-sigma": t("voicePistonSigma"),
-        "intake-eq": t("voiceIntakeEq"),
-        "ramp-forge": t("voiceRampForge"),
-        "grain-stage": t("voiceGrainStage"),
+        tesla: "Tesla",
+        aurora: t("visualAurora") !== "visualAurora" ? t("visualAurora") : "Aurora",
+        plasma: t("visualPlasma") !== "visualPlasma" ? t("visualPlasma") : "Plasma",
+        redline: t("visualRedline") !== "visualRedline" ? t("visualRedline") : "Redline",
+        cyberLime: t("visualCyberLime") !== "visualCyberLime" ? t("visualCyberLime") : "Cyber Lime",
+        electricIce: t("visualElectricIce") !== "visualElectricIce" ? t("visualElectricIce") : "Electric Ice",
+        solarFlare: t("visualSolarFlare") !== "visualSolarFlare" ? t("visualSolarFlare") : "Solar Flare",
+        neon: t("visualNeon") !== "visualNeon" ? t("visualNeon") : "Neon",
+        violetStorm: t("visualVioletStorm") !== "visualVioletStorm" ? t("visualVioletStorm") : "Violet Storm",
+        deepOcean: t("visualDeepOcean") !== "visualDeepOcean" ? t("visualDeepOcean") : "Deep Ocean",
+        midnight: "Midnight",
+        tunnel: t("visualTunnel") !== "visualTunnel" ? t("visualTunnel") : "Tunnel",
+        warp: t("visualWarp") !== "visualWarp" ? t("visualWarp") : "Warp",
+        plaidBoost: "Plaid Boost",
       });
     }
   }
@@ -2706,6 +2710,12 @@ const I18n = (() => {
     speak(text, opts = {}) {
       const msg = String(text || "").trim();
       if (!msg) return false;
+      // Uyarı TTS yalnızca Türkçe UI’da (klip + speechSynthesis)
+      try {
+        if (!String(I18n.lang || "").toLowerCase().startsWith("tr")) return false;
+      } catch (_) {
+        return false;
+      }
       const key = opts.key || msg;
       const now = Date.now();
       if (!I18n._speakState) I18n._speakState = { key: "", at: 0 };

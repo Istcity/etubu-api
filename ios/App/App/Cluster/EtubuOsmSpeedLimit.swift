@@ -68,21 +68,22 @@ final class EtubuOsmSpeedLimit: ObservableObject {
         guard let lat, let lng, lat != 0, lng != 0 else { return }
         let coord = CLLocationCoordinate2D(latitude: lat, longitude: lng)
 
-        // Success cache: aynı noktada sık sorgu yok.
+        // Success cache: aynı noktada sık sorgu yok — hız bandı değiştiyse yenile.
         if let last = lastSuccessCoord, let at = lastSuccessAt {
             let moved = CLLocation(latitude: last.latitude, longitude: last.longitude)
                 .distance(from: CLLocation(latitude: lat, longitude: lng))
-            if moved < 80, Date().timeIntervalSince(at) < 25 { return }
+            let speedBandShifted = abs((limitKmh ?? 0) - speedKmh) > 45
+            if moved < 80, Date().timeIntervalSince(at) < 25, !speedBandShifted { return }
         }
         // Fail / in-flight cooldown — stamp only after success (no stale lock).
         if let at = lastAttemptAt, Date().timeIntervalSince(at) < 8 { return }
 
         lastAttemptAt = Date()
         task?.cancel()
-        task = Task { await fetch(lat: lat, lng: lng, coord: coord) }
+        task = Task { await fetch(lat: lat, lng: lng, coord: coord, speedKmh: speedKmh) }
     }
 
-    private func fetch(lat: Double, lng: Double, coord: CLLocationCoordinate2D) async {
+    private func fetch(lat: Double, lng: Double, coord: CLLocationCoordinate2D, speedKmh: Int) async {
         guard !demoOverride else { return }
         let q = """
         [out:json][timeout:12];
@@ -104,9 +105,10 @@ final class EtubuOsmSpeedLimit: ObservableObject {
                     lastFail = "HTTP \((resp as? HTTPURLResponse)?.statusCode ?? -1)"
                     continue
                 }
-                if let parsed = Self.parse(data) {
+                if let parsed = Self.parse(data, speedKmh: speedKmh) {
                     guard !demoOverride else { return }
-                    guard EtubuVehicleTelemetry.shared.kmh >= Self.movingKmhThreshold else { return }
+                    guard EtubuVehicleTelemetry.shared.kmh >= Self.movingKmhThreshold
+                            || EtubuDemoDrive.isActive else { return }
                     limitKmh = parsed.limit
                     highway = parsed.highway
                     roadName = parsed.name
@@ -121,15 +123,21 @@ final class EtubuOsmSpeedLimit: ObservableObject {
                 lastFail = error.localizedDescription
             }
         }
-        // Tüm endpoint'ler fail → eski limitleyi tutma (yanlış levha riski).
+        // Geçici fail: yakın zamanda doğru levha varsa tut (yanıp sönmesin).
         guard !Task.isCancelled, !demoOverride else { return }
         lastError = lastFail ?? "OSM limit alınamadı"
+        if let at = lastSuccessAt, Date().timeIntervalSince(at) < 90,
+           let last = lastSuccessCoord {
+            let moved = CLLocation(latitude: last.latitude, longitude: last.longitude)
+                .distance(from: CLLocation(latitude: coord.latitude, longitude: coord.longitude))
+            if moved < 300, limitKmh != nil { return }
+        }
         limitKmh = nil
         highway = nil
         roadName = nil
     }
 
-    private static func parse(_ data: Data) -> (limit: Int?, highway: String?, name: String?)? {
+    private static func parse(_ data: Data, speedKmh: Int) -> (limit: Int?, highway: String?, name: String?)? {
         guard
             let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
             let elements = json["elements"] as? [[String: Any]], !elements.isEmpty
@@ -144,13 +152,33 @@ final class EtubuOsmSpeedLimit: ObservableObject {
             let limit = parseMaxspeed(tags["maxspeed"])
                 ?? parseMaxspeed(tags["maxspeed:forward"])
                 ?? defaultLimit(for: hw)
-            let score = priority(highway: hw) + (limit != nil ? 10 : 0)
+            let score = roadScore(highway: hw, limit: limit, speedKmh: speedKmh)
             if best == nil || score > best!.score {
                 best = (score, limit, hw, name)
             }
         }
         guard let best else { return nil }
         return (best.limit, best.highway, best.name)
+    }
+
+    /// Araç hızına göre doğru yolu seç — otoyolda yan sokak 50’yi alma.
+    private static func roadScore(highway: String, limit: Int?, speedKmh: Int) -> Int {
+        var s = priority(highway: highway)
+        if let limit {
+            s += 10
+            let gap = abs(limit - speedKmh)
+            if gap <= 15 { s += 40 }
+            else if gap <= 30 { s += 22 }
+            else if gap <= 50 { s += 8 }
+            // Hızlı giderken düşük limitli yolları cezalandır
+            if speedKmh >= 90, limit <= 50 { s -= 50 }
+            else if speedKmh >= 70, limit <= 50 { s -= 30 }
+            else if speedKmh >= 110, limit <= 90 { s -= 20 }
+            // Yavaş giderken otoyol varsayımını cezalandır
+            if speedKmh <= 40, limit >= 110 { s -= 35 }
+            else if speedKmh <= 55, limit >= 120 { s -= 25 }
+        }
+        return s
     }
 
     private static func parseMaxspeed(_ raw: String?) -> Int? {

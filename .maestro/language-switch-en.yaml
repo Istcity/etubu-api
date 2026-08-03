@@ -1,0 +1,42 @@
+appId: com.etubu.app
+---
+# EN chrome assert (launch force) + dil satırları görünür
+- launchApp:
+    clearState: true
+    permissions:
+      all: allow
+      notifications: deny
+    arguments:
+      etubuSkipOnboarding: true
+      etubuForcePremium: true
+      etubuForceLangEn: true
+- runFlow: setup-legal.yaml
+- tapOn:
+    id: "etubu.settings.open"
+- extendedWaitUntil:
+    visible: "About the app"
+    timeout: 10000
+- assertVisible: "Done"
+- scrollUntilVisible:
+    element:
+      id: "etubu.language.en"
+    direction: DOWN
+    timeout: 25000
+- assertVisible:
+    id: "etubu.language.en"
+- assertVisible: "Language"
+- takeScreenshot: qa-lang-en
+- tapOn:
+    id: "etubu.settings.done"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- swipe:
+    direction: DOWN
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 1500
+- assertVisible: "km/h"
+- assertVisible:
+    id: "etubu.settings.open"

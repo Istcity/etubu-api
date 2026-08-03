@@ -6,6 +6,8 @@ import UIKit
 struct EtubuRoutePickerView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var telemetry = EtubuVehicleTelemetry.shared
+    @ObservedObject private var premium = EtubuPremiumManager.shared
+    @ObservedObject private var warnings = EtubuDriveWarnings.shared
 
     private let fromFixed = "Konumum"
     private var theme: ClusterTheme { ClusterTheme.stored }
@@ -14,14 +16,17 @@ struct EtubuRoutePickerView: View {
     @State private var suggestions: [EtubuRoutePlace] = []
     @State private var isSearching = false
     @State private var indexReady = false
+    @State private var indexLoading = true
     @State private var isPlanning = false
     @State private var statusMessage = ""
     @State private var routeStatus = EtubuRouteStatus(active: false, fromLabel: "", toLabel: "", statusText: "", briefText: "")
     @State private var searchTask: Task<Void, Never>?
     @State private var destinationNeedsDistrict = false
     @State private var toResolved = false
+    @State private var selectedToPlace: EtubuRoutePlace? = nil
     @State private var suppressFieldChange = false
     @State private var sheetDetent: PresentationDetent = .large
+    @State private var showPremiumPaywall = false
     @FocusState private var toFocused: Bool
 
     var body: some View {
@@ -57,7 +62,7 @@ struct EtubuRoutePickerView: View {
                             if isSearching && suggestions.isEmpty && toText.count >= 2 {
                                 HStack(spacing: 8) {
                                     ProgressView().tint(theme.accent).scaleEffect(0.65)
-                                    Text("Aranıyor…")
+                                    Text(EtubuClusterL10n.t("searching"))
                                         .font(.caption2)
                                         .foregroundStyle(theme.accent.opacity(0.7))
                                     Spacer(minLength: 0)
@@ -81,10 +86,10 @@ struct EtubuRoutePickerView: View {
                                     .padding(.top, 8)
                                     .padding(.bottom, 4)
                             }
-                            if !indexReady {
+                            if indexLoading {
                                 HStack(spacing: 8) {
                                     ProgressView().tint(theme.accent).scaleEffect(0.8)
-                                    Text("TR yer dizini hazırlanıyor…")
+                                    Text(EtubuClusterL10n.t("trDirectoryPreparing"))
                                         .font(.caption)
                                         .foregroundStyle(theme.accent.opacity(0.85))
                                 }
@@ -135,7 +140,7 @@ struct EtubuRoutePickerView: View {
                 }
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
-                    Button("Kapat") { toFocused = false }
+                    Button(EtubuClusterL10n.close) { toFocused = false }
                         .fontWeight(.semibold)
                 }
             }
@@ -146,6 +151,10 @@ struct EtubuRoutePickerView: View {
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
         .accessibilityIdentifier("etubu.route.picker")
+        .sheet(isPresented: $showPremiumPaywall) {
+            EtubuPremiumPaywallView(accent: theme.accent, highlight: EtubuClusterL10n.t("premiumLockedRoute"))
+                .presentationDetents([.large, .medium])
+        }
         .onAppear {
             EtubuClusterPresenter.shared.hideCapacitorChrome()
             EtubuRouteBridge.primeWarningAudio()
@@ -154,6 +163,7 @@ struct EtubuRoutePickerView: View {
             statusMessage = ""
             sheetDetent = .large
             EtubuRouteBridge.ensureIndex { ready in
+                indexLoading = false
                 indexReady = ready
                 if !ready {
                     statusMessage = "Liste gecikti — yine de arayabilirsiniz"
@@ -175,11 +185,11 @@ struct EtubuRoutePickerView: View {
         }
     }
 
-    /// Rotayı kur + Tamam birleşik: kurunca ana ekrana döner.
+    /// Rota kur: özet aynı ekranda kalsın. Aktif rotada Tamam kapatır.
     private var planAndDoneButton: some View {
         Button {
             if canPlanRoute {
-                planRoute(andDismiss: true)
+                planRoute(andDismiss: false)
             } else if routeStatus.active {
                 dismiss()
             }
@@ -205,11 +215,13 @@ struct EtubuRoutePickerView: View {
             )
         }
         .disabled((!canPlanRoute && !routeStatus.active) || isPlanning)
+        .accessibilityIdentifier("etubu.route.plan")
+        .accessibilityLabel(planDoneLabel)
     }
 
     private var planDoneLabel: String {
         if isPlanning { return EtubuClusterL10n.planning }
-        if canPlanRoute { return "\(EtubuClusterL10n.planRoute) · \(EtubuClusterL10n.done)" }
+        if canPlanRoute { return EtubuClusterL10n.planRoute }
         if routeStatus.active { return EtubuClusterL10n.done }
         return EtubuClusterL10n.planRoute
     }
@@ -219,6 +231,7 @@ struct EtubuRoutePickerView: View {
             EtubuRouteBridge.clear()
             toText = ""
             toResolved = false
+            selectedToPlace = nil
             destinationNeedsDistrict = false
             suggestions = []
             routeStatus = EtubuRouteStatus(active: false, fromLabel: fromFixed, toLabel: "", statusText: "", briefText: "")
@@ -274,7 +287,7 @@ struct EtubuRoutePickerView: View {
                 TextField(
                     "",
                     text: $toText,
-                    prompt: Text("Şehir / ilçe").foregroundStyle(theme.mutedText)
+                    prompt: Text(EtubuClusterL10n.t("cityDistrict")).foregroundStyle(theme.mutedText)
                 )
                 .textInputAutocapitalization(.words)
                 .autocorrectionDisabled(true)
@@ -285,10 +298,10 @@ struct EtubuRoutePickerView: View {
                 .foregroundStyle(Color.white)
                 .tint(theme.accent)
                 .focused($toFocused)
-                .accessibilityLabel("Şehir / ilçe")
+                .accessibilityLabel(EtubuClusterL10n.t("cityDistrict"))
                 .accessibilityIdentifier("etubu.route.to")
                 .onSubmit {
-                    if canPlanRoute { planRoute(andDismiss: true) }
+                    if canPlanRoute { planRoute(andDismiss: false) }
                     else { commitDestination() }
                 }
 
@@ -296,6 +309,7 @@ struct EtubuRoutePickerView: View {
                     Button {
                         toText = ""
                         toResolved = false
+                        selectedToPlace = nil
                         suggestions = []
                         destinationNeedsDistrict = false
                     } label: {
@@ -322,6 +336,7 @@ struct EtubuRoutePickerView: View {
                     DispatchQueue.main.async { suppressFieldChange = false }
                 }
                 toResolved = false
+                selectedToPlace = nil
                 scheduleSearch(nfc)
                 refreshDistrictRequirement(for: nfc)
             }
@@ -348,7 +363,7 @@ struct EtubuRoutePickerView: View {
     private var suggestionsList: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
-                ForEach(suggestions) { place in
+                ForEach(Array(suggestions.enumerated()), id: \.element.id) { idx, place in
                     Button {
                         select(place)
                     } label: {
@@ -380,6 +395,7 @@ struct EtubuRoutePickerView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier(idx == 0 ? "etubu.route.suggestion.first" : "etubu.route.suggestion.\(idx)")
                     if place.id != suggestions.last?.id {
                         Rectangle()
                             .fill(Color.white.opacity(0.05))
@@ -396,12 +412,12 @@ struct EtubuRoutePickerView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 Circle().fill(routeStatus.navOnly ? theme.accent : Color.green).frame(width: 6, height: 6)
-                Text(routeStatus.navOnly ? "Navigasyon rotası" : "Aktif rota")
+                Text(routeStatus.navOnly ? EtubuClusterL10n.t("navRoute") : EtubuClusterL10n.t("activeRoute"))
                     .font(.caption.weight(.bold))
                     .foregroundStyle(routeStatus.navOnly ? theme.accent : Color.green)
                 Spacer()
-                if routeStatus.hazardCount > 0 {
-                    Text("\(routeStatus.hazardCount) nokta")
+                if displayHazardCount > 0 {
+                    Text(String(format: EtubuClusterL10n.t("hazardPointsFmt"), displayHazardCount))
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(theme.mutedText)
                 }
@@ -409,6 +425,8 @@ struct EtubuRoutePickerView: View {
             Text("\(fromFixed) → \(routeStatus.toLabel.isEmpty ? toText : routeStatus.toLabel)")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(theme.primaryText)
+                .accessibilityIdentifier("etubu.route.summary")
+                .accessibilityAddTraits(.isStaticText)
             Button {
                 if EtubuVehicleTelemetry.shared.needsChargeStop
                     || !EtubuEvRoutePlanner.shared.suggestedStops.isEmpty {
@@ -420,8 +438,8 @@ struct EtubuRoutePickerView: View {
                 Label(
                     EtubuVehicleTelemetry.shared.needsChargeStop
                         || !EtubuEvRoutePlanner.shared.suggestedStops.isEmpty
-                        ? "En yakın şarj (Haritalar)"
-                        : "Apple Haritalar’da aç",
+                        ? EtubuClusterL10n.t("nearestChargeMaps")
+                        : EtubuClusterL10n.t("openAppleMaps"),
                     systemImage: "map"
                 )
                     .font(.caption.weight(.semibold))
@@ -430,30 +448,31 @@ struct EtubuRoutePickerView: View {
             .foregroundStyle(theme.accent)
             .accessibilityIdentifier("etubu.route.openMaps")
             if routeStatus.navOnly {
-                Text("Yurt dışı veya OSRM yedek — radar / koridor / EGM noktaları yok; harita çizimi aktif.")
+                Text(EtubuClusterL10n.t("overseasRouteNote"))
                     .font(.caption)
                     .foregroundStyle(theme.accent.opacity(0.75))
             } else {
-                Text("Kısa özet")
+                Text(EtubuClusterL10n.t("shortSummary"))
                     .font(.caption2.weight(.bold))
                     .foregroundStyle(theme.mutedText)
-                EtubuRouteBriefChipsView(brief: routeStatus.brief, compact: false)
+                EtubuRouteBriefChipsView(brief: displayBrief, compact: false)
+                    .accessibilityIdentifier("etubu.route.brief")
 
                 // Detaylı liste — şarj / radar / koridor / hava + konum
-                if !routeStatus.hazardDetails.isEmpty {
-                    Text("Kritik noktalar (detay)")
+                if !displayHazards.isEmpty {
+                    Text(EtubuClusterL10n.t("criticalPoints"))
                         .font(.caption2.weight(.bold))
                         .foregroundStyle(.white.opacity(0.45))
                         .padding(.top, 4)
                     VStack(alignment: .leading, spacing: 0) {
-                        ForEach(Array(routeStatus.hazardDetails.enumerated()), id: \.element.id) { idx, h in
+                        ForEach(Array(displayHazards.enumerated()), id: \.element.id) { idx, h in
                             HStack(alignment: .top, spacing: 10) {
                                 Image(systemName: EtubuHazardChrome.icon(h.kind))
                                     .font(.system(size: 12, weight: .bold))
                                     .foregroundStyle(EtubuHazardChrome.tint(h.kind, urgent: false, theme: .aurora))
                                     .frame(width: 18)
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(h.kindTitleTR)
+                                    Text(h.kindTitle)
                                         .font(.caption.weight(.bold))
                                         .foregroundStyle(.white.opacity(0.9))
                                     Text(detailLine(for: h, index: idx + 1))
@@ -464,7 +483,7 @@ struct EtubuRoutePickerView: View {
                                 Spacer(minLength: 0)
                             }
                             .padding(.vertical, 8)
-                            if idx < routeStatus.hazardDetails.count - 1 {
+                            if idx < displayHazards.count - 1 {
                                 Divider().overlay(Color.white.opacity(0.06))
                             }
                         }
@@ -476,7 +495,7 @@ struct EtubuRoutePickerView: View {
                     )
                 }
             }
-            if !routeStatus.brief.hasAny, !routeStatus.briefText.isEmpty, !routeStatus.navOnly {
+            if !displayBrief.hasAny, !routeStatus.briefText.isEmpty, !routeStatus.navOnly {
                 Text(routeStatus.briefText)
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.5))
@@ -485,11 +504,29 @@ struct EtubuRoutePickerView: View {
         }
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("etubu.route.active")
         .overlay(alignment: .top) {
             Rectangle()
                 .fill((routeStatus.navOnly ? theme.accent : Color.green).opacity(0.35))
                 .frame(height: 0.5)
         }
+    }
+
+    /// Cap status boşken native plan brief’ini kullan.
+    private var displayBrief: EtubuRouteBriefSummary {
+        if routeStatus.brief.hasAny { return routeStatus.brief }
+        if warnings.brief.hasAny { return warnings.brief }
+        return routeStatus.brief
+    }
+
+    private var displayHazards: [EtubuRouteHazard] {
+        if !routeStatus.hazardDetails.isEmpty { return routeStatus.hazardDetails }
+        return warnings.hazards
+    }
+
+    private var displayHazardCount: Int {
+        max(routeStatus.hazardCount, displayHazards.count)
     }
 
     private func detailLine(for h: EtubuRouteHazard, index: Int) -> String {
@@ -519,18 +556,15 @@ struct EtubuRoutePickerView: View {
     private var canPlanRoute: Bool {
         let to = toText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard to.count >= 2, !isPlanning else { return false }
-        return !destinationNeedsDistrict
+        // İlçe zorunluluğu kalktı — şehir / OSM noktası yeterli.
+        return true
     }
 
     private func refreshDistrictRequirement(for text: String) {
-        EtubuRouteBridge.needsDistrictPick(text: text) { needs in
-            destinationNeedsDistrict = needs
-            if needs {
-                let name = text.trimmingCharacters(in: .whitespaces)
-                statusMessage = "\(name) — ilçe seçin (ör. \(name) Çankaya)"
-            } else if statusMessage.contains("ilçe seçin") {
-                statusMessage = ""
-            }
+        // Eski ilçe uyarısı kaldırıldı; arama OSM ile tamamlanır.
+        destinationNeedsDistrict = false
+        if statusMessage.contains("ilçe seçin") {
+            statusMessage = ""
         }
     }
 
@@ -538,47 +572,39 @@ struct EtubuRoutePickerView: View {
         suppressFieldChange = true
         searchTask?.cancel()
         toText = place.label
+        selectedToPlace = place
         toResolved = true
         destinationNeedsDistrict = false
         statusMessage = ""
         suggestions = []
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-        let label = place.label
-        EtubuRouteBridge.needsDistrictPick(text: label) { needs in
-            if needs {
-                toResolved = false
-                destinationNeedsDistrict = true
-                statusMessage = "\(label) — ilçe seçin (ör. \(label) Çankaya)"
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                suppressFieldChange = false
-            }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            suppressFieldChange = false
         }
     }
 
     private func commitDestination() {
         let raw = toText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !raw.isEmpty else { return }
-        EtubuRouteBridge.needsDistrictPick(text: raw) { needs in
-            if needs {
-                destinationNeedsDistrict = true
+        // Seçili öneri varsa doğrudan kullan
+        if let selected = selectedToPlace, selected.lat != nil {
+            toResolved = true
+            destinationNeedsDistrict = false
+            return
+        }
+        EtubuRouteBridge.resolve(text: raw) { place in
+            guard let place else {
                 toResolved = false
-                statusMessage = "\(raw) — ilçe seçin (ör. \(raw) Çankaya)"
                 return
             }
-            EtubuRouteBridge.resolve(text: raw) { place in
-                guard let place else {
-                    toResolved = false
-                    return
-                }
-                suppressFieldChange = true
-                toText = place.label
-                toResolved = true
-                destinationNeedsDistrict = false
-                statusMessage = ""
-                suggestions = []
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { suppressFieldChange = false }
-            }
+            suppressFieldChange = true
+            toText = place.label
+            selectedToPlace = place
+            toResolved = true
+            destinationNeedsDistrict = false
+            statusMessage = ""
+            suggestions = []
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { suppressFieldChange = false }
         }
     }
 
@@ -624,9 +650,9 @@ struct EtubuRoutePickerView: View {
             }
             if places.isEmpty {
                 if !indexReady {
-                    statusMessage = "İlçe listesi yükleniyor — birkaç saniye…"
+                    statusMessage = "Liste yükleniyor — birkaç saniye…"
                 } else if statusMessage.isEmpty || statusMessage.contains("yükleniyor") {
-                    statusMessage = "Sonuç yok — il / ilçe yazın (ör. Ankara Çankaya)"
+                    statusMessage = "Sonuç yok — şehir veya yer adı yazın"
                 }
             } else if statusMessage.contains("Sonuç yok") || statusMessage.contains("yükleniyor") {
                 statusMessage = ""
@@ -635,6 +661,18 @@ struct EtubuRoutePickerView: View {
     }
 
     private func planRoute(andDismiss: Bool = false) {
+        if !premium.isPremium {
+            if !premium.entitlementReady {
+                Task { @MainActor in
+                    await premium.ensureEntitlementChecked()
+                    planRoute(andDismiss: andDismiss)
+                }
+                return
+            }
+            showPremiumPaywall = true
+            statusMessage = EtubuClusterL10n.t("premiumLockedRoute")
+            return
+        }
         isPlanning = true
         statusMessage = "Yerler çözülüyor…"
         let toRaw = toText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -644,62 +682,157 @@ struct EtubuRoutePickerView: View {
             statusMessage = msg
         }
 
-        EtubuRouteBridge.needsDistrictPick(text: toRaw) { toNeeds in
-            if toNeeds {
-                fail("\(toRaw.trimmingCharacters(in: .whitespaces)) — ilçe seçin (ör. \(toRaw.trimmingCharacters(in: .whitespaces)) Çankaya)")
-                destinationNeedsDistrict = true
-                toResolved = false
+        // İlçe şartı yok — seçili yer veya resolve (TR index → OSM).
+        let planFromSelected: () -> Void = {
+            if let sel = selectedToPlace, sel.lat != nil, sel.lng != nil {
+                toText = sel.label
+                toResolved = true
+                statusMessage = "Rotaya alınıyor: \(fromFixed) → \(sel.label)"
+                EtubuRouteBridge.primeWarningAudio()
+                EtubuRouteBridge.plan(from: fromFixed, to: sel.label, toPlace: sel) { ok, msg in
+                    isPlanning = false
+                    statusMessage = msg
+                    telemetry.routeDestLat = sel.lat
+                    telemetry.routeDestLng = sel.lng
+                    if ok {
+                        telemetry.routeActive = true
+                        telemetry.routeTo = sel.label
+                        telemetry.navDestination = sel.label
+                        if telemetry.routeFrom.isEmpty { telemetry.routeFrom = fromFixed }
+                    }
+                    EtubuRouteBridge.status { st in
+                        routeStatus = st
+                        if st.active || ok || telemetry.routeActive {
+                            telemetry.routeActive = true
+                            telemetry.routeFrom = st.fromLabel.isEmpty
+                                ? (telemetry.routeFrom.isEmpty ? fromFixed : telemetry.routeFrom)
+                                : st.fromLabel
+                            telemetry.routeTo = st.toLabel.isEmpty ? sel.label : st.toLabel
+                            telemetry.navDestination = telemetry.routeTo
+                            routeStatus.active = true
+                            if routeStatus.toLabel.isEmpty { routeStatus.toLabel = sel.label }
+                            if routeStatus.fromLabel.isEmpty { routeStatus.fromLabel = fromFixed }
+                            if !st.toLabel.isEmpty { toText = st.toLabel }
+                            if !st.hazardDetails.isEmpty {
+                                EtubuDriveWarnings.shared.hazards = st.hazardDetails
+                                EtubuDriveWarnings.shared.remainingHazards = st.hazardDetails
+                            }
+                            Self.applyBriefFromStatus(st, warnings: warnings, routeStatus: &routeStatus)
+                            toFocused = false
+                            if andDismiss { dismiss() }
+                        } else {
+                            telemetry.routeActive = st.active
+                            telemetry.routeFrom = st.fromLabel.isEmpty ? fromFixed : st.fromLabel
+                            telemetry.routeTo = st.toLabel
+                            telemetry.navDestination = st.toLabel
+                        }
+                        EtubuEvRoutePlanner.shared.refreshFromLiveState()
+                    }
+                    EtubuDriveWarnings.shared.startPolling()
+                    EtubuMapLocationHelper.shared.enableBackgroundForRouteIfNeeded()
+                    if #available(iOS 16.2, *) {
+                        Task { await EtubuLiveActivityController.publishCurrent() }
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        EtubuDriveWarnings.shared.startPolling()
+                    }
+                }
                 return
             }
             EtubuRouteBridge.resolve(text: toRaw) { toPlace in
                 guard let toPlace else {
-                    fail("\(toRaw) bulunamadı — listeden seçin")
+                    fail(String(format: EtubuClusterL10n.t("routePlaceNotFoundOsmFmt"), toRaw))
                     toResolved = false
                     return
                 }
                 toText = toPlace.label
                 toResolved = true
-                statusMessage = "Rotaya alınıyor: \(fromFixed) → \(toPlace.label)"
+                selectedToPlace = toPlace
+                statusMessage = String(format: EtubuClusterL10n.t("routePlanningFmt"), fromFixed, toPlace.label)
                 EtubuRouteBridge.primeWarningAudio()
-                    EtubuRouteBridge.plan(from: fromFixed, to: toPlace.label) { ok, msg in
+                EtubuRouteBridge.plan(from: fromFixed, to: toPlace.label, toPlace: toPlace) { ok, msg in
                     isPlanning = false
-                    // Eski “RouteGuard yok” — Cap stub’dayken; kullanıcı dostu metin.
-                    if msg.contains("RouteGuard") || msg.contains("rota motoru") || msg.contains("Rota motoru") {
-                        statusMessage = msg.contains("tekrar") ? msg : "Rota motoru yükleniyor — tekrar deneyin"
-                    } else {
-                        statusMessage = msg
-                    }
+                    statusMessage = msg
                     telemetry.routeDestLat = toPlace.lat
                     telemetry.routeDestLng = toPlace.lng
+                    if ok {
+                        telemetry.routeActive = true
+                        telemetry.routeTo = toPlace.label
+                        telemetry.navDestination = toPlace.label
+                        if telemetry.routeFrom.isEmpty { telemetry.routeFrom = fromFixed }
+                    }
                     EtubuRouteBridge.status { st in
                         routeStatus = st
-                        telemetry.routeActive = st.active
-                        telemetry.routeFrom = st.fromLabel.isEmpty ? fromFixed : st.fromLabel
-                        telemetry.routeTo = st.toLabel
-                        telemetry.navDestination = st.toLabel
-                        if !st.toLabel.isEmpty { toText = st.toLabel }
-                        if ok || st.active {
-                            if andDismiss {
-                                toFocused = false
-                                dismiss()
+                        if st.active || ok || telemetry.routeActive {
+                            telemetry.routeActive = true
+                            telemetry.routeFrom = st.fromLabel.isEmpty
+                                ? (telemetry.routeFrom.isEmpty ? fromFixed : telemetry.routeFrom)
+                                : st.fromLabel
+                            telemetry.routeTo = st.toLabel.isEmpty ? toPlace.label : st.toLabel
+                            telemetry.navDestination = telemetry.routeTo
+                            routeStatus.active = true
+                            if routeStatus.toLabel.isEmpty { routeStatus.toLabel = toPlace.label }
+                            if routeStatus.fromLabel.isEmpty { routeStatus.fromLabel = fromFixed }
+                            if !st.toLabel.isEmpty { toText = st.toLabel }
+                            if !st.hazardDetails.isEmpty {
+                                EtubuDriveWarnings.shared.hazards = st.hazardDetails
+                                EtubuDriveWarnings.shared.remainingHazards = st.hazardDetails
                             }
-                        }
-                        if !st.hazardDetails.isEmpty {
-                            EtubuDriveWarnings.shared.hazards = st.hazardDetails
-                            EtubuDriveWarnings.shared.remainingHazards = st.hazardDetails
-                            EtubuDriveWarnings.shared.brief = st.brief
-                            EtubuDriveWarnings.shared.remainingBrief = st.brief
+                            Self.applyBriefFromStatus(st, warnings: warnings, routeStatus: &routeStatus)
+                            toFocused = false
+                            if andDismiss { dismiss() }
+                        } else {
+                            telemetry.routeActive = st.active
+                            telemetry.routeFrom = st.fromLabel.isEmpty ? fromFixed : st.fromLabel
+                            telemetry.routeTo = st.toLabel
+                            telemetry.navDestination = st.toLabel
                         }
                         EtubuEvRoutePlanner.shared.refreshFromLiveState()
                     }
                     EtubuDriveWarnings.shared.startPolling()
+                    EtubuMapLocationHelper.shared.enableBackgroundForRouteIfNeeded()
                     if #available(iOS 16.2, *) {
                         Task { await EtubuLiveActivityController.publishCurrent() }
                     }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                         EtubuDriveWarnings.shared.startPolling()
                     }
                 }
+            }
+        }
+        planFromSelected()
+    }
+
+    private static func applyBriefFromStatus(
+        _ st: EtubuRouteStatus,
+        warnings: EtubuDriveWarnings,
+        routeStatus: inout EtubuRouteStatus
+    ) {
+        if st.brief.hasAny {
+            EtubuDriveWarnings.shared.brief = st.brief
+            EtubuDriveWarnings.shared.remainingBrief = st.brief
+            routeStatus.brief = st.brief
+        } else if warnings.brief.hasAny {
+            routeStatus.brief = warnings.brief
+        } else if !st.hazardDetails.isEmpty {
+            var s = EtubuRouteBriefSummary()
+            for h in st.hazardDetails {
+                switch h.kind {
+                case "corridor": s.corridorCount += 1
+                case "charge":
+                    s.chargeCount += 1
+                    if !h.label.isEmpty, s.chargeNames.count < 4 { s.chargeNames.append(h.label) }
+                case "weather":
+                    s.weatherCount += 1
+                    if !h.label.isEmpty, s.weatherLabels.count < 4 { s.weatherLabels.append(h.label) }
+                case "control": s.controlCount += 1
+                default: s.radarCount += 1
+                }
+            }
+            if s.hasAny {
+                routeStatus.brief = s
+                EtubuDriveWarnings.shared.brief = s
+                EtubuDriveWarnings.shared.remainingBrief = s
             }
         }
     }

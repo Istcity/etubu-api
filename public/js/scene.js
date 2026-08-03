@@ -7,6 +7,9 @@ const Scene = (() => {
   const MODE_PROFILE = {
     glow: { particles: 28, shards: 0, speedGain: 0.95, hueShift: 0 },
     aurora: { particles: 28, shards: 0, speedGain: 0.95, hueShift: 0 }, // alias → glow
+    tesla: { particles: 18, shards: 0, speedGain: 0.9, hueShift: -4 },
+    midnight: { particles: 20, shards: 2, speedGain: 0.85, hueShift: -10 },
+    "plaid-boost": { particles: 40, shards: 5, speedGain: 1.35, hueShift: 22 },
     particles: { particles: 48, shards: 4, speedGain: 1.05, hueShift: 0 },
     vortex: { particles: 24, shards: 3, speedGain: 1.0, hueShift: 0 },
     horizon: { particles: 24, shards: 3, speedGain: 1.1, hueShift: 0 },
@@ -57,6 +60,9 @@ const Scene = (() => {
   const MODE_HUE = {
     glow: 195,
     aurora: 195,
+    tesla: 0,
+    midnight: 210,
+    "plaid-boost": 28,
     particles: 200,
     vortex: 275,
     horizon: 205,
@@ -1791,6 +1797,9 @@ const Scene = (() => {
   const DRAWERS = {
     glow: drawGlow,
     aurora: drawGlow,
+    tesla: drawChrome,
+    midnight: drawNightCity,
+    "plaid-boost": drawSolarFlare,
     particles: drawParticlesMode,
     vortex: drawVortex,
     horizon: drawHorizon,

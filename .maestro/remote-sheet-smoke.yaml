@@ -1,0 +1,41 @@
+appId: com.etubu.app
+---
+# Uzaktan kumanda sheet — araçsız crash yok
+- launchApp:
+    clearState: true
+    permissions:
+      all: allow
+      notifications: deny
+    arguments:
+      etubuSkipOnboarding: true
+      etubuForcePremium: true
+- runFlow: setup-legal.yaml
+- assertVisible:
+    id: "etubu.remote.open"
+- waitForAnimationToEnd:
+    timeout: 800
+- tapOn:
+    id: "etubu.remote.open"
+- waitForAnimationToEnd:
+    timeout: 2000
+- extendedWaitUntil:
+    visible:
+      id: "etubu.remote.climate.on"
+    timeout: 15000
+- assertVisible:
+    id: "etubu.remote.climate.on"
+- takeScreenshot: qa-remote-sheet
+- tapOn:
+    text: "Tamam"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- swipe:
+    direction: DOWN
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 1200
+- assertVisible:
+    id: "etubu.remote.open"
+- assertVisible: "km/h"

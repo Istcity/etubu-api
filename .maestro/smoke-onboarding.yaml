@@ -8,8 +8,10 @@ appId: com.etubu.app
       notifications: deny
     arguments:
       etubuSkipOnboarding: true
+      etubuForcePremium: true
 - runFlow: dismiss-permissions.yaml
-- assertVisible: "Hüküm ve Koşullar"
+- assertVisible:
+    id: "etubu.legal.checkbox"
 - assertVisible: "Etubu"
 - takeScreenshot: qa-01-legal
 - runFlow: dismiss-permissions.yaml
@@ -34,23 +36,35 @@ appId: com.etubu.app
     visible:
       id: "etubu.settings.open"
     timeout: 25000
-- assertNotVisible: "Hüküm ve Koşullar"
+- assertNotVisible:
+    id: "etubu.legal.checkbox"
 - takeScreenshot: qa-03-main
 - assertVisible: "km/h"
+- assertVisible:
+    id: "etubu.tpms.grid"
 - tapOn:
     id: "etubu.route.open"
 - runFlow: dismiss-permissions.yaml
 - extendedWaitUntil:
-    visible: "Şehir / ilçe"
+    visible:
+      id: "etubu.route.picker"
     timeout: 12000
-- tapOn: "Şehir / ilçe"
+- extendedWaitUntil:
+    visible:
+      id: "etubu.route.to"
+    timeout: 8000
+- tapOn:
+    id: "etubu.route.to"
 - inputText: "Ankara"
 - assertVisible: "Ankara"
+# İlçe nag kaldırıldı — şehir adı yeterli
+- assertNotVisible: ".*ilçe seçin.*"
 - takeScreenshot: qa-04-route-typing
 - tapOn: "Kapat"
 - extendedWaitUntil:
     visible: "km/h"
     timeout: 8000
 - assertVisible: "km/h"
-- assertVisible: "FL"
+- assertVisible:
+    id: "etubu.tpms.grid"
 - takeScreenshot: qa-05-main-tpms

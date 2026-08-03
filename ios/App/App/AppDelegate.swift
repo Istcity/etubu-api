@@ -125,11 +125,19 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         } else {
             Self.activateSilentSafeSession()
         }
-        // Dynamic Island / Live Activity: yalnızca arka planda
+        // Dynamic Island: hareket VEYA aktif app rotası — park+rota yoksa kapat.
+        // Aligns with EtubuLiveActivityController.isDriveSessionAllowed.
         if #available(iOS 16.2, *) {
-            EtubuLiveActivityController.ensureAudioSession(mixWithOthers: true)
-            EtubuLiveActivityController.startSilentKeepalive()
-            Task { await EtubuLiveActivityController.beginBackgroundSession() }
+            let t = EtubuVehicleTelemetry.shared
+            let keepIsland = EtubuDemoDrive.isActive || t.kmh >= 3 || t.routeActive
+            if keepIsland {
+                EtubuLiveActivityController.ensureAudioSession(mixWithOthers: true)
+                EtubuLiveActivityController.startSilentKeepalive()
+                Task { await EtubuLiveActivityController.publishCurrent() }
+            } else {
+                EtubuLiveActivityController.stopSilentKeepalive()
+                EtubuLiveActivityController.endAllNow()
+            }
         }
         var taskId: UIBackgroundTaskIdentifier = .invalid
         taskId = application.beginBackgroundTask(withName: "etubu.keepDriveAlive") {
@@ -142,6 +150,14 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             if taskId != .invalid {
                 application.endBackgroundTask(taskId)
                 taskId = .invalid
+            }
+            // BG task bitince: yalnızca gerçek park + rota yoksa Island’ı kapat.
+            if #available(iOS 16.2, *) {
+                let t = EtubuVehicleTelemetry.shared
+                let keepIsland = EtubuDemoDrive.isActive || t.kmh >= 3 || t.routeActive
+                if !keepIsland {
+                    EtubuLiveActivityController.endAllNow()
+                }
             }
         }
     }
@@ -159,6 +175,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         configureAudioSession(quality: true)
         EtubuRuntimeProfile.hideLingeringSplashOverlays()
         EtubuClusterPresenter.shared.installOverCapacitor()
+        // Premium köprüsünü taze tut — Cap “kilitli” yanılmasın.
+        Task { @MainActor in
+            EtubuClusterAudioBridge.setPremium(EtubuPremiumManager.shared.isPremium)
+            await EtubuPremiumManager.shared.refreshEntitlementQuietly()
+        }
         // Araç bağlantısı yalnızca uygulama açılışında (startCore → bootstrap).
         // becomeActive’de yeniden bağlanma / koparma yok.
         if #available(iOS 16.2, *) {

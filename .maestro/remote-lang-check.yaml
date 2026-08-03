@@ -1,0 +1,62 @@
+appId: com.etubu.app
+---
+# Dil seçici + uzaktan kumanda sheet smoke (TR GPS → Türkçe)
+- launchApp:
+    clearState: true
+    permissions:
+      all: allow
+      notifications: deny
+    arguments:
+      etubuSkipOnboarding: true
+      etubuForcePremium: true
+- runFlow: setup-legal.yaml
+- assertVisible:
+    id: "etubu.remote.open"
+- tapOn:
+    id: "etubu.settings.open"
+- extendedWaitUntil:
+    visible: "Uygulama hakkında"
+    timeout: 10000
+- scrollUntilVisible:
+    element:
+      id: "etubu.language.tr"
+    direction: DOWN
+    timeout: 20000
+- assertVisible:
+    id: "etubu.language.tr"
+- assertVisible: "Türkçe"
+- takeScreenshot: qa-lang-picker
+- tapOn:
+    id: "etubu.settings.done"
+    optional: true
+- tapOn:
+    text: "Tamam"
+    optional: true
+- swipe:
+    direction: DOWN
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 1000
+- assertVisible:
+    id: "etubu.remote.open"
+# Sheet gerçekten açılsın (audit: remote-lang-check sheet açmalı)
+- tapOn:
+    id: "etubu.remote.open"
+- waitForAnimationToEnd:
+    timeout: 2000
+- extendedWaitUntil:
+    visible:
+      id: "etubu.remote.climate.on"
+    timeout: 15000
+- takeScreenshot: qa-remote-sheet-open
+- tapOn:
+    text: "Tamam"
+    optional: true
+- swipe:
+    direction: DOWN
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 1000
+- assertVisible:
+    id: "etubu.remote.open"
+- takeScreenshot: qa-remote-chrome

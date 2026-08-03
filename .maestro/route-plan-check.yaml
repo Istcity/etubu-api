@@ -1,0 +1,67 @@
+appId: com.etubu.app
+---
+# Premium unlocked + rota: şehir/yer (ilçe nag yok), planla, özet kartı
+# Sim GPS gerekli — yoksa "Konum gerekli" ile plan düşer (suite: simctl location set).
+# Vehicle-nav (Tesla share → adaptVehicleNavIfNeeded): kod yolu doğrulandı; BLE sim yok.
+- launchApp:
+    clearState: true
+    permissions:
+      all: allow
+      notifications: deny
+    arguments:
+      etubuSkipOnboarding: true
+      etubuForcePremium: true
+- runFlow: setup-legal.yaml
+- extendedWaitUntil:
+    visible:
+      id: "etubu.route.open"
+    timeout: 8000
+- assertVisible:
+    id: "etubu.tpms.grid"
+- tapOn:
+    id: "etubu.route.open"
+# Force premium: picker açılmalı — paywall değil
+- extendedWaitUntil:
+    visible:
+      id: "etubu.route.picker"
+    timeout: 12000
+- assertNotVisible: "Etubu Premium"
+- extendedWaitUntil:
+    visible:
+      id: "etubu.route.to"
+    timeout: 8000
+- assertNotVisible: "Konum gerekli.*"
+- tapOn:
+    id: "etubu.route.to"
+# İlçe şartı yok — tek şehir adı yeterli
+- inputText: "Corum"
+- assertNotVisible: ".*ilçe seçin.*"
+- extendedWaitUntil:
+    visible:
+      id: "etubu.route.suggestion.first"
+    timeout: 20000
+- tapOn:
+    id: "etubu.route.suggestion.first"
+- waitForAnimationToEnd:
+    timeout: 1500
+- assertNotVisible: ".*ilçe seçin.*"
+- extendedWaitUntil:
+    visible:
+      id: "etubu.route.plan"
+    timeout: 8000
+- tapOn:
+    id: "etubu.route.plan"
+- extendedWaitUntil:
+    visible:
+      id: "etubu.route.active"
+    timeout: 90000
+- assertVisible:
+    id: "etubu.route.active"
+- assertVisible:
+    text: "Konumum"
+- assertNotVisible: ".*ilçe seçin.*"
+- takeScreenshot: qa-route-planned
+- tapOn: "Kapat"
+- extendedWaitUntil:
+    visible: "km/h"
+    timeout: 8000

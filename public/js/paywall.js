@@ -1,9 +1,8 @@
 /**
- * Web erişim modeli (reklam destekli):
- * - Tüm ses/tema ücretsiz; ücretli/ücretsiz ayrımı yok
- * - Gelir: yalnızca reklam
- * - Google girişi: ayarların hatırlanması (satın alma kapısı değil)
- * Native IAP yolları geriye uyum için duruyor; web UI’da gösterilmez.
+ * Monetization:
+ * - Web: ads-supported; full theme/voice catalog free (no IAP UI).
+ * - Native Cap shell: StoreKit premium (`com.etubu.premium`) — do not claim free catalog.
+ *   Primary paywall is SwiftUI; Cap helpers must stay consistent with native gates.
  */
 const Paywall = (() => {
   const cfg = () => window.ETUBU_CONFIG || {};
@@ -107,8 +106,11 @@ const Paywall = (() => {
     return typeof CarBrowser !== "undefined" && CarBrowser.hasUrlInvite();
   }
 
-  /** Tüm ses/tema: geçici olarak ödeme/deneme kilidi kapalı — katalog herkese açık */
+  /** Web: ads-supported free catalog. Native: StoreKit entitlement only. */
   function hasCatalogAccess(totalKm) {
+    if (isNativeApp()) {
+      return isPaid() || isAdFree() || hasInvite();
+    }
     return true;
   }
 
@@ -309,6 +311,15 @@ const Paywall = (() => {
       Identity?.refreshAccountUi?.();
       return;
     }
+    // Native: SwiftUI IAP messaging — Cap pill must not claim “ads-supported free catalog”
+    if (isNativeApp()) {
+      pill.textContent = t("premiumFreeNote") || t("trialFree");
+      pill.title = t("premiumFreeNote") || t("trialAdHint");
+      pill.style.borderColor = "rgba(0,240,255,.35)";
+      pill.style.color = "var(--cyan)";
+      Identity?.refreshAccountUi?.();
+      return;
+    }
     // Web: reklam desteği yönlendirmesi (deneme / üyelik yok)
     pill.textContent = t("trialFree");
     pill.title = t("trialAdHint");
@@ -443,7 +454,7 @@ const Paywall = (() => {
     const productId =
       planType === "lifetime"
         ? cfg().IAP_ADFREE_ID || "etubu.ads.remove"
-        : cfg().IAP_UNLOCK_ID || "etubu.catalog.monthly";
+        : cfg().IAP_UNLOCK_ID || "com.etubu.premium";
 
     if (status) status.textContent = t("paymentStarting");
 

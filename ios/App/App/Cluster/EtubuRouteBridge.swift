@@ -17,6 +17,7 @@ struct EtubuRoutePlace: Identifiable, Equatable, Hashable {
     var nearLabel: String = ""
     var lat: Double? = nil
     var lng: Double? = nil
+    var districtId: String = ""
 }
 
 struct EtubuRouteStatus: Equatable {
@@ -33,8 +34,14 @@ struct EtubuRouteStatus: Equatable {
     var hazardDetails: [EtubuRouteHazard] = []
 }
 
-/// Drives Cap-side RouteGuard + RadarAlert with the same place resolve logic as web.
 enum EtubuRouteBridge {
+    /// Kullanıcı rotayı temizlediyse araç nav uyarlamasını kısa süre bastır.
+    private static var suppressVehicleNavAdaptUntil: Date?
+    private static var lastVehicleNavDestKey = ""
+    private static var vehicleNavAdaptWork: DispatchWorkItem?
+    /// Son plan araç navigasyonundan mı geldi?
+    private static var routeFromVehicleNav = false
+
     /// Shared JS helpers mirroring js/route-guard.js fold / searchPlaces / resolvePlace.
     private static let placeHelpersJS = """
     function __etubuFold(s){
@@ -249,13 +256,23 @@ enum EtubuRouteBridge {
     }
 
     /// Cap stub (`index.html`) → `index-app.html` + RouteGuard script. Autocomplete can
-    /// work via native helpers without this; `buildRoute` cannot.
+    /// work via native helpers without this; `buildRoute` prefers Cap but has native fallback.
     static func ensureCapAppReady(attemptsLeft: Int = 45, completion: @escaping (Bool) -> Void) {
         EtubuCapBridgeViewController.armWebContent()
+        // Short timeout — stub navigation aborts in-flight evaluateJavaScript.
         EtubuClusterAudioBridge.evalJSReturning("""
         (function(){
           try {
+            window.__ETUBU_NATIVE_CLUSTER__ = true;
+            window.__ETUBU_GPS_ARMED__ = true;
+            try {
+              var forceTr = \(EtubuRegion.lastKnownInTurkey ? "1" : "0");
+              localStorage.setItem('etubu_force_tr_route', forceTr);
+              sessionStorage.setItem('etubu_force_tr_route', forceTr);
+              window.__etubuForceTrRoute = +forceTr;
+            } catch (e0) {}
             if (window.RouteGuard && typeof window.RouteGuard.buildRoute === 'function') return '1';
+            if (document.getElementById('routeGuard') && document.querySelector('script[src*=\"route-guard\"]')) return '2';
             if (typeof window.__ETUBU_LOAD_APP__ === 'function') {
               try { window.__ETUBU_LOAD_APP__(); } catch (e) {}
               return '0';
@@ -266,65 +283,84 @@ enum EtubuRouteBridge {
             return '0';
           } catch (e) { return '0'; }
         })();
-        """) { raw in
+        """, timeout: 3.5) { raw in
             let ready = (raw == "1" || raw == "\"1\"")
             if ready {
                 DispatchQueue.main.async { completion(true) }
                 return
             }
+            // Scripts present but RouteGuard global not yet — give it a few more ticks.
+            let almost = (raw == "2" || raw == "\"2\"")
             if attemptsLeft <= 0 {
                 DispatchQueue.main.async { completion(false) }
                 return
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            let delay = almost ? 0.22 : 0.15
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                 ensureCapAppReady(attemptsLeft: attemptsLeft - 1, completion: completion)
             }
         }
     }
 
-    /// Builds TR place index (web RouteGuard) and enables route UI even when Cap UI lang ≠ tr.
+    /// Builds TR place index (native first) and unlocks route UI without waiting on Cap WebView.
+    /// Cap inject / RouteGuard rebuild continues in the background for map + planRoute.
     static func ensureIndex(completion: ((Bool) -> Void)? = nil) {
-        ensureCapAppReady { _ in
-            // Native URLSession first (Cap WebView CORS often blocks etubu.com fetch).
-            Task {
-                var injected = false
-                do {
-                    var n = try await EtubuTrafikAPI.buildAndCachePlaceIndex()
-                    // First launch after UTF-8 fix: rebuild if only legacy/corrupt cache exists
-                    if n < 100 {
-                        n = try await EtubuTrafikAPI.buildAndCachePlaceIndex(force: true)
-                    }
-                    if n > 100, let raw = EtubuTrafikAPI.cachedIndexJSONString() {
-                        let b64 = Data(raw.utf8).base64EncodedString()
-                        // atob alone breaks UTF-8 (Çorum → mojibake). Decode bytes → TextDecoder.
-                        EtubuClusterAudioBridge.evalJS("""
-                        (function(){
-                          try {
-                            var bin = atob('\(b64)');
-                            var bytes = new Uint8Array(bin.length);
-                            for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-                            var raw = (typeof TextDecoder !== 'undefined')
-                              ? new TextDecoder('utf-8').decode(bytes)
-                              : decodeURIComponent(escape(bin));
-                            localStorage.setItem('etubu_place_index_v3', raw);
-                            sessionStorage.setItem('etubu_place_index_v3', raw);
-                            localStorage.setItem('etubu_place_index_v4', raw);
-                            sessionStorage.setItem('etubu_place_index_v4', raw);
-                          } catch (e) {}
-                        })();
-                        """)
-                        injected = true
-                    }
-                } catch {
-                    // Fall through to JS RouteGuard.buildPlaceIndex via native trafikGet.
+        Task {
+            final class Once: @unchecked Sendable {
+                private let lock = NSLock()
+                private var done = false
+                func run(_ body: () -> Void) {
+                    lock.lock()
+                    defer { lock.unlock() }
+                    guard !done else { return }
+                    done = true
+                    body()
                 }
-                _ = injected
-                DispatchQueue.main.async {
+            }
+            let once = Once()
+            let finish: @Sendable (Bool) -> Void = { ready in
+                once.run {
+                    DispatchQueue.main.async { completion?(ready) }
+                }
+            }
+
+            // Instant unlock when a previous session already cached the directory.
+            let cached = EtubuTrafikAPI.cachedItemCount()
+            if cached > 100 {
+                finish(true)
+            }
+
+            var nativeReady = cached > 100
+            do {
+                var n = try await EtubuTrafikAPI.buildAndCachePlaceIndex()
+                if n < 100 {
+                    n = try await EtubuTrafikAPI.buildAndCachePlaceIndex(force: true)
+                }
+                nativeReady = n > 100
+            } catch {
+                nativeReady = EtubuTrafikAPI.cachedItemCount() > 100
+            }
+
+            if let raw = EtubuTrafikAPI.cachedIndexJSONString(), EtubuTrafikAPI.cachedItemCount() > 100 {
+                await MainActor.run { injectPlaceIndexJSON(raw) }
+            }
+
+            // Always finish the spinner once native path settles — Cap can lag forever.
+            finish(nativeReady)
+
+            // Background: warm Cap + RouteGuard for planning / map polyline.
+            await MainActor.run {
+                ensureCapAppReady(attemptsLeft: 24) { _ in
+                    if let raw = EtubuTrafikAPI.cachedIndexJSONString(), EtubuTrafikAPI.cachedItemCount() > 100 {
+                        injectPlaceIndexJSON(raw)
+                    }
                     EtubuClusterAudioBridge.evalJS("""
                     (async function(){
                       try {
-                        localStorage.setItem('etubu_force_tr_route', '1');
-                        sessionStorage.setItem('etubu_force_tr_route', '1');
+                        var forceTr = \(EtubuRegion.lastKnownInTurkey ? "1" : "0");
+                        localStorage.setItem('etubu_force_tr_route', forceTr);
+                        sessionStorage.setItem('etubu_force_tr_route', forceTr);
+                        window.__etubuForceTrRoute = +forceTr;
                         var rg = document.getElementById('routeGuard');
                         if (rg) { rg.hidden = false; rg.classList.remove('is-collapsed','is-drive-hidden'); }
                         var form = document.getElementById('routeForm');
@@ -338,22 +374,33 @@ enum EtubuRouteBridge {
                           from.dispatchEvent(new Event('focus', { bubbles: true }));
                           from.dispatchEvent(new Event('input', { bubbles: true }));
                         }
-                        if (navigator.geolocation) {
-                          navigator.geolocation.getCurrentPosition(function(pos){
-                            try {
-                              localStorage.setItem('etubu_last_map_location', JSON.stringify({
-                                lat: pos.coords.latitude, lng: pos.coords.longitude
-                              }));
-                            } catch(e) {}
-                          }, function(){}, { enableHighAccuracy: true, timeout: 10000, maximumAge: 120000 });
-                        }
                       } catch (e) {}
                     })();
                     """)
-                    pollIndexReady(attemptsLeft: 20, completion: completion)
                 }
             }
         }
+    }
+
+    /// Inject UTF-8 place index JSON into Cap localStorage (TextDecoder; not raw atob).
+    private static func injectPlaceIndexJSON(_ raw: String) {
+        let b64 = Data(raw.utf8).base64EncodedString()
+        EtubuClusterAudioBridge.evalJS("""
+        (function(){
+          try {
+            var bin = atob('\(b64)');
+            var bytes = new Uint8Array(bin.length);
+            for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+            var raw = (typeof TextDecoder !== 'undefined')
+              ? new TextDecoder('utf-8').decode(bytes)
+              : decodeURIComponent(escape(bin));
+            localStorage.setItem('etubu_place_index_v3', raw);
+            sessionStorage.setItem('etubu_place_index_v3', raw);
+            localStorage.setItem('etubu_place_index_v4', raw);
+            sessionStorage.setItem('etubu_place_index_v4', raw);
+          } catch (e) {}
+        })();
+        """)
     }
 
     private static func pollIndexReady(attemptsLeft: Int, completion: ((Bool) -> Void)?) {
@@ -389,8 +436,20 @@ enum EtubuRouteBridge {
         }
     }
 
-    /// Autocomplete — prefers live `RouteGuard.suggest` (builds index, Jul-29 city/district UX).
+    /// Autocomplete — TR içinde native index; yurt dışında Nominatim (uluslararası).
     static func search(query: String, forFrom: Bool, completion: @escaping ([EtubuRoutePlace]) -> Void) {
+        let overseas = !EtubuRegion.lastKnownInTurkey
+        if overseas {
+            Self.nominatimSearch(query: query, completion: completion)
+            return
+        }
+
+        let native = EtubuTrafikAPI.searchPlaces(query: query, limit: 48)
+        if !native.isEmpty {
+            DispatchQueue.main.async { completion(native) }
+            return
+        }
+
         let qJSON = jsStringLiteral(query)
         let forFromJS = forFrom ? "true" : "false"
         EtubuClusterAudioBridge.evalJSReturning("""
@@ -468,47 +527,30 @@ enum EtubuRouteBridge {
         }
     }
 
-    /// True when `text` matches a city name with more than one district and no
-    /// unambiguous (Merkez / exact-district) match — UI must ask the user to pick a district.
+    /// True when `text` matches a city name with more than one district…
+    /// Artık ilçe zorunlu değil — şehir merkezi / OSM resolve yeterli.
     static func needsDistrictPick(text: String, completion: @escaping (Bool) -> Void) {
-        let tJSON = jsStringLiteral(text)
-        EtubuClusterAudioBridge.evalJSReturning("""
-        (async function(){
-          try {
-            var t = \(tJSON);
-            if (window.RouteGuard && window.RouteGuard.buildPlaceIndex) {
-              await window.RouteGuard.buildPlaceIndex();
-            }
-            // Web: yalnızca büyükşehir adı tek başına → ilçe şart
-            if (window.RouteGuard && window.RouteGuard.needsDistrictPick) {
-              return window.RouteGuard.needsDistrictPick(t) ? '1' : '0';
-            }
-            \(placeHelpersJS)
-            var q = __etubuFold(t);
-            if (!q || q === 'konumum' || q === 'konum') return '0';
-            var tokens = q.split(' ').filter(Boolean);
-            if (tokens.length !== 1) return '0';
-            var items = __etubuPlaceItems();
-            var distExact = items.some(function(p){ return __etubuFold(p.districtName) === q; });
-            if (distExact) return '0';
-            var cityRows = items.filter(function(p){ return __etubuFold(p.cityName) === q; });
-            if (cityRows.length <= 1) return '0';
-            // Merkez varsa tek başına il kabul (normal iller)
-            if (cityRows.some(function(p){ return p.isMerkez; })) return '0';
-            // Büyükşehir (Merkez yok) → ilçe seç
-            return '1';
-          } catch(e) { return '0'; }
-        })();
-        """) { raw in
-            DispatchQueue.main.async {
-                // Cap WebView yok / henüz hazır değil → fail-closed (ilçe iste).
-                guard let raw else {
-                    completion(Self.nativeNeedsDistrictHeuristic(text))
-                    return
-                }
-                completion(raw == "1")
-            }
+        DispatchQueue.main.async { completion(false) }
+    }
+
+    private static func nativeNeedsDistrictFromCache(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let tokens = trimmed.split(whereSeparator: { $0.isWhitespace })
+        guard tokens.count == 1 else { return false }
+        let hits = EtubuTrafikAPI.searchPlaces(query: trimmed, limit: 80)
+        guard !hits.isEmpty else { return nativeNeedsDistrictHeuristic(text) }
+        // Exact district name alone (Çankaya) — no pick needed
+        if hits.contains(where: {
+            $0.districtName.compare(trimmed, options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "tr_TR")) == .orderedSame
+        }) {
+            return false
         }
+        let cityRows = hits.filter {
+            $0.cityName.compare(trimmed, options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "tr_TR")) == .orderedSame
+        }
+        if cityRows.count <= 1 { return false }
+        if cityRows.contains(where: \.isMerkez) { return false }
+        return true
     }
 
     /// Cap cold-start fallback — tek token büyükşehir adını ilçe ister.
@@ -531,6 +573,19 @@ enum EtubuRouteBridge {
 
     /// Resolve typed text like web (Çorum→Merkez, Alaca→Çorum/Alaca). Falls back to Nominatim worldwide.
     static func resolve(text: String, completion: @escaping (EtubuRoutePlace?) -> Void) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !EtubuRegion.lastKnownInTurkey {
+            Task {
+                let p = await nominatimResolveNative(trimmed)
+                await MainActor.run { completion(p) }
+            }
+            return
+        }
+        if let native = resolveNative(trimmed) {
+            DispatchQueue.main.async { completion(native) }
+            return
+        }
+
         let tJSON = jsStringLiteral(text)
         EtubuClusterAudioBridge.evalJSReturning("""
         (async function(){
@@ -567,94 +622,652 @@ enum EtubuRouteBridge {
                     completion(nil)
                     return
                 }
-                let trimmed = raw!.trimmingCharacters(in: .whitespacesAndNewlines)
-                if trimmed.hasPrefix("{") {
-                    completion(parsePlaces("[\(trimmed)]").first)
+                let body = raw!.trimmingCharacters(in: .whitespacesAndNewlines)
+                if body.hasPrefix("{") {
+                    completion(parsePlaces("[\(body)]").first)
                 } else {
-                    completion(parsePlaces(trimmed).first)
+                    completion(parsePlaces(body).first)
                 }
             }
         }
     }
 
-    static func plan(from: String, to: String, completion: ((Bool, String) -> Void)? = nil) {
+    /// Prefer exact label / Merkez / single-hit from native index.
+    /// Tek token şehir adı → Merkez veya ilk eşleşme (ilçe şartı yok).
+    private static func resolveNative(_ text: String) -> EtubuRoutePlace? {
+        let hits = EtubuTrafikAPI.searchPlaces(query: text, limit: 24)
+        guard !hits.isEmpty else { return nil }
+        let foldQ = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if let exact = hits.first(where: { $0.label.compare(text, options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "tr_TR")) == .orderedSame }) {
+            return exact
+        }
+        if hits.count == 1 { return hits[0] }
+        if let merkez = hits.first(where: { $0.isMerkez }) { return merkez }
+        // "Ankara Çankaya" compound — top score already first
+        if foldQ.contains(" ") { return hits.first }
+        // Tek kelime şehir — Merkez yoksa ilk eşleşme (OSM yedek planNative’de)
+        return hits.first
+    }
+
+    static func plan(
+        from: String,
+        to: String,
+        toPlace: EtubuRoutePlace? = nil,
+        fromVehicleNav: Bool = false,
+        completion: ((Bool, String) -> Void)? = nil
+    ) {
+        if !fromVehicleNav {
+            routeFromVehicleNav = false
+            suppressVehicleNavAdaptUntil = nil
+        }
         primeWarningAudio()
         EtubuDriveWarnings.armRouteHazardHook()
         EtubuMapLocationHelper.shared.startIfNeeded()
         // Seed Cap RouteGuard with native GPS before "Konumum" resolve.
         pushNativeLocationToWeb()
-        let fromJSON = jsStringLiteral(from.isEmpty ? "Konumum" : from)
-        let toJSON = jsStringLiteral(to)
-        ensureCapAppReady { ready in
-            guard ready else {
-                completion?(false, "Rota motoru yükleniyor — tekrar deneyin")
-                // Keep warming Cap in background for the next attempt.
-                EtubuCapBridgeViewController.armWebContent()
-                return
+        let fromLabel = from.isEmpty ? EtubuClusterL10n.myLocation : from
+        let toLabel = toPlace?.label ?? to
+        // Native Trafik/OSRM — Cap WKWebView buildRoute beklemeden hızlı özet.
+        // Polyline + radar hemen; şarj/hava arka planda; sonuç Cap'e inject edilir.
+        planNative(from: fromLabel, to: toLabel, toPlace: toPlace, completion: { ok, msg in
+            if ok {
+                routeFromVehicleNav = fromVehicleNav
+                EtubuMapLocationHelper.shared.enableBackgroundForRouteIfNeeded()
             }
-            EtubuClusterAudioBridge.evalJSReturning("""
-            (async function(){
-              try {
-                window.__ETUBU_GPS_ARMED__ = true;
-                localStorage.setItem('etubu_force_tr_route', '1');
-                sessionStorage.setItem('etubu_force_tr_route', '1');
-                if (window.RadarAlert && window.RadarAlert.primeAudio) window.RadarAlert.primeAudio();
-                var rg = document.getElementById('routeGuard');
-                if (rg) { rg.hidden = false; rg.classList.remove('is-collapsed','is-drive-hidden'); }
-                var form = document.getElementById('routeForm');
-                if (form) form.hidden = false;
-                var fromLabel = \(fromJSON);
-                var toLabel = \(toJSON);
-                // Same path as web Cap bridge — resolve + buildRoute (createRoute + hazards + brief)
-                if (window.RouteGuard && window.RouteGuard.buildRoute) {
-                  var out = await window.RouteGuard.buildRoute(fromLabel, toLabel);
-                  return JSON.stringify(out || { ok: false, message: 'Rota kurulamadı' });
-                }
-                return JSON.stringify({ ok: false, message: 'Rota motoru hazır değil' });
-              } catch (e) {
-                return JSON.stringify({ ok: false, message: String(e && e.message ? e.message : e) });
-              }
-            })();
-            """) { raw in
-                var ok = false
-                var msg = "Rota kurulamadı"
-                if let raw, let data = raw.data(using: .utf8),
-                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                    ok = json["ok"] as? Bool ?? false
-                    msg = (json["message"] as? String) ?? msg
-                }
-                if ok {
-                    pollPlanReady(attemptsLeft: 12, delay: 0.5) { ready, statusMsg in
-                        completion?(ready, ready ? statusMsg : (statusMsg.isEmpty ? msg : statusMsg))
-                    }
-                } else {
-                    // Still poll briefly — createRoute may have partially activated
-                    pollPlanReady(attemptsLeft: 6, delay: 0.6) { ready, statusMsg in
-                        completion?(ready || ok, ready ? statusMsg : msg)
+            completion?(ok, msg)
+        })
+        EtubuCapBridgeViewController.armWebContent()
+    }
+
+    /// Tesla aktif navigasyonu → uygulama rota hattı (EGM/OSM uyarıları).
+    /// Kullanıcı app içinde rota kurduysa dokunma; temizlediyse kısa süre bastır.
+    /// Premium gate: aynı `openRouteOrPaywall` felsefesi — free dial/OSM hız; rota+radar yok.
+    @MainActor
+    static func adaptVehicleNavIfNeeded(
+        destination: String?,
+        remainKm: Double?,
+        etaMinutes: Double?
+    ) {
+        let dest = (destination ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard dest.count >= 2 else { return }
+        // Free: telemetride hedef etiketi kalabilir; plan/hazard stack Premium.
+        guard EtubuPremiumManager.shared.isPremium else { return }
+
+        let t = EtubuVehicleTelemetry.shared
+        // Kullanıcı app rotası — araç nav ile ezme.
+        if t.routeActive, !routeFromVehicleNav { return }
+        if let until = suppressVehicleNavAdaptUntil, Date() < until { return }
+
+        // Aynı hedef — kalan mesafe güncelle + arka planda hazard yenile (radar bayatlamasın).
+        let key = dest.lowercased()
+        if t.routeActive, routeFromVehicleNav, key == lastVehicleNavDestKey {
+            if let remainKm, remainKm > 0 {
+                t.applyCapRouteRemain(active: true, remainKm: remainKm)
+            }
+            if let etaMinutes, etaMinutes >= 0 {
+                t.navEtaMinutes = etaMinutes
+            }
+            t.navDestination = dest
+            t.routeTo = dest
+            // Periyodik zenginleştirme (OSM/EGM radar)
+            enrichActiveRouteFromNativeIfNeeded()
+            Task { @MainActor in
+                EtubuDriveWarnings.shared.startPolling()
+            }
+            return
+        }
+
+        // UI’yi hemen güncelle; polyline arka planda.
+        t.navDestination = dest
+        t.routeTo = dest
+        if let remainKm, remainKm > 0 {
+            t.applyCapRouteRemain(active: true, remainKm: remainKm)
+        }
+        if let etaMinutes, etaMinutes >= 0 {
+            t.navEtaMinutes = etaMinutes
+        }
+
+        vehicleNavAdaptWork?.cancel()
+        let work = DispatchWorkItem {
+            lastVehicleNavDestKey = key
+            // Önce Nominatim/TR resolve ile toPlace al — EGM il/ilçe eşlemesi arka planda.
+            resolve(text: dest) { place in
+                plan(from: "Konumum", to: dest, toPlace: place, fromVehicleNav: true) { ok, _ in
+                    if ok {
+                        Task { @MainActor in
+                            EtubuVehicleTelemetry.shared.routeActive = true
+                            EtubuVehicleTelemetry.shared.routeTo = dest
+                            EtubuVehicleTelemetry.shared.navDestination = dest
+                            EtubuDriveWarnings.shared.startPolling()
+                            EtubuMapLocationHelper.shared.enableBackgroundForRouteIfNeeded()
+                            enrichActiveRouteFromNativeIfNeeded()
+                        }
                     }
                 }
             }
         }
+        vehicleNavAdaptWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: work)
     }
 
-    private static func pollPlanReady(attemptsLeft: Int, delay: Double = 0.7, completion: ((Bool, String) -> Void)?) {
+    /// If Cap RouteGuard left hazards empty (Radars[] often blank), fill from native enrichers.
+    private static func enrichActiveRouteFromNativeIfNeeded() {
+        Task {
+            let existing = await MainActor.run { EtubuDriveWarnings.shared.hazards }
+            let coordsCL = await MainActor.run { EtubuDriveWarnings.shared.routeCoords }
+            var latLng: [(lat: Double, lng: Double)] = coordsCL.map { ($0.latitude, $0.longitude) }
+            if latLng.count < 2 {
+                // Try Cap stash
+                await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+                    EtubuClusterAudioBridge.evalJSReturning("""
+                    (function(){
+                      try {
+                        var c = (window.__etubuRouteState && window.__etubuRouteState.coords) || [];
+                        return JSON.stringify(c.map(function(p){ return {lat:+p.lat, lng:+p.lng}; }));
+                      } catch(e) { return '[]'; }
+                    })();
+                    """) { raw in
+                        if let raw, let data = raw.data(using: .utf8),
+                           let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+                            latLng = arr.compactMap { row in
+                                let lat = (row["lat"] as? NSNumber)?.doubleValue ?? (row["lat"] as? Double)
+                                let lng = (row["lng"] as? NSNumber)?.doubleValue ?? (row["lng"] as? Double)
+                                guard let lat, let lng else { return nil }
+                                return (lat, lng)
+                            }
+                        }
+                        cont.resume()
+                    }
+                }
+            }
+            guard latLng.count >= 2 else { return }
+
+            let hasCharge = existing.contains { $0.kind == "charge" }
+            let hasWeather = existing.contains { $0.kind == "weather" }
+            let hasRadarOrCorridor = existing.contains { $0.kind == "radar" || $0.kind == "corridor" }
+
+            var merged = existing
+            // Radar her zaman OSM ile taze tut (seed/EGM boş veya bayat olabilir).
+            let inTR = latLng.contains { EtubuRegion.inTurkeyBounds(lat: $0.lat, lng: $0.lng) }
+            if inTR && !hasRadarOrCorridor {
+                merged.append(contentsOf: EtubuTrafikAPI.parseOfficialHazards(
+                    data: [:], coords: latLng, includeSeeds: true
+                ))
+            }
+            let osmCams = await EtubuTrafikAPI.fetchOsmCamerasAlong(coords: latLng)
+            merged.append(contentsOf: osmCams)
+            if !hasCharge {
+                merged.append(contentsOf: await EtubuTrafikAPI.fetchChargersAlong(coords: latLng))
+            }
+            if !hasWeather {
+                merged.append(contentsOf: await EtubuTrafikAPI.fetchWeatherAlong(coords: latLng))
+            }
+            // Dedupe by id
+            var seen = Set<String>()
+            merged = merged.filter { seen.insert($0.id).inserted }
+            merged.sort { ($0.routeIdx ?? 0) < ($1.routeIdx ?? 0) }
+            guard merged.count > existing.count || (!hasRadarOrCorridor && !merged.isEmpty) else { return }
+
+            let brief = EtubuRouteBriefSummary(
+                radarCount: merged.filter { $0.kind == "radar" }.count,
+                controlCount: merged.filter { $0.kind == "control" }.count,
+                corridorCount: merged.filter { $0.kind == "corridor" }.count,
+                chargeCount: merged.filter { $0.kind == "charge" }.count,
+                weatherCount: merged.filter { $0.kind == "weather" }.count,
+                chargeNames: merged.filter { $0.kind == "charge" }.prefix(4).map(\.label),
+                weatherLabels: merged.filter { $0.kind == "weather" }.prefix(4).map(\.label)
+            )
+            await MainActor.run {
+                let w = EtubuDriveWarnings.shared
+                w.hazards = merged
+                w.remainingHazards = merged
+                if !w.brief.hasAny || w.brief.chargeCount == 0 || w.brief.weatherCount == 0 {
+                    w.brief = brief
+                    w.remainingBrief = brief
+                }
+                if w.routeCoords.isEmpty {
+                    w.routeCoords = latLng.map { CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng) }
+                }
+                w.startPolling()
+            }
+        }
+    }
+
+    /// Cap-independent route build: TR → EGM+OSRM; yurt dışı → yalnızca OSM/OSRM + Overpass uyarıları.
+    private static func planNative(
+        from: String,
+        to: String,
+        toPlace hintPlace: EtubuRoutePlace? = nil,
+        completion: ((Bool, String) -> Void)?
+    ) {
+        Task {
+            var toPlace: EtubuRoutePlace? = {
+                if let p = hintPlace, p.lat != nil, p.lng != nil { return p }
+                if let p = resolveNative(to) { return p }
+                let hits = EtubuTrafikAPI.searchPlaces(query: to, limit: 8)
+                return hits.first
+            }()
+            if toPlace?.lat == nil || toPlace?.lng == nil {
+                toPlace = await nominatimResolveNative(to) ?? toPlace
+            }
+            guard let toPlace, let toLat = toPlace.lat, let toLng = toPlace.lng else {
+                await MainActor.run {
+                    completion?(false, String(format: EtubuClusterL10n.t("routePlaceNotFoundFmt"), to))
+                }
+                return
+            }
+
+            let fromIsMine = {
+                let f = from.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                return f.isEmpty || f == "konumum" || f == "my location" || f.contains("konum")
+                    || f == "mylocation" || f == "location"
+            }()
+
+            var fromLat: Double?
+            var fromLng: Double?
+            var fromDistrictId = ""
+            var fromResolvedLabel = from
+
+            if fromIsMine {
+                let t = EtubuVehicleTelemetry.shared
+                fromLat = t.latitude
+                fromLng = t.longitude
+                fromResolvedLabel = EtubuClusterL10n.myLocation
+                if fromLat == nil || fromLng == nil {
+                    await MainActor.run {
+                        completion?(false, EtubuClusterL10n.t("routeNeedLocation"))
+                    }
+                    return
+                }
+                if let near = EtubuTrafikAPI.nearestPlace(lat: fromLat!, lng: fromLng!) {
+                    fromDistrictId = near.districtId
+                }
+            } else if let fp = resolveNative(from) ?? EtubuTrafikAPI.searchPlaces(query: from, limit: 8).first,
+                      let la = fp.lat, let ln = fp.lng {
+                fromLat = la
+                fromLng = ln
+                fromResolvedLabel = fp.label
+                fromDistrictId = fp.districtId
+            } else if let fp = await nominatimResolveNative(from), let la = fp.lat, let ln = fp.lng {
+                fromLat = la
+                fromLng = ln
+                fromResolvedLabel = fp.label
+            } else {
+                await MainActor.run {
+                    completion?(false, String(format: EtubuClusterL10n.t("routePlaceNotFoundFmt"), from))
+                }
+                return
+            }
+
+            guard let fLat = fromLat, let fLng = fromLng else {
+                await MainActor.run { completion?(false, EtubuClusterL10n.t("routeLocFailed")) }
+                return
+            }
+
+            EtubuRegion.updateFrom(lat: fLat, lng: fLng)
+
+            let domestic = EtubuRegion.inTurkeyBounds(lat: fLat, lng: fLng)
+                && EtubuRegion.inTurkeyBounds(lat: toLat, lng: toLng)
+
+            var toDistrictId = toPlace.districtId
+            if domestic {
+                if toDistrictId.isEmpty,
+                   let nearTo = EtubuTrafikAPI.nearestPlace(lat: toLat, lng: toLng) {
+                    toDistrictId = nearTo.districtId
+                }
+                if fromDistrictId.isEmpty {
+                    fromDistrictId = toDistrictId.isEmpty ? "0" : toDistrictId
+                }
+            }
+
+            var coords: [[String: Double]] = []
+            var navOnly = false
+            var routeData: [String: Any]?
+            var statusNote = ""
+
+            // Yurt dışı / uluslararası: EGM atla — doğrudan OSRM (OSM).
+            if domestic {
+                do {
+                    let body: [String: Any] = [
+                        "action": "createRoute",
+                        "fromLatitude": String(fLat),
+                        "fromLongitude": String(fLng),
+                        "toLatitude": String(toLat),
+                        "toLongitude": String(toLng),
+                        "fromDistrictId": fromDistrictId,
+                        "toDistrictId": toDistrictId,
+                        "fromLabel": fromResolvedLabel,
+                        "toLabel": toPlace.label,
+                    ]
+                    let json = try await EtubuTrafikAPI.postCreateRoute(body: body)
+                    if let data = json["data"] as? [String: Any],
+                       let arr = data["Coordinates"] as? [[String: Any]], !arr.isEmpty {
+                        coords = arr.compactMap { row in
+                            let x = (row["x"] as? NSNumber)?.doubleValue ?? (row["x"] as? Double)
+                            let y = (row["y"] as? NSNumber)?.doubleValue ?? (row["y"] as? Double)
+                            guard let x, let y else { return nil }
+                            return ["x": x, "y": y]
+                        }
+                        routeData = data
+                        statusNote = "\(fromResolvedLabel) → \(toPlace.label)"
+                    }
+                } catch {
+                    // Fall through to OSRM
+                }
+            }
+
+            if coords.count < 2 {
+                do {
+                    coords = try await fetchOsrmCoordinates(fromLat: fLat, fromLng: fLng, toLat: toLat, toLng: toLng)
+                    navOnly = true
+                    statusNote = domestic
+                        ? EtubuClusterL10n.t("routeDrawnOsrm")
+                        : String(format: EtubuClusterL10n.t("routeArrowOsmFmt"), fromResolvedLabel, toPlace.label)
+                } catch {
+                    await MainActor.run {
+                        completion?(false, EtubuClusterL10n.t("routePlanNetworkFail"))
+                    }
+                    return
+                }
+            }
+
+            let latLngCoords: [(lat: Double, lng: Double)] = coords.compactMap { row in
+                guard let x = row["x"], let y = row["y"] else { return nil }
+                return (lat: y, lng: x)
+            }
+
+            var hazards: [EtubuRouteHazard] = []
+            if domestic {
+                if let data = routeData {
+                    hazards = EtubuTrafikAPI.parseOfficialHazards(
+                        data: data, coords: latLngCoords, includeSeeds: true
+                    )
+                } else {
+                    hazards = EtubuTrafikAPI.parseOfficialHazards(
+                        data: [:], coords: latLngCoords, includeSeeds: true
+                    )
+                }
+            } else {
+                // Uluslararası: EGM/TR seed yok — Overpass (OSM) kameraları.
+                hazards = await EtubuTrafikAPI.fetchOsmCamerasAlong(coords: latLngCoords)
+            }
+
+            let remainKm: Double = {
+                guard latLngCoords.count >= 2 else { return 0 }
+                var sum: Double = 0
+                for i in 1..<latLngCoords.count {
+                    sum += EtubuTrafikAPI.haversineKm(
+                        latLngCoords[i - 1].lat, latLngCoords[i - 1].lng,
+                        latLngCoords[i].lat, latLngCoords[i].lng
+                    )
+                }
+                return sum
+            }()
+
+            // Hızlı UI: önce rota + radar/koridor; şarj/hava arka planda.
+            let quickBrief = EtubuRouteBriefSummary(
+                radarCount: hazards.filter { $0.kind == "radar" }.count,
+                controlCount: (routeData?["ControlPointCount"] as? NSNumber)?.intValue
+                    ?? (routeData?["ControlPointCount"] as? Int)
+                    ?? hazards.filter { $0.kind == "control" }.count,
+                corridorCount: hazards.filter { $0.kind == "corridor" }.count,
+                chargeCount: 0,
+                weatherCount: 0
+            )
+
+            await MainActor.run {
+                let t = EtubuVehicleTelemetry.shared
+                t.routeActive = true
+                t.routeFrom = fromResolvedLabel
+                t.routeTo = toPlace.label
+                t.navDestination = toPlace.label
+                t.routeDestLat = toLat
+                t.routeDestLng = toLng
+                t.applyCapRouteRemain(active: true, remainKm: remainKm > 0 ? remainKm : nil)
+                EtubuEvRoutePlanner.shared.refreshFromLiveState()
+
+                let w = EtubuDriveWarnings.shared
+                w.hazards = hazards
+                w.remainingHazards = hazards
+                w.brief = quickBrief
+                w.remainingBrief = quickBrief
+                w.routeCoords = latLngCoords.map {
+                    CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng)
+                }
+                w.startPolling()
+
+                injectNativeRouteIntoCap(
+                    fromLabel: fromResolvedLabel,
+                    toLabel: toPlace.label,
+                    coords: coords,
+                    hazards: hazards,
+                    navOnly: navOnly || !domestic,
+                    brief: quickBrief
+                )
+
+                let radarN = quickBrief.radarCount
+                let corridorN = quickBrief.corridorCount
+                let msg: String
+                if !domestic {
+                    msg = String(
+                        format: EtubuClusterL10n.t("routeOverseasBriefFmt"),
+                        statusNote, radarN, corridorN
+                    )
+                } else if hazards.isEmpty && navOnly {
+                    msg = statusNote.isEmpty
+                        ? EtubuClusterL10n.t("routeDrawnNoWarn")
+                        : String(format: EtubuClusterL10n.t("routeWarnLimitedFmt"), statusNote)
+                } else {
+                    msg = String(format: EtubuClusterL10n.t("routeActiveBriefFmt"), radarN, corridorN)
+                }
+                completion?(true, msg)
+            }
+
+            // Şarj + hava — UI’yi bekletmeden zenginleştir
+            async let charges = EtubuTrafikAPI.fetchChargersAlong(coords: latLngCoords)
+            async let weather = EtubuTrafikAPI.fetchWeatherAlong(coords: latLngCoords)
+            let osmHaz: [EtubuRouteHazard]
+            if domestic {
+                osmHaz = await EtubuTrafikAPI.fetchOsmCamerasAlong(coords: latLngCoords)
+            } else {
+                osmHaz = []
+            }
+            let (chargeHaz, wxHaz) = await (charges, weather)
+            guard !chargeHaz.isEmpty || !wxHaz.isEmpty || !osmHaz.isEmpty else { return }
+
+            await MainActor.run {
+                let w = EtubuDriveWarnings.shared
+                var merged = w.hazards
+                merged.append(contentsOf: osmHaz)
+                merged.append(contentsOf: chargeHaz)
+                merged.append(contentsOf: wxHaz)
+                var seen = Set<String>()
+                merged = merged.filter { seen.insert($0.id).inserted }
+                merged.sort { ($0.routeIdx ?? 0) < ($1.routeIdx ?? 0) }
+                let brief = EtubuRouteBriefSummary(
+                    radarCount: merged.filter { $0.kind == "radar" }.count,
+                    controlCount: merged.filter { $0.kind == "control" }.count,
+                    corridorCount: merged.filter { $0.kind == "corridor" }.count,
+                    chargeCount: merged.filter { $0.kind == "charge" }.count,
+                    weatherCount: merged.filter { $0.kind == "weather" }.count,
+                    chargeNames: merged.filter { $0.kind == "charge" }.prefix(4).map(\.label),
+                    weatherLabels: merged.filter { $0.kind == "weather" }.prefix(4).map(\.label)
+                )
+                w.hazards = merged
+                w.remainingHazards = merged
+                w.brief = brief
+                w.remainingBrief = brief
+                injectNativeRouteIntoCap(
+                    fromLabel: fromResolvedLabel,
+                    toLabel: toPlace.label,
+                    coords: coords,
+                    hazards: merged,
+                    navOnly: navOnly || !domestic,
+                    brief: brief
+                )
+            }
+        }
+    }
+
+    /// Nominatim (OSM) — Cap WebView’e ihtiyaç duymadan destinasyon çözümü.
+    private static func nominatimResolveNative(_ query: String) async -> EtubuRoutePlace? {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard q.count >= 2 else { return nil }
+        var comps = URLComponents(string: "https://nominatim.openstreetmap.org/search")
+        comps?.queryItems = [
+            URLQueryItem(name: "format", value: "json"),
+            URLQueryItem(name: "limit", value: "1"),
+            URLQueryItem(name: "q", value: q),
+        ]
+        guard let url = comps?.url else { return nil }
+        var req = URLRequest(url: url)
+        req.setValue("Etubu/1.0 (com.etubu.app)", forHTTPHeaderField: "User-Agent")
+        req.setValue(EtubuAppLanguage.current.rawValue, forHTTPHeaderField: "Accept-Language")
+        req.timeoutInterval = 12
+        do {
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode),
+                  let arr = try JSONSerialization.jsonObject(with: data) as? [[String: Any]],
+                  let hit = arr.first
+            else { return nil }
+            let lat = (hit["lat"] as? NSNumber)?.doubleValue
+                ?? Double(hit["lat"] as? String ?? "")
+            let lon = (hit["lon"] as? NSNumber)?.doubleValue
+                ?? Double(hit["lon"] as? String ?? "")
+            guard let lat, let lon else { return nil }
+            let label = (hit["display_name"] as? String) ?? q
+            return EtubuRoutePlace(
+                label: label,
+                cityName: "",
+                districtName: "",
+                isMyLocation: false,
+                lat: lat,
+                lng: lon,
+                districtId: ""
+            )
+        } catch {
+            return nil
+        }
+    }
+
+    private static func fetchOsrmCoordinates(
+        fromLat: Double, fromLng: Double, toLat: Double, toLng: Double
+    ) async throws -> [[String: Double]] {
+        let urlStr =
+            "https://router.project-osrm.org/route/v1/driving/"
+            + "\(fromLng),\(fromLat);\(toLng),\(toLat)"
+            + "?overview=full&geometries=geojson"
+        guard let url = URL(string: urlStr) else { throw URLError(.badURL) }
+        var req = URLRequest(url: url)
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        req.setValue("Etubu/1.0 (com.etubu.app)", forHTTPHeaderField: "User-Agent")
+        req.timeoutInterval = 18
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw URLError(.badServerResponse)
+        }
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              (json["code"] as? String) == "Ok",
+              let routes = json["routes"] as? [[String: Any]],
+              let geom = routes.first?["geometry"] as? [String: Any],
+              let pairs = geom["coordinates"] as? [[Double]], pairs.count >= 2
+        else { throw URLError(.cannotParseResponse) }
+        return pairs.map { pair in
+            ["x": pair[0], "y": pair[1]]
+        }
+    }
+
+    private static func injectNativeRouteIntoCap(
+        fromLabel: String,
+        toLabel: String,
+        coords: [[String: Double]],
+        hazards: [EtubuRouteHazard],
+        navOnly: Bool,
+        brief: EtubuRouteBriefSummary
+    ) {
+        guard let coordsData = try? JSONSerialization.data(withJSONObject: coords),
+              let coordsJSON = String(data: coordsData, encoding: .utf8) else { return }
+        let hazardPayload: [[String: Any]] = hazards.map { h in
+            var row: [String: Any] = [
+                "id": h.id,
+                "kind": h.kind,
+                "label": h.label,
+                "lat": h.lat,
+                "lng": h.lng,
+            ]
+            if let ms = h.maxspeed { row["maxspeed"] = ms }
+            if let kw = h.kw { row["kw"] = kw }
+            if let idx = h.routeIdx { row["routeIdx"] = idx }
+            if let along = h.alongKm { row["alongKm"] = along }
+            return row
+        }
+        guard let hazData = try? JSONSerialization.data(withJSONObject: hazardPayload),
+              let hazJSON = String(data: hazData, encoding: .utf8) else { return }
+        let fromJS = jsStringLiteral(fromLabel)
+        let toJS = jsStringLiteral(toLabel)
+        EtubuClusterAudioBridge.evalJS("""
+        (function(){
+          try {
+            window.__ETUBU_GPS_ARMED__ = true;
+            var forceTr = \(EtubuRegion.lastKnownInTurkey ? "1" : "0");
+            localStorage.setItem('etubu_force_tr_route', forceTr);
+            sessionStorage.setItem('etubu_force_tr_route', forceTr);
+            window.__etubuForceTrRoute = +forceTr;
+            window.__etubuRouteState = window.__etubuRouteState || { hazards: [], coords: [], at: 0 };
+            window.__etubuRouteState.coords = (\(coordsJSON)).map(function(p){
+              return { lng: +p.x, lat: +p.y };
+            });
+            window.__etubuRouteState.hazards = \(hazJSON);
+            window.__etubuRouteState.at = Date.now();
+            window.__etubuLastPlanMeta = {
+              navOnly: \(navOnly ? "true" : "false"),
+              from: \(fromJS),
+              to: \(toJS),
+              radar: \(brief.radarCount),
+              corridor: \(brief.corridorCount),
+              charge: \(brief.chargeCount),
+              weather: \(brief.weatherCount),
+              control: \(brief.controlCount)
+            };
+            var from = document.getElementById('routeFromInput');
+            var to = document.getElementById('routeToInput');
+            if (from) from.value = \(fromJS);
+            if (to) to.value = \(toJS);
+            if (typeof MiniMap !== 'undefined' && MiniMap.setRoute) {
+              MiniMap.setRoute(
+                window.__etubuRouteState.coords.map(function(p){ return [p.lng, p.lat]; }),
+                window.__etubuRouteState.hazards
+              );
+            } else if (typeof MiniMap !== 'undefined' && MiniMap.setHazards) {
+              MiniMap.setHazards(window.__etubuRouteState.hazards);
+            }
+          } catch (e) {}
+        })();
+        """)
+    }
+
+    private static func pollPlanReady(attemptsLeft: Int, delay: Double = 0.15, completion: ((Bool, String) -> Void)?) {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
             status { st in
-                let enriched = st.brief.hasAny || st.hazardCount > 0 || (st.active && !st.navOnly)
-                if st.active && (enriched || st.navOnly || attemptsLeft <= 3) {
+                // Aktif rota yeter — brief/enrich arka planda tamamlanır.
+                if st.active {
                     let msg: String
                     if st.navOnly {
-                        msg = "Rota çizildi — OSRM; EGM radar yok · şarj/hava/OSM kamera var"
-                    } else if st.active {
-                        msg = "Rota aktif · \(st.brief.radarCount) radar · \(st.brief.corridorCount) koridor · \(st.brief.chargeCount) şarj · \(st.brief.weatherCount) hava"
+                        msg = EtubuClusterL10n.t("routeDrawnOsrmNoEgm")
+                    } else if st.brief.hasAny || st.hazardCount > 0 {
+                        msg = String(
+                            format: EtubuClusterL10n.t("routeActiveFullFmt"),
+                            st.brief.radarCount, st.brief.corridorCount,
+                            st.brief.chargeCount, st.brief.weatherCount
+                        )
                     } else {
-                        msg = st.statusText.isEmpty ? "Kuruluyor…" : st.statusText
+                        msg = st.statusText.isEmpty ? EtubuClusterL10n.t("routeActiveShort") : st.statusText
                     }
-                    completion?(st.active, msg)
+                    completion?(true, msg)
                     return
                 }
                 if attemptsLeft <= 0 {
-                    completion?(st.active, st.statusText.isEmpty ? (st.active ? "Rota aktif" : "Rota kurulamadı") : st.statusText)
+                    completion?(st.active, st.statusText.isEmpty ? (st.active ? EtubuClusterL10n.t("routeActiveShort") : EtubuClusterL10n.t("routeFailedShort")) : st.statusText)
                     return
                 }
                 let fail = st.statusText.lowercased()
@@ -663,13 +1276,18 @@ enum EtubuRouteBridge {
                     completion?(false, st.statusText)
                     return
                 }
-                let nextDelay = min(1.0, delay + 0.15)
+                let nextDelay = min(0.35, delay + 0.05)
                 pollPlanReady(attemptsLeft: attemptsLeft - 1, delay: nextDelay, completion: completion)
             }
         }
     }
 
     static func clear() {
+        vehicleNavAdaptWork?.cancel()
+        vehicleNavAdaptWork = nil
+        routeFromVehicleNav = false
+        lastVehicleNavDestKey = ""
+        suppressVehicleNavAdaptUntil = Date().addingTimeInterval(90)
         EtubuClusterAudioBridge.evalJS("""
         (function(){
           try {
@@ -685,10 +1303,15 @@ enum EtubuRouteBridge {
         })();
         """)
         Task { @MainActor in
-            EtubuVehicleTelemetry.shared.routeDestLat = nil
-            EtubuVehicleTelemetry.shared.routeDestLng = nil
-            EtubuVehicleTelemetry.shared.capRouteRemainKm = nil
-            EtubuVehicleTelemetry.shared.refreshEnergyPlan()
+            let t = EtubuVehicleTelemetry.shared
+            t.routeActive = false
+            t.routeTo = ""
+            t.routeFrom = ""
+            t.routeDestLat = nil
+            t.routeDestLng = nil
+            t.capRouteRemainKm = nil
+            t.refreshEnergyPlan()
+            EtubuMapLocationHelper.shared.disableBackgroundUpdates()
         }
     }
 
@@ -745,7 +1368,7 @@ enum EtubuRouteBridge {
     static func openNearestChargeInMaps() {
         Task { @MainActor in
             if openNearestChargeStopIfAvailable() { return }
-            openCoordinateInMaps(nil, name: "Şarj istasyonu")
+            openCoordinateInMaps(nil, name: EtubuClusterL10n.t("warnKindCharge"))
         }
     }
 
@@ -776,7 +1399,7 @@ enum EtubuRouteBridge {
 
     @MainActor
     static func openChargeStop(_ stop: EtubuRouteHazard) {
-        let name = stop.label.isEmpty ? "Şarj istasyonu" : stop.label
+        let name = stop.label.isEmpty ? EtubuClusterL10n.t("warnKindCharge") : stop.label
         let coord = CLLocationCoordinate2D(latitude: stop.lat, longitude: stop.lng)
         guard CLLocationCoordinate2DIsValid(coord),
               abs(stop.lat) > 0.01 || abs(stop.lng) > 0.01 else {
@@ -826,14 +1449,33 @@ enum EtubuRouteBridge {
               if (saved.toLabel) to = saved.toLabel;
             } catch (e) {}
             var brief = { radar: 0, control: 0, corridor: 0, charge: 0, weather: 0, chargeNames: [], weatherLabels: [] };
+            // Native plan fallback — Cap RouteGuard may be absent but coords/meta were injected.
+            try {
+              var meta = window.__etubuLastPlanMeta || {};
+              var stCoords = (window.__etubuRouteState && window.__etubuRouteState.coords) || [];
+              if (!active && stCoords.length >= 2) {
+                active = true;
+                if (meta.from) from = meta.from;
+                if (meta.to) to = meta.to;
+              }
+              if (meta.radar) brief.radar = +meta.radar || 0;
+              if (meta.corridor) brief.corridor = +meta.corridor || 0;
+              if (meta.charge) brief.charge = +meta.charge || 0;
+              if (meta.weather) brief.weather = +meta.weather || 0;
+              if (meta.control) brief.control = +meta.control || 0;
+            } catch (eN) {}
             var cardsEl = document.querySelectorAll('.route-brief-cards > div');
             if (cardsEl && cardsEl.length >= 5) {
               function num(el){ var em = el && el.querySelector('em'); return em ? parseInt(em.textContent, 10) || 0 : 0; }
-              brief.radar = num(cardsEl[0]);
-              brief.control = num(cardsEl[1]);
-              brief.corridor = num(cardsEl[2]);
-              brief.charge = num(cardsEl[3]);
-              brief.weather = num(cardsEl[4]);
+              var domRadar = num(cardsEl[0]), domControl = num(cardsEl[1]), domCorridor = num(cardsEl[2]);
+              var domCharge = num(cardsEl[3]), domWeather = num(cardsEl[4]);
+              if (domRadar || domControl || domCorridor || domCharge || domWeather) {
+                brief.radar = domRadar;
+                brief.control = domControl;
+                brief.corridor = domCorridor;
+                brief.charge = domCharge;
+                brief.weather = domWeather;
+              }
             }
             var chargeBlock = document.querySelector('.route-brief-charge span');
             if (chargeBlock && chargeBlock.textContent) {
@@ -905,7 +1547,23 @@ enum EtubuRouteBridge {
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
             else {
                 DispatchQueue.main.async {
-                    completion(EtubuRouteStatus(active: false, fromLabel: "", toLabel: "", statusText: "", briefText: ""))
+                    let t = EtubuVehicleTelemetry.shared
+                    let w = EtubuDriveWarnings.shared
+                    if t.routeActive {
+                        completion(EtubuRouteStatus(
+                            active: true,
+                            fromLabel: t.routeFrom,
+                            toLabel: t.routeTo,
+                            statusText: "",
+                            briefText: "",
+                            brief: w.brief,
+                            hazardCount: w.hazards.count,
+                            navOnly: !w.brief.hasAny && w.hazards.isEmpty,
+                            hazardDetails: w.hazards
+                        ))
+                    } else {
+                        completion(EtubuRouteStatus(active: false, fromLabel: "", toLabel: "", statusText: "", briefText: ""))
+                    }
                 }
                 return
             }
@@ -961,16 +1619,49 @@ enum EtubuRouteBridge {
                 )
             }
             DispatchQueue.main.async {
+                var active = json["active"] as? Bool ?? false
+                var fromLabel = json["from"] as? String ?? ""
+                var toLabel = json["to"] as? String ?? ""
+                var navOnly = json["navOnly"] as? Bool ?? false
+                // Prefer live telemetry when Cap status is empty (native plan path).
+                let t = EtubuVehicleTelemetry.shared
+                let w = EtubuDriveWarnings.shared
+                if !active && t.routeActive {
+                    active = true
+                    if fromLabel.isEmpty { fromLabel = t.routeFrom }
+                    if toLabel.isEmpty { toLabel = t.routeTo }
+                }
+                var briefOut = summary
+                var detailsOut = details
+                var hazardOut = hazardCount
+                if !briefOut.hasAny, w.brief.hasAny {
+                    briefOut = w.brief
+                }
+                if detailsOut.isEmpty, !w.hazards.isEmpty {
+                    detailsOut = w.hazards
+                    hazardOut = w.hazards.count
+                }
+                if !briefOut.hasAny, !detailsOut.isEmpty {
+                    briefOut = EtubuRouteBriefSummary(
+                        radarCount: detailsOut.filter { $0.kind == "radar" }.count,
+                        controlCount: detailsOut.filter { $0.kind == "control" }.count,
+                        corridorCount: detailsOut.filter { $0.kind == "corridor" }.count,
+                        chargeCount: detailsOut.filter { $0.kind == "charge" }.count,
+                        weatherCount: detailsOut.filter { $0.kind == "weather" }.count,
+                        chargeNames: detailsOut.filter { $0.kind == "charge" }.prefix(4).map(\.label),
+                        weatherLabels: detailsOut.filter { $0.kind == "weather" }.prefix(4).map(\.label)
+                    )
+                }
                 completion(EtubuRouteStatus(
-                    active: json["active"] as? Bool ?? false,
-                    fromLabel: json["from"] as? String ?? "",
-                    toLabel: json["to"] as? String ?? "",
+                    active: active,
+                    fromLabel: fromLabel,
+                    toLabel: toLabel,
                     statusText: json["status"] as? String ?? "",
                     briefText: json["brief"] as? String ?? "",
-                    brief: summary,
-                    hazardCount: hazardCount,
-                    navOnly: json["navOnly"] as? Bool ?? false,
-                    hazardDetails: details
+                    brief: briefOut,
+                    hazardCount: hazardOut,
+                    navOnly: navOnly,
+                    hazardDetails: detailsOut
                 ))
             }
         }
@@ -1005,7 +1696,8 @@ enum EtubuRouteBridge {
                 isMerkez: (row["isMerkez"] as? Bool) ?? false,
                 nearLabel: (row["nearLabel"] as? String) ?? "",
                 lat: lat,
-                lng: lng
+                lng: lng,
+                districtId: (row["districtId"] as? String) ?? ""
             )
         }
     }

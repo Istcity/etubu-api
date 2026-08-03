@@ -17,6 +17,7 @@ struct EtubuSpeedDialView: View {
     @ObservedObject private var warnings = EtubuDriveWarnings.shared
     /// Soft display lerp — keskin sıçrama yok, yumuşak yükseliş.
     @State private var displayKmh: Double = 0
+    @State private var displayPower: Double = 0
     @State private var boostPulse: CGFloat = 0
 
     private var rawKmh: Int { warnings.demoActive ? warnings.demoKmh : kmh }
@@ -28,19 +29,18 @@ struct EtubuSpeedDialView: View {
         }
         return gear
     }
-    /// P/N veya <5 km/h → kadran kilitli 0.
+    /// P/N → kadran kilitli 0; düşük hızı gizleme (yumuşak artış).
     private var isStationary: Bool {
         let g = shownGear.uppercased()
-        if g.hasPrefix("P") || g.hasPrefix("N") { return true }
-        return rawKmh < 5
+        return g.hasPrefix("P") || g.hasPrefix("N")
     }
     private var targetKmh: Int { isStationary ? 0 : rawKmh }
     private var shownKmh: Int { Int(displayKmh.rounded()) }
     private var shownPowerKw: Int? {
         let raw = warnings.demoActive ? warnings.demoPowerKw : powerKw
         guard let raw else { return nil }
-        if isStationary { return 0 }
-        if abs(raw) < 12 { return 0 }
+        if isStationary { return abs(raw) < 6 ? 0 : raw }
+        if abs(raw) < 4 { return 0 }
         return raw
     }
 
@@ -75,8 +75,8 @@ struct EtubuSpeedDialView: View {
     }
 
     private var speedProgress: CGFloat { min(1, CGFloat(max(0, shownKmh)) / 180) }
-    private var power: Int { shownPowerKw ?? 0 }
-    private var powerFill: CGFloat { min(1, CGFloat(abs(power)) / 160) }
+    private var power: Int { Int(displayPower.rounded()) }
+    private var powerFill: CGFloat { min(1, CGFloat(abs(displayPower)) / 160) }
     private var boostStrength: CGFloat {
         guard !isStationary else { return 0 }
         if power > 40 { return min(1, CGFloat(power) / 220) }
@@ -143,12 +143,6 @@ struct EtubuSpeedDialView: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
 
-                if !isStationary, sparkSamples.count >= 2 {
-                    EtubuPowerHistorySparkline(samples: sparkSamples, compact: true)
-                        .frame(width: dialSize * (compact ? 0.42 : 0.38), height: compact ? 14 : 18)
-                        .padding(.top, compact ? 0 : 1)
-                }
-
                 if warnings.demoActive {
                     Button {
                         EtubuDemoDrive.shared.stop()
@@ -188,20 +182,23 @@ struct EtubuSpeedDialView: View {
         }
         .onAppear {
             displayKmh = Double(targetKmh)
+            displayPower = Double(shownPowerKw ?? 0)
         }
         .onChange(of: targetKmh) { _, new in
             if new == 0 || isStationary {
-                var t = Transaction()
-                t.animation = nil
-                withTransaction(t) { displayKmh = 0 }
+                withAnimation(.easeOut(duration: 0.35)) { displayKmh = 0 }
                 return
             }
-            withAnimation(.easeOut(duration: 0.48)) {
+            withAnimation(.interpolatingSpring(stiffness: 70, damping: 16)) {
                 displayKmh = Double(new)
             }
         }
-        .onChange(of: power) { _, new in
-            guard new > 55 else {
+        .onChange(of: shownPowerKw) { _, new in
+            let v = Double(new ?? 0)
+            withAnimation(.easeInOut(duration: 0.32)) {
+                displayPower = v
+            }
+            guard v > 55 else {
                 withAnimation(.easeOut(duration: 0.4)) { boostPulse = 0 }
                 return
             }
@@ -210,7 +207,7 @@ struct EtubuSpeedDialView: View {
                 withAnimation(.easeOut(duration: 0.55)) { boostPulse = 0.35 }
             }
         }
-        .animation(nil, value: power)
+        .animation(.easeInOut(duration: 0.28), value: displayPower)
     }
 
     @ViewBuilder
@@ -246,7 +243,7 @@ struct EtubuSpeedDialView: View {
         .allowsHitTesting(false)
         .animation(.easeOut(duration: 0.48), value: shownKmh)
         .animation(.easeOut(duration: 0.4), value: socProgress)
-        .animation(nil, value: power)
+        .animation(.easeInOut(duration: 0.28), value: displayPower)
     }
 
     @ViewBuilder
@@ -376,7 +373,7 @@ struct EtubuSpeedDialView: View {
                     .shadow(color: Color.orange.opacity(0.55), radius: 8)
             }
         }
-        .animation(nil, value: power)
+        .animation(.easeInOut(duration: 0.28), value: displayPower)
     }
 
     private var gearRow: some View {
@@ -403,11 +400,22 @@ enum EtubuHazardChrome {
 
     static func kicker(_ kind: String, urgent: Bool) -> String {
         switch kind {
-        case "corridor": return "HIZ KORİDORU"
-        case "charge": return "ŞARJ"
-        case "weather": return "HAVA"
-        case "control": return "KONTROL"
-        default: return urgent ? "KRİTİK NOKTA" : "RADAR"
+        case "corridor": return EtubuClusterL10n.t("warnKickerCorridor")
+        case "charge": return EtubuClusterL10n.t("warnKickerCharge")
+        case "weather": return EtubuClusterL10n.t("warnKickerWeather")
+        case "control": return EtubuClusterL10n.t("warnKickerControl")
+        default: return urgent ? EtubuClusterL10n.t("warnKickerCritical") : EtubuClusterL10n.t("warnKickerRadar")
+        }
+    }
+
+    /// TTS için TR kök — EtubuWarnVoice composeKeys ile uyumlu.
+    static func speakRootTR(_ kind: String) -> String {
+        switch kind {
+        case "corridor": return "hız koridoru"
+        case "charge": return "şarj istasyonu"
+        case "weather": return "hava olayı"
+        case "control": return "kontrol"
+        default: return "radar"
         }
     }
 
@@ -911,7 +919,7 @@ struct EtubuCorridorChipView: View {
     }
 }
 
-/// Twin of avg card — road / radar / corridor alerts under one title (Jul 29).
+/// Twin of avg card — same frame size; kind icon + distance; extras clipped to fit.
 struct EtubuRoadWarnTwinView: View {
     @ObservedObject var warnings: EtubuDriveWarnings
     var theme: ClusterTheme
@@ -923,61 +931,66 @@ struct EtubuRoadWarnTwinView: View {
         return p.stage == .critical || p.stage == .near
     }
 
+    private var titleSize: CGFloat { (compact ? 9 : 10) * contentScale }
+    private var valueSize: CGFloat { (compact ? 18 : 22) * contentScale }
+    private var metaSize: CGFloat { (compact ? 8 : 9) * contentScale }
+
     var body: some View {
-        let secondary = Array(warnings.queue.dropFirst().prefix(compact ? 0 : 1))
+        let tint = EtubuHazardChrome.tint(warnings.primary?.kind ?? "radar", urgent: urgent, theme: theme)
         VStack(alignment: .center, spacing: compact ? 2 : 3) {
             Text(EtubuClusterL10n.roadWarnings.uppercased())
-                .font(EtubuClusterFonts.ui(9 * contentScale, weight: .heavy))
+                .font(EtubuClusterFonts.ui(titleSize, weight: .heavy))
                 .tracking(0.6)
                 .foregroundStyle(theme.mutedText)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
-                .layoutPriority(2)
 
             if let item = warnings.primary {
-                let tint = EtubuHazardChrome.tint(item.kind, urgent: urgent, theme: theme)
-                Text(item.title.isEmpty ? EtubuHazardChrome.kicker(item.kind, urgent: urgent) : item.title)
-                    .font(EtubuClusterFonts.ui(11 * contentScale, weight: .bold))
-                    .foregroundStyle(tint)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(compact ? 1 : 2)
-                    .minimumScaleFactor(0.55)
-                    .layoutPriority(1)
-                Text(item.distanceLabel.isEmpty ? "—" : item.distanceLabel)
-                    .font(EtubuClusterFonts.gauge((compact ? 18 : 22) * contentScale))
-                    .monospacedDigit()
-                    .foregroundStyle(theme.primaryText)
-                    .minimumScaleFactor(0.5)
-                    .lineLimit(1)
-                    .layoutPriority(3)
-                if !compact, !item.meta.isEmpty {
-                    Text(item.meta)
-                        .font(EtubuClusterFonts.ui(9 * contentScale, weight: .medium))
-                        .foregroundStyle(theme.secondaryText)
+                HStack(spacing: 5) {
+                    Image(systemName: EtubuHazardChrome.icon(item.kind))
+                        .font(.system(size: (compact ? 11 : 13) * contentScale, weight: .bold))
+                        .foregroundStyle(tint)
+                    Text(EtubuHazardChrome.kicker(item.kind, urgent: urgent))
+                        .font(EtubuClusterFonts.ui((compact ? 8 : 9) * contentScale, weight: .heavy))
+                        .foregroundStyle(tint.opacity(0.95))
                         .lineLimit(1)
                         .minimumScaleFactor(0.65)
                 }
-                ForEach(Array(secondary.enumerated()), id: \.element.id) { _, next in
-                    HStack(spacing: 4) {
-                        Text(next.title)
-                            .font(EtubuClusterFonts.ui(9 * contentScale, weight: .semibold))
-                            .foregroundStyle(theme.primaryText.opacity(0.7))
-                            .lineLimit(1)
-                        if !next.distanceLabel.isEmpty {
-                            Text(next.distanceLabel)
-                                .font(EtubuClusterFonts.ui(9 * contentScale, weight: .medium))
-                                .monospacedDigit()
-                                .foregroundStyle(theme.mutedText)
-                                .lineLimit(1)
-                        }
-                    }
+
+                Text(item.distanceLabel.isEmpty ? "—" : item.distanceLabel)
+                    .font(EtubuClusterFonts.gauge(valueSize))
+                    .monospacedDigit()
+                    .foregroundStyle(urgent ? tint : theme.primaryText)
+                    .minimumScaleFactor(0.5)
+                    .lineLimit(1)
+                    .layoutPriority(3)
+
+                // Alta sığan ek bilgi
+                Text(item.title.isEmpty ? "—" : item.title)
+                    .font(EtubuClusterFonts.ui(metaSize, weight: .semibold))
+                    .foregroundStyle(theme.secondaryText)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(compact ? 1 : 2)
                     .minimumScaleFactor(0.6)
+
+                if !compact, !item.meta.isEmpty {
+                    Text(item.meta)
+                        .font(EtubuClusterFonts.ui(metaSize, weight: .medium))
+                        .foregroundStyle(theme.mutedText)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
                 }
             } else {
                 Text("—")
-                    .font(EtubuClusterFonts.gauge(18 * contentScale))
+                    .font(EtubuClusterFonts.gauge(valueSize))
                     .foregroundStyle(theme.mutedText.opacity(0.4))
+                Text(EtubuClusterL10n.t("roadClear"))
+                    .font(EtubuClusterFonts.ui(metaSize, weight: .medium))
+                    .foregroundStyle(theme.mutedText.opacity(0.5))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
             }
+
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -985,9 +998,9 @@ struct EtubuRoadWarnTwinView: View {
         .padding(.vertical, 6)
         .modifier(EtubuTwinCardChrome(
             theme: theme,
-            stroke: urgent ? Color.orange.opacity(0.7) : theme.accent.opacity(0.55),
+            stroke: urgent ? tint.opacity(0.8) : theme.accent.opacity(0.55),
             warmFill: false,
-            shadowColor: urgent ? Color.orange.opacity(0.22) : Color.black.opacity(0.32)
+            shadowColor: urgent ? tint.opacity(0.22) : Color.black.opacity(0.32)
         ))
     }
 }
@@ -1030,105 +1043,76 @@ private struct EtubuTwinCardChrome: ViewModifier {
             .overlay(
                 shape.strokeBorder(stroke, lineWidth: 1.25)
             )
-            .shadow(color: shadowColor, radius: 8)
+            .clipShape(shape)
+            .shadow(color: shadowColor, radius: 4)
     }
 }
 
-/// Bipolar power meter: green left = regen (negative kW), warm right = drive (positive).
-/// Colors follow active `ClusterTheme`.
+/// Regen-only meter (tüketim barı yok).
 struct EtubuPowerRegenBarView: View {
     let powerKw: Int?
     var compact: Bool = false
     var theme: ClusterTheme = .aurora
+    @State private var displayKw: Double = 0
 
-    private var power: Int {
+    private var targetPower: Int {
         let raw = powerKw ?? 0
-        // Idle noise — bar titremesin.
-        return abs(raw) < 12 ? 0 : raw
+        return abs(raw) < 4 ? 0 : raw
     }
-    private var regenerating: Bool { power < -1 }
-    private var accelerating: Bool { power > 1 }
-
+    private var regenerating: Bool { displayKw < -1 }
     private var fill: CGFloat {
-        min(1, CGFloat(abs(power)) / 160.0)
+        min(1, CGFloat(abs(displayKw)) / 160.0)
     }
-
     private var labelColor: Color {
-        if regenerating { return Color(red: 0.35, green: 0.92, blue: 0.55) }
-        if accelerating { return theme.accent }
-        return theme.mutedText
-    }
-
-    private var driveColors: [Color] {
-        [theme.accent.opacity(0.45), theme.accent, Color.yellow.opacity(0.85)]
+        regenerating ? Color(red: 0.35, green: 0.92, blue: 0.55) : theme.mutedText
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: compact ? 4 : 6) {
-            HStack {
-                Text(regenerating ? "REGEN" : "POWER")
-                    .font(EtubuClusterFonts.ui(10, weight: .heavy))
-                    .tracking(1)
-                    .foregroundStyle(labelColor)
-                Spacer()
-                Text(powerLabel)
-                    .font(EtubuClusterFonts.gauge(compact ? 13 : 15))
-                    .monospacedDigit()
-                    .foregroundStyle(labelColor)
-            }
+        // Tüketim (POWER) gösterilmez — yalnızca regen.
+        Group {
+            if regenerating {
+                VStack(alignment: .leading, spacing: compact ? 4 : 6) {
+                    HStack {
+                        Text("REGEN")
+                            .font(EtubuClusterFonts.ui(10, weight: .heavy))
+                            .tracking(1)
+                            .foregroundStyle(labelColor)
+                        Spacer()
+                        Text("\(Int(displayKw.rounded())) kW")
+                            .font(EtubuClusterFonts.gauge(compact ? 13 : 15))
+                            .monospacedDigit()
+                            .foregroundStyle(labelColor)
+                    }
 
-            GeometryReader { geo in
-                let mid = geo.size.width / 2
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(theme.surface.opacity(0.55))
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color(red: 0.2, green: 0.85, blue: 0.45).opacity(0.95),
-                                    Color(red: 0.35, green: 0.95, blue: 0.65).opacity(0.55),
-                                ],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .frame(width: max(2, mid * (regenerating ? fill : 0)))
-                        .offset(x: mid - max(2, mid * (regenerating ? fill : 0)))
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: driveColors,
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .frame(width: max(2, mid * (accelerating ? fill : 0)))
-                        .offset(x: mid)
-                    Rectangle()
-                        .fill(Color.white.opacity(0.55))
-                        .frame(width: 2, height: compact ? 10 : 12)
-                        .position(x: mid, y: geo.size.height / 2)
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Capsule()
+                                .fill(theme.surface.opacity(0.55))
+                            Capsule()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            Color(red: 0.2, green: 0.85, blue: 0.45).opacity(0.95),
+                                            Color(red: 0.35, green: 0.95, blue: 0.65).opacity(0.55),
+                                        ],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .frame(width: max(4, geo.size.width * fill))
+                        }
+                    }
+                    .frame(height: compact ? 8 : 10)
                 }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Regen \(Int(displayKw.rounded())) kilowatt")
             }
-            .frame(height: compact ? 8 : 10)
         }
-        .padding(.horizontal, compact ? 10 : 12)
-        .padding(.vertical, compact ? 8 : 10)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(theme.canvas.opacity(0.55))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(labelColor.opacity(regenerating || accelerating ? 0.4 : 0.14), lineWidth: 1)
-                )
-        )
-        .animation(.easeOut(duration: 0.1), value: power)
-    }
-
-    private var powerLabel: String {
-        if power > 0 { return "+\(power) kW" }
-        if power < 0 { return "\(power) kW" }
-        return "0 kW"
+        .onAppear { displayKw = Double(targetPower) }
+        .onChange(of: targetPower) { _, new in
+            withAnimation(.easeInOut(duration: 0.32)) {
+                displayKw = Double(new)
+            }
+        }
     }
 }

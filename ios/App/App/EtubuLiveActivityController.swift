@@ -13,14 +13,13 @@ enum EtubuLiveActivityController {
     /// Uygulama öldürülürse güncelleme kesilir; bu süre sonra sistem LA’yı bayat sayar.
     private static let staleSeconds: TimeInterval = 75
 
-    /// Sürüş aktifken LA/Island her zaman güncellenir (ön plan dahil).
+    /// Sürüş aktifken LA/Island güncellenir — park/idle bağlıyken sürekli tutma.
     @MainActor
     static var isDriveSessionAllowed: Bool {
         let t = EtubuVehicleTelemetry.shared
-        return t.kmh >= 1
-            || t.connectionState == .connected
-            || t.routeActive
-            || EtubuDemoDrive.isActive
+        if EtubuDemoDrive.isActive { return true }
+        // Hareket veya aktif rota — Island anlamlı; salt BLE bağlı parkta kapat.
+        return t.kmh >= 3 || t.routeActive
     }
 
     static func ensureAudioSession(mixWithOthers: Bool) {
@@ -102,8 +101,8 @@ enum EtubuLiveActivityController {
             }
             if let h = remaining.first {
                 let dist = h.distanceLabel.isEmpty ? "" : " · \(h.distanceLabel)"
-                let name = h.label.isEmpty ? h.kindTitleTR : h.label
-                return String(("\(h.kindTitleTR): \(name)\(dist)").prefix(52))
+                let name = h.label.isEmpty ? h.kindTitle : h.label
+                return String(("\(h.kindTitle): \(name)\(dist)").prefix(52))
             }
             return ""
         }()
@@ -111,8 +110,8 @@ enum EtubuLiveActivityController {
             guard routeOn, remaining.count > 1 else { return "" }
             let h = remaining[1]
             let dist = h.distanceLabel.isEmpty ? "" : " · \(h.distanceLabel)"
-            let name = h.label.isEmpty ? h.kindTitleTR : h.label
-            return String(("\(h.kindTitleTR): \(name)\(dist)").prefix(48))
+            let name = h.label.isEmpty ? h.kindTitle : h.label
+            return String(("\(h.kindTitle): \(name)\(dist)").prefix(48))
         }()
         return EtubuDriveAttributes.ContentState(
             kmh: kmh ?? t.kmh,
@@ -125,7 +124,7 @@ enum EtubuLiveActivityController {
             tpmsRL: t.tpmsRL.psi.map { Int($0.rounded()) },
             tpmsRR: t.tpmsRR.psi.map { Int($0.rounded()) },
             routeActive: routeOn,
-            routeFrom: t.routeFrom.isEmpty ? "Konumum" : t.routeFrom,
+            routeFrom: t.routeFrom.isEmpty ? EtubuClusterL10n.myLocation : t.routeFrom,
             routeTo: t.routeTo,
             radarCount: rb.radarCount,
             corridorCount: rb.corridorCount,
@@ -139,7 +138,9 @@ enum EtubuLiveActivityController {
             rangeKm: t.displayRangeKm ?? t.rangeKm,
             remainKm: t.effectiveRemainKm,
             etaMinutes: t.navEtaMinutes.map { Int($0.rounded()) },
-            arrivalSocPercent: t.energyAtArrivalPercent
+            arrivalSocPercent: t.energyAtArrivalPercent,
+            islandEtaLabel: EtubuClusterL10n.t("islandEtaRemain"),
+            islandKmRemainLabel: EtubuClusterL10n.t("islandKmRemain")
         )
     }
 

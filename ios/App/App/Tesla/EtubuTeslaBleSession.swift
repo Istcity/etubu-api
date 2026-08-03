@@ -54,14 +54,14 @@ final class EtubuTeslaBleSession: ObservableObject {
         guard !demoSuspended else { return }
         guard let vin = EtubuTeslaVinStore.vin else {
             telemetry.connectionState = .needsVIN
-            telemetry.statusMessage = "VIN girin ve eşleştirin"
+            telemetry.statusMessage = EtubuClusterL10n.t("bleEnterVin")
             return
         }
         telemetry.vin = vin
         telemetry.deviceLabel = "Tesla \(String(vin.suffix(6)))"
         guard EtubuTeslaVinStore.pairedConfirmed(for: vin) else {
             telemetry.connectionState = .needsVIN
-            telemetry.statusMessage = "Eşleştirmeyi tamamlamak için Pair açın"
+            telemetry.statusMessage = EtubuClusterL10n.t("bleOpenPair")
             pairStep = .none
             return
         }
@@ -105,7 +105,7 @@ final class EtubuTeslaBleSession: ObservableObject {
         }
         let vin = EtubuTeslaVinStore.normalize(raw)
         guard EtubuTeslaVinStore.isValidVIN(vin) else {
-            telemetry.statusMessage = "VIN must be 17 characters"
+            telemetry.statusMessage = EtubuClusterL10n.t("bleVinLen")
             telemetry.connectionState = .failed
             return
         }
@@ -137,7 +137,7 @@ final class EtubuTeslaBleSession: ObservableObject {
         activePairVIN = nil
         pairStep = .none
         telemetry.connectionState = .idle
-        telemetry.statusMessage = "Disconnected"
+        telemetry.statusMessage = EtubuClusterL10n.t("bleDisconnected")
         if telemetry.source == .tesla {
             telemetry.source = .none
         }
@@ -153,7 +153,7 @@ final class EtubuTeslaBleSession: ObservableObject {
         EtubuTeslaVinStore.vin = nil
         telemetry.vin = ""
         telemetry.connectionState = .needsVIN
-        telemetry.statusMessage = "VIN girin ve eşleştirin"
+        telemetry.statusMessage = EtubuClusterL10n.t("bleEnterVin")
         telemetry.deviceLabel = "Tesla"
         activePairVIN = nil
         pairStep = .none
@@ -162,7 +162,7 @@ final class EtubuTeslaBleSession: ObservableObject {
     func repair() async {
         guard let vin = EtubuTeslaVinStore.vin else {
             telemetry.connectionState = .needsVIN
-            telemetry.statusMessage = "VIN girin ve eşleştirin"
+            telemetry.statusMessage = EtubuClusterL10n.t("bleEnterVin")
             return
         }
         try? keyStore.deletePrivateKey(forVIN: vin)
@@ -176,13 +176,13 @@ final class EtubuTeslaBleSession: ObservableObject {
         guard pairStep == .waitingForCard || pairStep == .failed else { return }
         guard let vin = activePairVIN ?? EtubuTeslaVinStore.vin else {
             telemetry.connectionState = .needsVIN
-            telemetry.statusMessage = "VIN bulunamadı"
+            telemetry.statusMessage = EtubuClusterL10n.t("bleVinMissing")
             return
         }
         pairInFlight = true
         defer { pairInFlight = false }
         telemetry.connectionState = .connecting
-        telemetry.statusMessage = "Kart doğrulaması sonrası bağlanıyor…"
+        telemetry.statusMessage = EtubuClusterL10n.t("bleConnectingAfterCard")
         pairStep = .connectingAfterCard
         if let client {
             await client.disconnect()
@@ -200,7 +200,7 @@ final class EtubuTeslaBleSession: ObservableObject {
         }
         guard let vin = activePairVIN ?? EtubuTeslaVinStore.vin else {
             telemetry.connectionState = .needsVIN
-            telemetry.statusMessage = "VIN girin ve eşleştirin"
+            telemetry.statusMessage = EtubuClusterL10n.t("bleEnterVin")
             return
         }
         userStopped = false
@@ -217,7 +217,7 @@ final class EtubuTeslaBleSession: ObservableObject {
         activePairVIN = vin
         pairStep = .sendingRequest
         telemetry.connectionState = .pairing
-        telemetry.statusMessage = "Anahtar isteği Bluetooth üzerinden gönderiliyor…"
+        telemetry.statusMessage = EtubuClusterL10n.t("bleSendingKey")
 
         do {
             let privateKey: P256.KeyAgreement.PrivateKey
@@ -236,7 +236,7 @@ final class EtubuTeslaBleSession: ObservableObject {
             try await c.connect(mode: .pairing)
             pairStep = .waitingForCard
             telemetry.connectionState = .waitingForCard
-            telemetry.statusMessage = "Tesla anahtar kartını orta konsola dokundurun"
+            telemetry.statusMessage = EtubuClusterL10n.t("bleTapCard")
 
             try await c.send(.security(.addKey(
                 publicKey: publicKey,
@@ -245,7 +245,7 @@ final class EtubuTeslaBleSession: ObservableObject {
             )))
             pairStep = .waitingForCard
             telemetry.connectionState = .waitingForCard
-            telemetry.statusMessage = "Kartı dokundurup araç ekranındaki onayı verin, sonra \"Kartı dokundum — bağlan\"a basın"
+            telemetry.statusMessage = EtubuClusterL10n.t("bleTapCardConfirm")
         } catch {
             pairStep = .failed
             telemetry.connectionState = .failed
@@ -266,7 +266,7 @@ final class EtubuTeslaBleSession: ObservableObject {
         defer { connectInFlight = false }
         cancelJobs()
         telemetry.connectionState = .connecting
-        telemetry.statusMessage = "Bağlanıyor…"
+        telemetry.statusMessage = EtubuClusterL10n.t("bleConnecting")
 
         if (try? keyStore.loadPrivateKey(forVIN: vin)) == nil {
             if allowPairFallback {
@@ -276,7 +276,7 @@ final class EtubuTeslaBleSession: ObservableObject {
             } else {
                 pairStep = .failed
                 telemetry.connectionState = .failed
-                telemetry.statusMessage = "Kayıtlı anahtar bulunamadı, yeniden eşleştirin"
+                telemetry.statusMessage = EtubuClusterL10n.t("bleKeyMissing")
             }
             return
         }
@@ -294,8 +294,8 @@ final class EtubuTeslaBleSession: ObservableObject {
                 connectedAt = Date()
                 ignoreDisconnectUntil = Date().addingTimeInterval(5)
                 telemetry.connectionState = .connected
-                telemetry.source = .tesla
-                telemetry.statusMessage = "Bağlandı"
+                telemetry.lockToTeslaSource()
+                telemetry.statusMessage = EtubuClusterL10n.t("bleConnected")
                 EtubuVehicleTelemetry.shared.scrubDemoChargeResidueIfNeeded()
                 EtubuTeslaVinStore.setPairedConfirmed(true, for: vin)
                 activePairVIN = nil
@@ -306,7 +306,7 @@ final class EtubuTeslaBleSession: ObservableObject {
             } catch {
                 if attempt < maxRetries {
                     telemetry.connectionState = .reconnecting
-                    telemetry.statusMessage = "Bağlantı tekrar deneniyor (\(attempt + 1)/\(maxRetries))…"
+                    telemetry.statusMessage = String(format: EtubuClusterL10n.t("bleRetryFmt"), attempt + 1, maxRetries)
                     try? await Task.sleep(nanoseconds: UInt64(attempt) * 1_000_000_000)
                     continue
                 }
@@ -323,17 +323,20 @@ final class EtubuTeslaBleSession: ObservableObject {
         pollTask = Task { [weak self] in
             guard let self else { return }
             var failStreak = 0
-            // İlk bağlanmada iklim / enerji / lastik hemen gelsin
+            // İlk bağlanmada iklim / enerji / lastik / kapaklar hemen gelsin
             do {
-                let boot = try await client.fetch(.categories([.charge, .climate, .tirePressure]))
+                let boot = try await client.fetch(.categories([.charge, .climate, .tirePressure, .closures]))
                 await MainActor.run { self.applySnapshot(boot) }
             } catch {
-                // Kombine istek başarısızsa lastiği ayrı dene
+                // Kombine istek başarısızsa parçalı dene
                 if let tiresOnly = try? await client.fetch(.categories([.tirePressure])) {
                     await MainActor.run { self.applySnapshot(tiresOnly) }
                 }
                 if let chargeOnly = try? await client.fetch(.categories([.charge, .climate])) {
                     await MainActor.run { self.applySnapshot(chargeOnly) }
+                }
+                if let clos = try? await client.fetch(.categories([.closures])) {
+                    await MainActor.run { self.applySnapshot(clos) }
                 }
             }
             // Lastik yoksa bir kez daha zorla
@@ -367,17 +370,14 @@ final class EtubuTeslaBleSession: ObservableObject {
                                 && self.telemetry.tpmsRR.psi == nil)
                     }
 
-                    // Eksik SoC/iklim/TPMS varken her döngüde zorla; doluyken parkta seyrek.
-                    if missingExtras {
-                        let snap = try await client.fetch(.categories([.charge, .climate, .tirePressure]))
+                    // Canlı tut: eksikse her tur; doluyken sık climate+TPMS+closures
+                    if missingExtras || self.tick % (parked ? 3 : 2) == 0 {
+                        let snap = try await client.fetch(.categories([.charge, .climate, .tirePressure, .closures]))
                         await MainActor.run { self.applySnapshot(snap) }
-                    } else if self.tick % (parked ? 5 : 3) == 0 {
-                        let snap = try await client.fetch(.categories([.charge, .climate, .tirePressure]))
+                    } else if self.tick % (parked ? 4 : 3) == 0 {
+                        let snap = try await client.fetch(.categories([.tirePressure, .climate]))
                         await MainActor.run { self.applySnapshot(snap) }
-                    } else if self.tick % (parked ? 8 : 5) == 0 {
-                        let snap = try await client.fetch(.categories([.tirePressure]))
-                        await MainActor.run { self.applySnapshot(snap) }
-                    } else if self.tick % (parked ? 16 : 10) == 0 {
+                    } else if self.tick % (parked ? 6 : 4) == 0 {
                         let snap = try await client.fetch(.categories([.closures]))
                         await MainActor.run { self.applySnapshot(snap) }
                     } else if self.tick % (parked ? 14 : 8) == 0 {
@@ -388,7 +388,7 @@ final class EtubuTeslaBleSession: ObservableObject {
                     failStreak += 1
                     if failStreak < 5 {
                         await MainActor.run {
-                            self.telemetry.statusMessage = "Sinyal zayıf… (\(failStreak)/5)"
+                            self.telemetry.statusMessage = String(format: EtubuClusterL10n.t("bleWeakSignalFmt"), failStreak)
                         }
                         try? await Task.sleep(nanoseconds: 450_000_000)
                         continue
@@ -432,6 +432,8 @@ final class EtubuTeslaBleSession: ObservableObject {
     private func applyDrive(_ drive: DriveState) {
         guard !demoSuspended else { return }
         let mph = drive.speedMph ?? 0
+        // Bozuk / imkansız paket — yayınlama.
+        guard mph.isFinite, mph >= 0, mph <= 175 else { return }
         let kmh = Int((mph * 1.60934).rounded())
         let gear: String = {
             switch drive.shiftState {
@@ -443,29 +445,51 @@ final class EtubuTeslaBleSession: ObservableObject {
             }
         }()
         let odoKm: Int? = {
-            guard let hundredths = drive.odometerHundredthsMile else { return nil }
+            guard let hundredths = drive.odometerHundredthsMile, hundredths > 0 else { return nil }
             let miles = Double(hundredths) / 100.0
+            guard miles.isFinite, miles > 0, miles < 2_000_000 else { return nil }
             return Int((miles * 1.60934).rounded())
         }()
         let remainKm: Double? = {
-            guard let mi = drive.activeRouteMilesToArrival else { return nil }
+            guard let mi = drive.activeRouteMilesToArrival, mi.isFinite, mi >= 0, mi < 12_000 else { return nil }
             return mi * 1.60934
+        }()
+        let power: Int? = {
+            guard let kw = drive.powerKW else { return nil }
+            // Aşırı gürültü paketini yutma; geçerli aralıkta bırak.
+            if abs(kw) > 800 { return nil }
+            return kw
         }()
         telemetry.applyTeslaDrive(
             kmh: kmh,
             gear: gear,
-            powerKw: drive.powerKW,
+            powerKw: power,
             odometerKm: odoKm,
             navDestination: drive.activeRouteDestination,
             navRemainKm: remainKm,
             navEtaMinutes: drive.activeRouteMinutesToArrival
         )
-        EtubuClusterAudioBridge.pushDrive(
-            kmh: kmh,
-            powerKw: drive.powerKW,
-            source: "tesla"
-        )
+        // EV ses — kullanıcı açtıysa Tesla’da da demo gibi motoru ayakta tut.
+        if EtubuClusterAudioBridge.isSoundWanted {
+            EtubuClusterAudioBridge.ensureLiveDriveSound(
+                kmh: telemetry.kmh,
+                powerKw: telemetry.powerKw,
+                gear: telemetry.gear
+            )
+        } else {
+            EtubuClusterAudioBridge.pushDrive(
+                kmh: telemetry.kmh,
+                powerKw: telemetry.powerKw,
+                source: "tesla"
+            )
+        }
         AppDelegate.activateDriveAudioSession()
+        // Araç navigasyonu → uygulama rotası + uyarı hattı (arka planda).
+        EtubuRouteBridge.adaptVehicleNavIfNeeded(
+            destination: drive.activeRouteDestination,
+            remainKm: remainKm,
+            etaMinutes: drive.activeRouteMinutesToArrival
+        )
         // Live Activity: max ~2 Hz so faster drive poll doesn't spam
         if Date().timeIntervalSince(lastLiveActivityPush) >= 0.5 {
             lastLiveActivityPush = Date()
@@ -515,13 +539,7 @@ final class EtubuTeslaBleSession: ObservableObject {
         }
         if let tires = snap.tirePressure {
             func reading(_ t: TirePressureState.Tire?) -> EtubuTireReading {
-                // Tesla reports bar; if value looks like psi already (> 8), keep as-is.
-                let raw = t?.pressureBar
-                let psi: Double? = {
-                    guard let raw, raw > 0.2 else { return nil }
-                    if raw > 8 { return raw }
-                    return EtubuVehicleTelemetry.barToPsi(raw)
-                }()
+                let psi = EtubuVehicleTelemetry.tireRawToPsi(t?.pressureBar)
                 return EtubuTireReading(
                     psi: psi,
                     warning: t?.hasWarning == true
@@ -567,15 +585,16 @@ final class EtubuTeslaBleSession: ObservableObject {
                     switch state {
                     case .scanning:
                         self.telemetry.connectionState = .connecting
-                        self.telemetry.statusMessage = "Scanning…"
+                        self.telemetry.statusMessage = EtubuClusterL10n.t("bleScanning")
                     case .connecting, .handshaking:
                         self.telemetry.connectionState = .connecting
-                        self.telemetry.statusMessage = "Handshaking…"
+                        self.telemetry.statusMessage = EtubuClusterL10n.t("bleHandshaking")
                     case .connected:
                         self.connectedAt = Date()
                         self.ignoreDisconnectUntil = Date().addingTimeInterval(4)
                         self.telemetry.connectionState = .connected
-                        self.telemetry.statusMessage = "Bağlandı · salt okuma"
+                        self.telemetry.lockToTeslaSource()
+                        self.telemetry.statusMessage = EtubuClusterL10n.t("bleConnectedReadOnly")
                         EtubuVehicleLaunchNotifier.shared.notifyVehicleConnected(source: "tesla")
                     case .disconnected:
                         if !self.userStopped {
@@ -588,11 +607,11 @@ final class EtubuTeslaBleSession: ObservableObject {
                                 break
                             } else if self.shouldAutoReconnect, let vin = EtubuTeslaVinStore.vin {
                                 self.telemetry.connectionState = .reconnecting
-                                self.telemetry.statusMessage = "Yeniden bağlanıyor…"
+                                self.telemetry.statusMessage = EtubuClusterL10n.t("bleReconnecting")
                                 self.scheduleReconnect(vin: vin, debounce: 2.0)
                             } else {
                                 self.telemetry.connectionState = .idle
-                                self.telemetry.statusMessage = "Bağlantı kesildi"
+                                self.telemetry.statusMessage = EtubuClusterL10n.t("bleDisconnected")
                             }
                         }
                     @unknown default:
@@ -617,21 +636,21 @@ final class EtubuTeslaBleSession: ObservableObject {
         if isSessionHealthy { return }
         guard reconnectAttempt < 4 else {
             telemetry.connectionState = .failed
-            telemetry.statusMessage = "Bağlantı kurulamadı"
+            telemetry.statusMessage = EtubuClusterL10n.t("bleConnectFailed")
             return
         }
         reconnectTask?.cancel()
         reconnectAttempt += 1
         let delay = max(debounce, min(8.0, pow(2.0, Double(min(reconnectAttempt, 4) - 1))))
         telemetry.connectionState = .reconnecting
-        telemetry.statusMessage = "Yeniden bağlanıyor (\(Int(delay))s)…"
+        telemetry.statusMessage = String(format: EtubuClusterL10n.t("bleReconnectInFmt"), Int(delay))
         reconnectTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
             guard let self, !self.userStopped, !self.demoSuspended else { return }
             guard self.shouldAutoReconnect else {
                 await MainActor.run {
                     self.telemetry.connectionState = .idle
-                    self.telemetry.statusMessage = "Bağlantı kesildi"
+                    self.telemetry.statusMessage = EtubuClusterL10n.t("bleDisconnected")
                 }
                 return
             }
@@ -640,13 +659,17 @@ final class EtubuTeslaBleSession: ObservableObject {
         }
     }
 
-    /// SPM Charge/Climate mapper unset optional → 0; her iki temp de ~0 ise yok say.
+    /// SPM Charge/Climate mapper unset optional → 0; gerçek 0°C ile karıştırma.
     private static func sanitizeTempC(_ value: Double?, other: Double?) -> Double? {
-        guard let value else { return nil }
-        let otherZ = other.map { abs($0) < 0.05 } ?? true
-        if abs(value) < 0.05, otherZ { return nil }
-        // Tesla kabin/dış için mantıklı aralık dışı → yok say
+        guard let value, value.isFinite else { return nil }
         if value < -50 || value > 70 { return nil }
+        // Her iki alan da ~0 → protokol “unset”; kışın gerçek 0 nadiren iki tarafta birden.
+        if abs(value) < 0.05 {
+            let otherNearZero = other.map { abs($0) < 0.05 } ?? true
+            if otherNearZero { return nil }
+            // Bu alan unset, diğeri dolu → yok say
+            return nil
+        }
         return value
     }
 
@@ -696,60 +719,119 @@ final class EtubuTeslaBleSession: ObservableObject {
     @Published var nearbyChargers: [NearbyChargerSite] = []
 
     func setClimate(on: Bool) async {
-        await sendCommand(.climate(on ? .on : .off), label: on ? "İklim açıldı" : "İklim kapandı")
+        await sendCommand(
+            .climate(on ? .on : .off),
+            label: EtubuClusterL10n.t(on ? "cmdOkClimateOn" : "cmdOkClimateOff")
+        )
     }
 
     func setChargeLimit(_ percent: Int) async {
         let p = Int32(min(100, max(50, percent)))
-        await sendCommand(.charge(.setLimit(percent: p)), label: "Şarj limiti \(p)%")
+        await sendCommand(
+            .charge(.setLimit(percent: p)),
+            label: String(format: EtubuClusterL10n.t("cmdOkChargeLimitFmt"), Int(p))
+        )
     }
 
     func setCharging(start: Bool) async {
-        await sendCommand(.charge(start ? .start : .stop), label: start ? "Şarj başladı" : "Şarj durdu")
+        await sendCommand(
+            .charge(start ? .start : .stop),
+            label: EtubuClusterL10n.t(start ? "cmdOkChargeStart" : "cmdOkChargeStop")
+        )
     }
 
     func setLocked(_ lock: Bool) async {
-        await sendCommand(.security(lock ? .lock : .unlock), label: lock ? "Kilitlendi" : "Kilit açıldı")
+        await sendCommand(
+            .security(lock ? .lock : .unlock),
+            label: EtubuClusterL10n.t(lock ? "cmdOkLocked" : "cmdOkUnlocked")
+        )
     }
 
     func setSeatHeater(level: Command.Climate.SeatHeaterLevel, seat: Command.Climate.SeatPosition) async {
         let label: String
         switch level {
-        case .off: label = "Koltuk ısıtıcı kapalı"
-        case .low: label = "Koltuk ısıtıcı 1"
-        case .medium: label = "Koltuk ısıtıcı 2"
-        case .high: label = "Koltuk ısıtıcı 3"
+        case .off: label = EtubuClusterL10n.t("cmdOkSeatOff")
+        case .low: label = EtubuClusterL10n.t("cmdOkSeat1")
+        case .medium: label = EtubuClusterL10n.t("cmdOkSeat2")
+        case .high: label = EtubuClusterL10n.t("cmdOkSeat3")
         }
         await sendCommand(.climate(.setSeatHeater(level: level, seat: seat)), label: label)
     }
 
     func ventWindows() async {
-        await sendCommand(.actions(.ventWindows), label: "Camlar aralandı")
+        await sendCommand(.actions(.ventWindows), label: EtubuClusterL10n.t("cmdOkVent"))
     }
 
     func closeWindows() async {
-        await sendCommand(.actions(.closeWindows), label: "Camlar kapandı")
+        await sendCommand(.actions(.closeWindows), label: EtubuClusterL10n.t("cmdOkCloseWindows"))
     }
 
     func openFrunk() async {
-        await sendCommand(.security(.openFrunk), label: "Frunk açıldı")
+        await sendCommand(.security(.openFrunk), label: EtubuClusterL10n.t("cmdOkFrunk"))
+    }
+
+    /// Frunk BLE’de yalnızca açma var — açıksa bilgilendir.
+    func toggleFrunk() async {
+        if telemetry.frunkOpen == true {
+            lastCommandMessage = EtubuClusterL10n.t("cmdFrunkManualClose")
+            telemetry.statusMessage = lastCommandMessage
+            return
+        }
+        await openFrunk()
+        await refreshClosuresSoon()
     }
 
     func openTrunk() async {
-        await sendCommand(.security(.openTrunk), label: "Bagaj açıldı")
+        await sendCommand(.security(.openTrunk), label: EtubuClusterL10n.t("cmdOkTrunk"))
+    }
+
+    func closeTrunk() async {
+        await sendCommand(.security(.closeTrunk), label: EtubuClusterL10n.t("cmdOkTrunkClose"))
+    }
+
+    /// Aynı tuş: açıksa kapat, kapalıysa aç (powered liftgate / actuate).
+    func toggleTrunk() async {
+        if telemetry.trunkOpen == true {
+            await sendCommand(.security(.closeTrunk), label: EtubuClusterL10n.t("cmdOkTrunkClose"))
+        } else {
+            // actuateTrunk = smart open/close; openTrunk yedek
+            await sendCommand(.security(.actuateTrunk), label: EtubuClusterL10n.t("cmdOkTrunk"))
+        }
+        await refreshClosuresSoon()
     }
 
     func openChargePort() async {
-        await sendCommand(.charge(.openPort), label: "Şarj kapağı açıldı")
+        await sendCommand(.charge(.openPort), label: EtubuClusterL10n.t("cmdOkChargePort"))
+    }
+
+    func closeChargePort() async {
+        await sendCommand(.charge(.closePort), label: EtubuClusterL10n.t("cmdOkChargePortClose"))
+    }
+
+    func toggleChargePort() async {
+        if telemetry.chargePortOpen == true {
+            await closeChargePort()
+        } else {
+            await openChargePort()
+        }
+        await refreshClosuresSoon()
     }
 
     func flashLights() async {
-        await sendCommand(.actions(.flashLights), label: "Farlar yakıldı")
+        await sendCommand(.actions(.flashLights), label: EtubuClusterL10n.t("cmdOkFlash"))
+    }
+
+    private func refreshClosuresSoon() async {
+        guard let client else { return }
+        try? await Task.sleep(nanoseconds: 450_000_000)
+        if let snap = try? await client.fetch(.categories([.closures, .charge])) {
+            await MainActor.run { applySnapshot(snap) }
+        }
     }
 
     func refreshNearbyChargers() async {
         guard let client else {
-            lastCommandMessage = "Araç bağlı değil"
+            lastCommandMessage = EtubuClusterL10n.t("vehicleNotConnected")
             return
         }
         do {
@@ -770,18 +852,21 @@ final class EtubuTeslaBleSession: ObservableObject {
                         )
                     }
                 lastCommandMessage = nearbyChargers.isEmpty
-                    ? "Yakında Supercharger yok"
-                    : "\(nearbyChargers.count) Supercharger"
+                    ? EtubuClusterL10n.t("noNearbySuperchargers")
+                    : String(format: EtubuClusterL10n.t("superchargerCountFmt"), nearbyChargers.count)
                 NotificationCenter.default.post(name: .etubuCarPlayNeedsRefresh, object: nil)
             }
         } catch {
-            lastCommandMessage = "Şarj araması başarısız: \(error.localizedDescription)"
+            lastCommandMessage = String(
+                format: EtubuClusterL10n.t("chargeSearchFailedFmt"),
+                error.localizedDescription
+            )
         }
     }
 
     private func sendCommand(_ command: Command, label: String) async {
         guard let client else {
-            lastCommandMessage = "Araç bağlı değil"
+            lastCommandMessage = EtubuClusterL10n.t("vehicleNotConnected")
             telemetry.statusMessage = lastCommandMessage
             return
         }
@@ -790,7 +875,10 @@ final class EtubuTeslaBleSession: ObservableObject {
             lastCommandMessage = label
             telemetry.statusMessage = label
         } catch {
-            lastCommandMessage = "Komut başarısız: \(error.localizedDescription)"
+            lastCommandMessage = String(
+                format: EtubuClusterL10n.t("commandFailedFmt"),
+                error.localizedDescription
+            )
             telemetry.statusMessage = lastCommandMessage
         }
     }

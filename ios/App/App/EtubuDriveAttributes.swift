@@ -33,6 +33,9 @@ public struct EtubuDriveAttributes: ActivityAttributes {
         public var remainKm: Double?
         public var etaMinutes: Int?
         public var arrivalSocPercent: Int?
+        /// Pre-localized Island captions (set by app from EtubuClusterL10n).
+        public var islandEtaLabel: String
+        public var islandKmRemainLabel: String
 
         public init(
             kmh: Int,
@@ -59,7 +62,9 @@ public struct EtubuDriveAttributes: ActivityAttributes {
             rangeKm: Int? = nil,
             remainKm: Double? = nil,
             etaMinutes: Int? = nil,
-            arrivalSocPercent: Int? = nil
+            arrivalSocPercent: Int? = nil,
+            islandEtaLabel: String = "",
+            islandKmRemainLabel: String = ""
         ) {
             self.kmh = kmh
             self.gear = gear
@@ -86,6 +91,8 @@ public struct EtubuDriveAttributes: ActivityAttributes {
             self.remainKm = remainKm
             self.etaMinutes = etaMinutes
             self.arrivalSocPercent = arrivalSocPercent
+            self.islandEtaLabel = islandEtaLabel
+            self.islandKmRemainLabel = islandKmRemainLabel
         }
 
         public var routeSummaryLine: String {

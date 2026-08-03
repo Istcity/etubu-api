@@ -39,7 +39,8 @@ const Scene = (() => {
   // picker and paywall copy don't need to change.
   // ---------------------------------------------------------------------
   const MODE_HUE = {
-    aurora: 185, particles: 200, vortex: 275, horizon: 205, pulse: 345,
+    aurora: 185, tesla: 0, midnight: 210, "plaid-boost": 28,
+    particles: 200, vortex: 275, horizon: 205, pulse: 345,
     plasma: 295, warp: 255, streak: 18, chrome: 210, tunnel: 165,
     grid: 145, circuit: 132, telemetry: 175, neon: 318, matrix: 118,
     "night-city": 305, "solar-flare": 36, "deep-ocean": 204,

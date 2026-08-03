@@ -57,6 +57,7 @@ Restore accepts: `etubu.catalog.yearly`, `etubu.unlock.yearly`, `etubu.unlock.li
 
 ## Not in this build
 
-- Vehicle write commands (lock/climate/media)
-- AdMob
+- Vehicle write commands beyond existing BLE remote sheet (documented in legal)
+- AdMob (not wired; Cap skips native ads)
+- CarPlay (foundation scene only — no Apple entitlement; not shipping)
 - Map / turn-by-turn panels

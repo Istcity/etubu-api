@@ -1,0 +1,59 @@
+appId: com.etubu.app
+---
+# Premium kapısı: rotaya basınca paywall + TR fiyat 249 TL
+- launchApp:
+    clearState: true
+    permissions:
+      all: allow
+      notifications: deny
+    arguments:
+      etubuSkipOnboarding: true
+      etubuForceLangTr: true
+- runFlow: dismiss-permissions.yaml
+- extendedWaitUntil:
+    visible:
+      id: "etubu.legal.checkbox"
+    timeout: 20000
+- tapOn:
+    id: "etubu.legal.checkbox"
+- tapOn:
+    id: "etubu.legal.accept"
+    optional: true
+- tapOn:
+    point: "50%,90%"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 1500
+- runFlow: dismiss-permissions.yaml
+- extendedWaitUntil:
+    visible:
+      id: "etubu.route.open"
+    timeout: 25000
+- tapOn:
+    id: "etubu.route.open"
+- extendedWaitUntil:
+    visible: "Premium"
+    timeout: 10000
+- assertVisible: "Etubu Premium"
+- assertVisible:
+    id: "etubu.premium.price"
+- assertVisible: "249 TL"
+- assertVisible:
+    id: "etubu.premium.feat.route"
+- assertVisible:
+    id: "etubu.premium.buy"
+- assertVisible:
+    text: "Satın al"
+- scrollUntilVisible:
+    element:
+      id: "etubu.premium.redeem"
+    direction: DOWN
+    timeout: 5000
+- assertVisible:
+    id: "etubu.premium.redeem"
+- assertVisible: "Kod kullan"
+- takeScreenshot: qa-premium-route-lock
+- tapOn: "Kapat"
+- extendedWaitUntil:
+    visible: "km/h"
+    timeout: 8000

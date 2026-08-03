@@ -29,6 +29,8 @@ struct EtubuRouteHazard: Equatable, Identifiable {
     var routeIdx: Int? = nil
     /// Approx km from route start.
     var alongKm: Double? = nil
+    /// Corridor length (km) — free-drive / OSM average_speed.
+    var lengthKm: Double? = nil
     /// Remaining straight-line distance label when known (e.g. "1.2 km").
     var distanceLabel: String = ""
 
@@ -36,15 +38,31 @@ struct EtubuRouteHazard: Equatable, Identifiable {
         CLLocationCoordinate2D(latitude: lat, longitude: lng)
     }
 
-    var kindTitleTR: String {
+    var kindTitle: String { Self.kindTitle(for: kind) }
+
+    static func kindTitle(for kind: String) -> String {
         switch kind {
-        case "corridor": return "Hız koridoru"
-        case "charge": return "Şarj istasyonu"
-        case "weather": return "Hava olayı"
-        case "control": return "Kontrol"
-        default: return "Radar"
+        case "corridor": return EtubuClusterL10n.t("warnKindCorridor")
+        case "charge": return EtubuClusterL10n.t("warnKindCharge")
+        case "weather": return EtubuClusterL10n.t("warnKindWeather")
+        case "control": return EtubuClusterL10n.t("warnKindControl")
+        default: return EtubuClusterL10n.t("warnKindRadar")
         }
     }
+
+    /// TTS clip composer için sabit Türkçe kök (UI dili bağımsız).
+    var speakRootTR: String {
+        switch kind {
+        case "corridor": return "hız koridoru"
+        case "charge": return "şarj istasyonu"
+        case "weather": return "hava olayı"
+        case "control": return "kontrol"
+        default: return "radar"
+        }
+    }
+
+    /// Geriye dönük çağrılar.
+    var kindTitleTR: String { kindTitle }
 }
 
 struct EtubuRouteBriefSummary: Equatable {
@@ -95,6 +113,53 @@ final class EtubuDriveWarnings: ObservableObject {
 
     private init() {}
 
+    /// Dil değişince generic HUD başlıklarını yeni dile çevir (özel isimler korunur).
+    func relocalizeVisibleTitles() {
+        let generics = Self.genericKindTitles()
+        if var p = primary {
+            if p.title.isEmpty || generics.contains(p.title) {
+                p.title = EtubuRouteHazard.kindTitle(for: p.kind)
+            }
+            primary = p
+        }
+        queue = queue.map { item in
+            var q = item
+            if q.title.isEmpty || generics.contains(q.title) {
+                q.title = EtubuRouteHazard.kindTitle(for: q.kind)
+            }
+            return q
+        }
+        if corridorActive, corridorLabel.isEmpty || generics.contains(corridorLabel) {
+            corridorLabel = EtubuClusterL10n.t("warnKindCorridor")
+        }
+        objectWillChange.send()
+    }
+
+    private static func genericKindTitles() -> Set<String> {
+        var s: Set<String> = [
+            "Radar", "Hız koridoru", "Şarj istasyonu", "Hava olayı", "Kontrol",
+            "RADAR", "HIZ KORİDORU", "ŞARJ", "HAVA", "KONTROL", "KRİTİK NOKTA",
+            "Average speed zone", "Charging station", "Weather alert", "Checkpoint",
+            "AVG SPEED", "CHARGE", "WEATHER", "CONTROL", "CRITICAL",
+            "Abschnittskontrolle", "Ladestation", "Wetterwarnung", "Kontrolle",
+            "ABSCHNITT", "LADEN", "WETTER", "KONTROLLE", "KRITISCH",
+            "Zone de vitesse moyenne", "Borne de recharge", "Alerte météo", "Contrôle",
+            "VITESSE MOY.", "MÉTÉO", "CRITIQUE",
+            "Zona de velocidad media", "Estación de carga", "Alerta meteorológica",
+            "VEL. MEDIA", "CARGA", "CLIMA", "CRÍTICO",
+            "平均速度ゾーン", "充電ステーション", "天候警報", "取締", "レーダー", "充電", "天候", "重要",
+            "Зона средней скорости", "Зарядная станция", "Погодное предупреждение",
+            "РАДАР", "СР. СКОРОСТЬ", "ЗАРЯДКА", "ПОГОДА", "КОНТРОЛЬ", "КРИТИЧНО",
+            "Speed camera", "Blitzer",
+        ]
+        for k in ["warnKindRadar", "warnKindCorridor", "warnKindCharge", "warnKindWeather", "warnKindControl",
+                  "warnKickerRadar", "warnKickerCorridor", "warnKickerCharge", "warnKickerWeather",
+                  "warnKickerControl", "warnKickerCritical"] {
+            s.insert(EtubuClusterL10n.t(k))
+        }
+        return s
+    }
+
     func clearCriticalAlerts() {
         primary = nil
         queue = []
@@ -144,104 +209,93 @@ final class EtubuDriveWarnings: ObservableObject {
         timer = nil
     }
 
+    /// Arka plan GPS callback — Timer askıdayken de radar/koridor tick.
+    func tickFromLocation() {
+        guard !EtubuDemoDrive.isActive else { return }
+        refreshNativeProximityWarnings()
+    }
+
     private func pollOnce() {
         // Demo kendi uyarılarını yazar — web poll boş queue ile silmesin.
         if EtubuDemoDrive.isActive { return }
+        let hasNativeHazards = !hazards.isEmpty || !remainingHazards.isEmpty
         let routeQuiet = routeCoords.isEmpty && queue.isEmpty && primary == nil
-            && !EtubuVehicleTelemetry.shared.routeActive
+            && !EtubuVehicleTelemetry.shared.routeActive && !hasNativeHazards
         if routeQuiet {
             pollIdleTicks &+= 1
             // Rota yokken her 3. tikte bir oku (≈3s).
-            if pollIdleTicks % 3 != 1 { return }
+            if pollIdleTicks % 3 != 1 {
+                // OSM limit aşımı rotasız da çalışsın.
+                refreshNativeProximityWarnings()
+                return
+            }
         } else {
             pollIdleTicks = 0
         }
         EtubuClusterAudioBridge.evalJSReturning(Self.readScript) { [weak self] raw in
-            guard let self, let raw, let data = raw.data(using: .utf8),
+            guard let self else { return }
+            guard let raw, let data = raw.data(using: .utf8),
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-            else { return }
+            else {
+                Task { @MainActor in self.refreshNativeProximityWarnings() }
+                return
+            }
             let hash = raw.hashValue
             Task { @MainActor in
                 // Callback gecikmeli gelebilir — demo başlamışsa web sonucunu yoksay.
                 if EtubuDemoDrive.isActive { return }
-                if hash == self.lastPollJSONHash { return }
-                self.lastPollJSONHash = hash
-                self.apply(json)
+                if hash != self.lastPollJSONHash {
+                    self.lastPollJSONHash = hash
+                    self.apply(json)
+                }
+                // Cap JSON değişmese bile GPS yaklaşması her tikte yenilensin.
+                self.refreshNativeProximityWarnings()
             }
         }
     }
 
     private func apply(_ json: [String: Any]) {
         if let arr = json["queue"] as? [[String: Any]] {
-            let parsed = arr.compactMap { Self.parseWarn($0) }
-            // Radar + hız koridoru her zaman önce
-            queue = parsed.sorted { a, b in
-                let pa = Self.warnPriority(a.kind)
-                let pb = Self.warnPriority(b.kind)
-                if pa != pb { return pa < pb }
-                return false
-            }
-            primary = queue.first
-        } else {
-            queue = []
-            primary = nil
-        }
-
-        if let hs = json["hazards"] as? [[String: Any]] {
-            hazards = hs.compactMap { row in
-                guard let lat = Self.double(row["lat"]), let lng = Self.double(row["lng"]) else { return nil }
-                let kind = (row["kind"] as? String) ?? "radar"
-                let label = (row["label"] as? String) ?? ""
-                return EtubuRouteHazard(
-                    id: (row["id"] as? String) ?? "\(kind)-\(lat),\(lng)",
-                    kind: kind,
-                    label: label,
-                    lat: lat,
-                    lng: lng,
-                    maxspeed: Self.int(row["maxspeed"]),
-                    kw: Self.int(row["kw"]),
-                    routeIdx: Self.int(row["routeIdx"]),
-                    alongKm: Self.double(row["alongKm"]),
-                    distanceLabel: (row["dist"] as? String) ?? ""
-                )
+            let capQueue = arr.compactMap { Self.parseWarn($0) }
+            if !capQueue.isEmpty {
+                queue = capQueue.sorted { a, b in
+                    let pa = Self.warnPriority(a.kind)
+                    let pb = Self.warnPriority(b.kind)
+                    if pa != pb { return pa < pb }
+                    return false
+                }
+                primary = queue.first
+            } else {
+                // Cap warn-reel boş — native GPS proximity doldursun.
+                queue = []
+                primary = nil
             }
         }
 
-        if let rh = json["remaining"] as? [[String: Any]] {
-            remainingHazards = rh.compactMap { row in
-                guard let lat = Self.double(row["lat"]), let lng = Self.double(row["lng"]) else { return nil }
-                let kind = (row["kind"] as? String) ?? "radar"
-                let label = (row["label"] as? String) ?? ""
-                return EtubuRouteHazard(
-                    id: (row["id"] as? String) ?? "rem-\(kind)-\(lat),\(lng)",
-                    kind: kind,
-                    label: label,
-                    lat: lat,
-                    lng: lng,
-                    maxspeed: Self.int(row["maxspeed"]),
-                    kw: Self.int(row["kw"]),
-                    routeIdx: Self.int(row["routeIdx"]),
-                    alongKm: Self.double(row["alongKm"]),
-                    distanceLabel: (row["dist"] as? String) ?? ""
-                )
-            }
-        } else if json["active"] as? Bool == true {
-            remainingHazards = hazards
-        } else {
+        if let hs = json["hazards"] as? [[String: Any]], !hs.isEmpty {
+            hazards = hs.compactMap { Self.parseHazard($0) }
+        }
+        // Boş Cap hazards native EGM listesini silmesin.
+
+        if let rh = json["remaining"] as? [[String: Any]], !rh.isEmpty {
+            remainingHazards = rh.compactMap { Self.parseHazard($0, idPrefix: "rem-") }
+        } else if (json["active"] as? Bool == true) || EtubuVehicleTelemetry.shared.routeActive {
+            if remainingHazards.isEmpty { remainingHazards = hazards }
+        } else if !EtubuVehicleTelemetry.shared.routeActive, hazards.isEmpty {
             remainingHazards = []
         }
 
-        if let cs = json["coords"] as? [[String: Any]] {
+        if let cs = json["coords"] as? [[String: Any]], !cs.isEmpty {
             routeCoords = cs.compactMap { row in
                 guard let lat = Self.double(row["lat"]), let lng = Self.double(row["lng"]) else { return nil }
                 return CLLocationCoordinate2D(latitude: lat, longitude: lng)
             }
-        } else if json["active"] as? Bool == false {
+        } else if json["active"] as? Bool == false, !EtubuVehicleTelemetry.shared.routeActive {
             routeCoords = []
         }
 
         if let b = json["brief"] as? [String: Any] {
-            brief = EtubuRouteBriefSummary(
+            let incoming = EtubuRouteBriefSummary(
                 radarCount: Self.int(b["radar"]) ?? 0,
                 controlCount: Self.int(b["control"]) ?? 0,
                 corridorCount: Self.int(b["corridor"]) ?? 0,
@@ -250,6 +304,9 @@ final class EtubuDriveWarnings: ObservableObject {
                 chargeNames: (b["chargeNames"] as? [String]) ?? [],
                 weatherLabels: (b["weatherLabels"] as? [String]) ?? []
             )
+            if incoming.hasAny || !brief.hasAny {
+                brief = incoming
+            }
         }
 
         if let rb = json["remainingBrief"] as? [String: Any] {
@@ -262,7 +319,7 @@ final class EtubuDriveWarnings: ObservableObject {
                 chargeNames: (rb["chargeNames"] as? [String]) ?? [],
                 weatherLabels: (rb["weatherLabels"] as? [String]) ?? []
             )
-        } else {
+        } else if !remainingHazards.isEmpty {
             remainingBrief = Self.briefFromHazards(remainingHazards)
         }
 
@@ -282,15 +339,26 @@ final class EtubuDriveWarnings: ObservableObject {
             if brief.controlCount == 0 { brief.controlCount = fromHaz.controlCount }
         }
 
-        corridorActive = json["corridor"] as? Bool ?? false
-        corridorOver = json["over"] as? Bool ?? false
-        corridorAvgKmh = Self.int(json["avg"]) ?? 0
-        corridorLimit = Self.int(json["limit"])
-        corridorRemainLabel = (json["remain"] as? String) ?? ""
-        corridorLabel = (json["corridorLabel"] as? String) ?? ""
-        tripDistLabel = (json["tripMeta"] as? String) ?? ""
+        // Cap koridor snapshot — canlı koridor açıksa Cap false ile silme.
+        if json["corridor"] as? Bool == true {
+            corridorActive = true
+            corridorOver = json["over"] as? Bool ?? false
+            corridorAvgKmh = Self.int(json["avg"]) ?? 0
+            corridorLimit = Self.int(json["limit"])
+            corridorRemainLabel = (json["remain"] as? String) ?? ""
+            corridorLabel = (json["corridorLabel"] as? String) ?? ""
+        } else if json["corridor"] as? Bool == false, !EtubuLiveRadarMonitor.shared.corridorActive {
+            corridorActive = false
+            corridorOver = false
+            corridorRemainLabel = ""
+            corridorLabel = ""
+            corridorLimit = nil
+        }
+        if let meta = json["tripMeta"] as? String, !meta.isEmpty {
+            tripDistLabel = meta
+        }
 
-        let routeOn = json["active"] as? Bool ?? false
+        let routeOn = (json["active"] as? Bool ?? false) || EtubuVehicleTelemetry.shared.routeActive
         let remainKm: Double? = {
             if let n = json["remainKm"] as? Double { return n }
             if let n = json["remainKm"] as? NSNumber { return n.doubleValue }
@@ -318,6 +386,230 @@ final class EtubuDriveWarnings: ObservableObject {
         EtubuEvRoutePlanner.shared.refreshFromLiveState()
     }
 
+    /// GPS + native hazard list → yaklaşma kuyruğu, hız koridoru / OSM üstü uyarı.
+    private func refreshNativeProximityWarnings() {
+        guard !EtubuDemoDrive.isActive else { return }
+        let t = EtubuVehicleTelemetry.shared
+        let lat = t.latitude
+        let lng = t.longitude
+        let kmh = t.kmh
+
+        // Rota yokken de OSM radar / koridor (canlı sürüş) — Premium.
+        let live = EtubuLiveRadarMonitor.shared
+        if EtubuPremiumManager.shared.isPremium {
+            live.tick(lat: lat, lng: lng, heading: t.headingDeg, kmh: kmh)
+        }
+
+        updateOsmOverSpeed(kmh: kmh)
+
+        // Rota hazard + canlı kameralar birleşik havuz.
+        var pool = remainingHazards.isEmpty ? hazards : remainingHazards
+        if !EtubuPremiumManager.shared.isPremium {
+            // Ücretsiz: yalnızca OSM hız levhası — radar/koridor/şarj/hava yok.
+            hazards = []
+            remainingHazards = []
+            brief = EtubuRouteBriefSummary()
+            remainingBrief = EtubuRouteBriefSummary()
+            queue = queue.filter { $0.meta == "OSM" }
+            if primary?.meta != "OSM" { primary = queue.first }
+            if corridorActive {
+                corridorActive = false
+                corridorOver = false
+                corridorRemainLabel = ""
+                corridorLabel = ""
+                corridorLimit = nil
+            }
+            maybeSpeakPrimaryWarn()
+            Self.pushLiveActivityBrief()
+            return
+        }
+
+        if !t.routeActive {
+            pool = live.cameras
+        } else if !live.cameras.isEmpty {
+            var seen = Set(pool.map(\.id))
+            for c in live.cameras where !seen.contains(c.id) {
+                pool.append(c)
+                seen.insert(c.id)
+            }
+        }
+
+        // Canlı koridor girişi — Cap boş olsa bile paneli doldur.
+        if live.corridorActive {
+            corridorActive = true
+            corridorOver = live.corridorOver
+            corridorAvgKmh = live.corridorAvgKmh
+            corridorLimit = live.corridorLimit
+            corridorRemainLabel = live.corridorRemainLabel
+            corridorLabel = live.corridorLabel
+            if let p = live.primary {
+                primary = p
+                if !queue.contains(where: { $0.id == p.id }) {
+                    queue.insert(p, at: 0)
+                }
+            }
+            maybeSpeakPrimaryWarn()
+            Self.pushLiveActivityBrief()
+            EtubuVehicleTelemetry.shared.publishWidgetSnapshot(
+                primaryWarn: primary.map { "\($0.title) \($0.distanceLabel)" }
+            )
+            // Koridor içinde de yaklaşan radarları güncelle (aşağıda devam).
+        }
+
+        guard let lat, let lng else { return }
+        guard !pool.isEmpty || t.routeActive || live.corridorActive else { return }
+
+        struct Ranked {
+            var h: EtubuRouteHazard
+            var dM: Double
+            var stage: EtubuWarnStage
+        }
+        var ranked: [Ranked] = []
+        for h in pool {
+            let dM = Self.haversineM(lat, lng, h.lat, h.lng)
+            guard dM <= 5500 else { continue }
+            let stage: EtubuWarnStage
+            if dM <= 300 { stage = .critical }
+            else if dM <= 1000 { stage = .near }
+            else if dM <= 2000 { stage = .mid }
+            else { stage = .far }
+            ranked.append(Ranked(h: h, dM: dM, stage: stage))
+        }
+        ranked.sort { a, b in
+            let pa = Self.warnPriority(a.h.kind)
+            let pb = Self.warnPriority(b.h.kind)
+            if pa != pb { return pa < pb }
+            return a.dM < b.dM
+        }
+
+        let nativeQueue: [EtubuWarnItem] = ranked.prefix(4).map { r in
+            let lim = r.h.maxspeed.map { " · \($0)" } ?? ""
+            return EtubuWarnItem(
+                id: r.h.id,
+                kind: r.h.kind,
+                title: r.h.label.isEmpty ? r.h.kindTitle : r.h.label,
+                distanceLabel: Self.fmtDist(r.dM) + lim,
+                stage: r.stage,
+                meta: r.h.maxspeed.map { "lim \($0)" } ?? ""
+            )
+        }
+
+        // Canlı koridor primary’yi ezme.
+        if !live.corridorActive {
+            if queue.isEmpty || primary == nil {
+                if !nativeQueue.isEmpty {
+                    queue = nativeQueue
+                    primary = nativeQueue.first
+                } else if let p = live.primary {
+                    primary = p
+                    queue = [p]
+                }
+            }
+        } else if !nativeQueue.isEmpty {
+            // Koridor + yaklaşan radar kuyruğu
+            let rest = nativeQueue.filter { $0.kind != "corridor" || $0.id != primary?.id }
+            queue = ([primary].compactMap { $0 } + rest).prefix(4).map { $0 }
+        }
+
+        if !live.corridorActive, let corr = ranked.first(where: { $0.h.kind == "corridor" && $0.dM <= 3500 }) {
+            corridorActive = true
+            corridorLabel = corr.h.label
+            corridorLimit = corr.h.maxspeed
+            corridorRemainLabel = Self.fmtDist(corr.dM)
+            corridorAvgKmh = kmh
+            let lim = corr.h.maxspeed ?? 0
+            corridorOver = lim > 0 && kmh > lim + 2
+            if corridorOver, corr.stage == .critical || corr.stage == .near {
+                let overItem = EtubuWarnItem(
+                    id: "over-\(corr.h.id)",
+                    kind: "corridor",
+                    title: EtubuClusterL10n.slowDown,
+                    distanceLabel: "\(kmh) / \(lim)",
+                    stage: .critical,
+                    meta: corr.h.label
+                )
+                primary = overItem
+                if !queue.contains(where: { $0.id == overItem.id }) {
+                    queue.insert(overItem, at: 0)
+                }
+            }
+        } else if !live.corridorActive, corridorActive, let lim = corridorLimit, lim > 0 {
+            corridorAvgKmh = kmh
+            corridorOver = kmh > lim + 2
+        }
+
+        if !ranked.isEmpty {
+            remainingHazards = ranked.map(\.h)
+            remainingBrief = Self.briefFromHazards(remainingHazards)
+            if !t.routeActive {
+                // Rotasız harita pinleri — yakındaki canlı radar/koridor.
+                hazards = remainingHazards
+                brief = remainingBrief
+            }
+        }
+
+        maybeSpeakPrimaryWarn()
+        Self.pushLiveActivityBrief()
+        EtubuVehicleTelemetry.shared.publishWidgetSnapshot(
+            primaryWarn: primary.map { "\($0.title) \($0.distanceLabel)" }
+        )
+    }
+
+    private func updateOsmOverSpeed(kmh: Int) {
+        let lim = EtubuOsmSpeedLimit.shared.limitKmh
+        guard let lim, lim > 0, kmh >= EtubuOsmSpeedLimit.movingKmhThreshold else { return }
+        guard kmh > lim + 5 else { return }
+        // Daha güçlü radar/koridor uyarısı varken OSM aşımını bastırma.
+        if let p = primary, p.kind == "radar" || p.kind == "corridor", p.stage == .critical || p.stage == .near {
+            return
+        }
+        if primary == nil || queue.isEmpty || primary?.meta == "OSM" {
+            let item = EtubuWarnItem(
+                id: "osm-over-\(lim)",
+                kind: "radar",
+                title: EtubuClusterL10n.slowDown,
+                distanceLabel: "\(kmh) / \(lim)",
+                stage: kmh > lim + 15 ? .critical : .near,
+                meta: "OSM"
+            )
+            primary = item
+            queue = [item]
+        }
+    }
+
+    private static func haversineM(_ lat1: Double, _ lon1: Double, _ lat2: Double, _ lon2: Double) -> Double {
+        EtubuTrafikAPI.haversineKm(lat1, lon1, lat2, lon2) * 1000
+    }
+
+    private static func fmtDist(_ m: Double) -> String {
+        guard m.isFinite, m >= 0 else { return "" }
+        if m >= 1000 {
+            let km = m / 1000
+            if km >= 10 { return String(format: "%.0f km", km) }
+            return String(format: "%.1f km", km)
+        }
+        if m >= 100 { return "\(Int((m / 50).rounded() * 50)) m" }
+        return "\(Int((m / 10).rounded() * 10)) m"
+    }
+
+    private static func parseHazard(_ row: [String: Any], idPrefix: String = "") -> EtubuRouteHazard? {
+        guard let lat = double(row["lat"]), let lng = double(row["lng"]) else { return nil }
+        let kind = (row["kind"] as? String) ?? "radar"
+        let label = (row["label"] as? String) ?? ""
+        return EtubuRouteHazard(
+            id: (row["id"] as? String) ?? "\(idPrefix)\(kind)-\(lat),\(lng)",
+            kind: kind,
+            label: label,
+            lat: lat,
+            lng: lng,
+            maxspeed: int(row["maxspeed"]),
+            kw: int(row["kw"]),
+            routeIdx: int(row["routeIdx"]),
+            alongKm: double(row["alongKm"]),
+            distanceLabel: (row["dist"] as? String) ?? ""
+        )
+    }
+
     private var lastSpokenWarnId = ""
     private var lastSpokenWarnStage = ""
     private func maybeSpeakPrimaryWarn() {
@@ -328,7 +620,8 @@ final class EtubuDriveWarnings: ObservableObject {
         if item.id == lastSpokenWarnId, stage == lastSpokenWarnStage { return }
         lastSpokenWarnId = item.id
         lastSpokenWarnStage = stage
-        let phrase = "\(item.title) \(item.distanceLabel)".trimmingCharacters(in: .whitespaces)
+        // Ekran metni lokalize; TTS yalnızca TR klipler (kök TR).
+        let phrase = EtubuHazardChrome.speakRootTR(item.kind)
         guard !phrase.isEmpty else { return }
         EtubuClusterAudioBridge.playWarnCue(
             id: item.id,
