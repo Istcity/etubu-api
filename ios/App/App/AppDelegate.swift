@@ -108,6 +108,39 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         }
     }
 
+    /// Tesla tarzı uyarı sesi: müziği geçici olarak kısar, uyarı biter bitmez eski seviyeye döner.
+    /// Bluetooth üzerinden de çalışır; müzik uygulamalarından bağımsız.
+    static func activateAlertDuckSession() {
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.setCategory(
+                .playback,
+                mode: .default,
+                options: [.duckOthers, .allowBluetoothA2DP, .allowAirPlay]
+            )
+            try session.setPreferredSampleRate(48_000)
+            try session.setActive(true, options: [])
+        } catch {
+            // Duck başarısızsa normal drive session'a dön
+            activateDriveAudioSession()
+            print("ETUBU alert duck session:", error)
+        }
+    }
+
+    /// Uyarı bittikten sonra müziği eski seviyesine döndür.
+    static func deactivateAlertDuckSession() {
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.setActive(false, options: [.notifyOthersOnDeactivation])
+        } catch {}
+        // Sürüş devam ediyorsa drive session'ı geri getir
+        if driveAudioActive {
+            activateDriveAudioSession()
+        } else {
+            activateSilentSafeSession()
+        }
+    }
+
     static func endDriveAudioSession() {
         driveAudioActive = false
         activateSilentSafeSession()

@@ -750,14 +750,15 @@ enum EtubuRouteBridge {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: work)
     }
 
-    /// If Cap RouteGuard left hazards empty (Radars[] often blank), fill from native enrichers.
-    private static func enrichActiveRouteFromNativeIfNeeded() {
+    /// EGM boş / eksikse OSM kameraları ve diğer kaynaklarla zenginleştir.
+    /// Her rota planında ve araç nav güncellemesinde çalışır.
+    static func enrichActiveRouteFromNativeIfNeeded() {
         Task {
             let existing = await MainActor.run { EtubuDriveWarnings.shared.hazards }
             let coordsCL = await MainActor.run { EtubuDriveWarnings.shared.routeCoords }
             var latLng: [(lat: Double, lng: Double)] = coordsCL.map { ($0.latitude, $0.longitude) }
             if latLng.count < 2 {
-                // Try Cap stash
+                // Cap stash'ten dene
                 await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
                     EtubuClusterAudioBridge.evalJSReturning("""
                     (function(){
@@ -787,26 +788,38 @@ enum EtubuRouteBridge {
             let hasRadarOrCorridor = existing.contains { $0.kind == "radar" || $0.kind == "corridor" }
 
             var merged = existing
-            // Radar her zaman OSM ile taze tut (seed/EGM boş veya bayat olabilir).
             let inTR = latLng.contains { EtubuRegion.inTurkeyBounds(lat: $0.lat, lng: $0.lng) }
-            if inTR && !hasRadarOrCorridor {
+
+            // Türkiye'de: seed hazard'ları her zaman ekle (EGM boş olsa bile)
+            if inTR {
                 merged.append(contentsOf: EtubuTrafikAPI.parseOfficialHazards(
                     data: [:], coords: latLng, includeSeeds: true
                 ))
             }
+
+            // OSM kameraları — EGM'den bağımsız her zaman çek (güncel ve global)
             let osmCams = await EtubuTrafikAPI.fetchOsmCamerasAlong(coords: latLng)
             merged.append(contentsOf: osmCams)
+
+            // Şarj ve hava — sadece eksikse çek
             if !hasCharge {
                 merged.append(contentsOf: await EtubuTrafikAPI.fetchChargersAlong(coords: latLng))
             }
             if !hasWeather {
                 merged.append(contentsOf: await EtubuTrafikAPI.fetchWeatherAlong(coords: latLng))
             }
+
             // Dedupe by id
             var seen = Set<String>()
             merged = merged.filter { seen.insert($0.id).inserted }
             merged.sort { ($0.routeIdx ?? 0) < ($1.routeIdx ?? 0) }
-            guard merged.count > existing.count || (!hasRadarOrCorridor && !merged.isEmpty) else { return }
+
+            // Yeni kritik nokta geldiyse veya daha önce yoksa güncelle
+            guard merged.count > existing.count
+                || (!hasRadarOrCorridor && !merged.isEmpty)
+                || (!hasCharge && merged.contains { $0.kind == "charge" })
+                || (!hasWeather && merged.contains { $0.kind == "weather" })
+            else { return }
 
             let brief = EtubuRouteBriefSummary(
                 radarCount: merged.filter { $0.kind == "radar" }.count,
@@ -821,7 +834,8 @@ enum EtubuRouteBridge {
                 let w = EtubuDriveWarnings.shared
                 w.hazards = merged
                 w.remainingHazards = merged
-                if !w.brief.hasAny || w.brief.chargeCount == 0 || w.brief.weatherCount == 0 {
+                if !w.brief.hasAny || w.brief.chargeCount == 0 || w.brief.weatherCount == 0
+                    || (!hasRadarOrCorridor && brief.radarCount + brief.corridorCount > 0) {
                     w.brief = brief
                     w.remainingBrief = brief
                 }
@@ -1066,13 +1080,8 @@ enum EtubuRouteBridge {
             // Şarj + hava — UI’yi bekletmeden zenginleştir
             async let charges = EtubuTrafikAPI.fetchChargersAlong(coords: latLngCoords)
             async let weather = EtubuTrafikAPI.fetchWeatherAlong(coords: latLngCoords)
-            let osmHaz: [EtubuRouteHazard]
-            if domestic {
-                osmHaz = await EtubuTrafikAPI.fetchOsmCamerasAlong(coords: latLngCoords)
-            } else {
-                osmHaz = []
-            }
-            let (chargeHaz, wxHaz) = await (charges, weather)
+            async let osmCamsAsync = EtubuTrafikAPI.fetchOsmCamerasAlong(coords: latLngCoords)
+            let (chargeHaz, wxHaz, osmHaz) = await (charges, weather, osmCamsAsync)
             guard !chargeHaz.isEmpty || !wxHaz.isEmpty || !osmHaz.isEmpty else { return }
 
             await MainActor.run {

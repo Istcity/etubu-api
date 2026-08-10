@@ -35,7 +35,8 @@ enum EtubuWarnVoice {
         let urls = keys.compactMap { urlForClip($0) }
         guard urls.count == keys.count else { return false }
 
-        AppDelegate.activateDriveAudioSession()
+        // Tesla tarzı: müziği kısarak uyarı ver (duckOthers), bitince eski seviyeye dön.
+        AppDelegate.activateAlertDuckSession()
         playToken &+= 1
         let token = playToken
         players.forEach { $0.stop() }
@@ -53,10 +54,16 @@ enum EtubuWarnVoice {
         players.removeAll()
         lastKey = ""
         lastAt = Date.distantPast
+        // Duck modunu kapat; müziği eski seviyeye döndür.
+        AppDelegate.deactivateAlertDuckSession()
     }
 
     private static func playSequence(urls: [URL], index: Int, token: Int, volume: Float) {
-        guard token == playToken, index < urls.count else { return }
+        guard token == playToken, index < urls.count else {
+            // Tüm klipler bitti — müziği eski seviyeye döndür (duck kaldır)
+            if index >= urls.count { AppDelegate.deactivateAlertDuckSession() }
+            return
+        }
         do {
             let player = try AVAudioPlayer(contentsOf: urls[index])
             player.volume = volume

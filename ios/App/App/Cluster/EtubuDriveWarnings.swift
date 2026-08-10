@@ -174,6 +174,8 @@ final class EtubuDriveWarnings: ObservableObject {
         corridorRemainLabel = ""
         corridorLabel = ""
         tripDistLabel = ""
+        deviationReplanning = false
+        lastDeviationCheckAt = Date.distantPast
         // demoActive / demoKmh — clearCriticalAlerts demo sürüşünü bozmasın;
         // sadece stop() / applyDemoDrive(false) sıfırlar.
     }
@@ -386,6 +388,52 @@ final class EtubuDriveWarnings: ObservableObject {
         EtubuEvRoutePlanner.shared.refreshFromLiveState()
     }
 
+    // MARK: - Rota sapma tespiti
+
+    private var lastDeviationCheckAt = Date.distantPast
+    private var deviationReplanning = false
+
+    /// Araç aktif rotadan çıktıysa yeni rota planla ve kritik noktaları güncelle.
+    private func checkRouteDeviationIfNeeded() {
+        guard !EtubuDemoDrive.isActive else { return }
+        let t = EtubuVehicleTelemetry.shared
+        guard t.routeActive, EtubuPremiumManager.shared.isPremium else { return }
+        guard let lat = t.latitude, let lng = t.longitude else { return }
+        guard t.kmh >= 5 else { return }  // Park modunda sapma kontrolü yapma
+        guard !deviationReplanning else { return }
+        guard Date().timeIntervalSince(lastDeviationCheckAt) >= 8 else { return }
+        lastDeviationCheckAt = Date()
+
+        let coords = routeCoords
+        guard coords.count >= 2 else { return }
+
+        // Rota üzerindeki en yakın noktaya mesafe
+        var minDistM = Double.infinity
+        for c in coords {
+            let d = Self.haversineM(lat, lng, c.latitude, c.longitude)
+            if d < minDistM { minDistM = d }
+        }
+
+        // 600m üzeri sapma → yeni rota planla (EGM/OSM ile kritik noktalar yenilenir)
+        guard minDistM > 600 else { return }
+        deviationReplanning = true
+        let dest = t.routeTo
+        let destLat = t.routeDestLat
+        let destLng = t.routeDestLng
+        guard !dest.isEmpty else { deviationReplanning = false; return }
+
+        Task { @MainActor in
+            defer { self.deviationReplanning = false }
+            let toPlace: EtubuRoutePlace? = {
+                if let la = destLat, let ln = destLng {
+                    return EtubuRoutePlace(label: dest, cityName: "", districtName: "", isMyLocation: false, lat: la, lng: ln)
+                }
+                return nil
+            }()
+            EtubuRouteBridge.plan(from: "Konumum", to: dest, toPlace: toPlace, fromVehicleNav: false) { _, _ in }
+        }
+    }
+
     /// GPS + native hazard list → yaklaşma kuyruğu, hız koridoru / OSM üstü uyarı.
     private func refreshNativeProximityWarnings() {
         guard !EtubuDemoDrive.isActive else { return }
@@ -393,6 +441,9 @@ final class EtubuDriveWarnings: ObservableObject {
         let lat = t.latitude
         let lng = t.longitude
         let kmh = t.kmh
+
+        // Rota sapması kontrolü (Premium + rota aktifken).
+        checkRouteDeviationIfNeeded()
 
         // Rota yokken de OSM radar / koridor (canlı sürüş) — Premium.
         let live = EtubuLiveRadarMonitor.shared

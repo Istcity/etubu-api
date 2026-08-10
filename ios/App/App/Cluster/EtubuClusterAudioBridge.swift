@@ -10,7 +10,7 @@ enum EtubuClusterAudioBridge {
             if #available(iOS 16.2, *) {
                 EtubuLiveActivityController.ensureAudioSession(mixWithOthers: mode != "solo")
             }
-            // Uyarılar müziğin üstüne yazsın — duckOthers kullanma
+            // EV motor sesi müzikle karışık çalar; uyarılar duckOthers ile ayrı session'dan.
             AppDelegate.activateDriveAudioSession()
         }
         evalJS("""
@@ -593,6 +593,12 @@ enum EtubuClusterAudioBridge {
 
     private static func fireBeeps(count: Int, urgent: Bool) {
         guard count > 0 else { return }
+        // Tesla tarzı: beep öncesi müziği kıs, sonra eski seviyeye dön.
+        AppDelegate.activateAlertDuckSession()
+        let beepDuration = Double(count) * (urgent ? 0.16 : 0.2) + 0.15
+        DispatchQueue.main.asyncAfter(deadline: .now() + beepDuration + 0.1) {
+            AppDelegate.deactivateAlertDuckSession()
+        }
         evalJS("""
         (function(){
           try {
