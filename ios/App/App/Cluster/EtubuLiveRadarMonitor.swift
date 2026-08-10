@@ -205,13 +205,16 @@ final class EtubuLiveRadarMonitor: ObservableObject {
                 return nil
             }
             corridor = state
-            let avg = corridorAvg(state, kmh: kmh)
+            let displayAvg = corridorAvg(state, kmh: kmh)
+            // Gerçek uyarı (kameraya göre): yalnızca distance/time ortalaması — anlık karışımı değil.
+            let trueAvg = corridorTrueAvg(state)
+            let isOver = trueAvg > 0 && trueAvg > state.limit + 2
             return CorridorSnap(
                 id: state.id,
                 remainM: remain,
                 limit: state.limit,
-                avg: avg,
-                over: avg > 0 && avg > state.limit + 2,
+                avg: displayAvg,
+                over: isOver,
                 label: state.label,
                 entered: false
             )
@@ -279,11 +282,31 @@ final class EtubuLiveRadarMonitor: ObservableObject {
     }
 
     private func corridorAvg(_ state: CorridorSession, kmh: Int) -> Int {
+        let elapsed = Date().timeIntervalSince(state.enteredAt)
+        let elapsedH = elapsed / 3600
+        let traveled = state.traveledM
+        // İlk 1.5 saniye veya 10m'den az seyahat: mevcut araç hızını göster (giriş anında anlık geri bildirim).
+        if elapsed < 1.5 || traveled < 10 {
+            return kmh > 0 ? kmh : 0
+        }
+        let histAvg = traveled / 1000 / elapsedH
+        guard histAvg.isFinite, histAvg >= 0, histAvg <= 300 else { return kmh > 0 ? kmh : 0 }
+        // Koridor uzunluğuna oranla ilerleme: başta %50 tarihsel + %50 anlık → sonda %90 tarihsel.
+        // Bu hem süre/mesafe ortalamasını hem araç hızını yansıtır (etubu.com davranışı).
+        let progress = min(1.0, traveled / max(500.0, state.lengthM))
+        let alpha = min(0.90, 0.50 + progress * 0.40)
+        let blended = histAvg * alpha + Double(kmh) * (1.0 - alpha)
+        guard blended.isFinite, blended >= 0 else { return min(220, Int(histAvg.rounded())) }
+        return min(220, Int(blended.rounded()))
+    }
+
+    /// Kameranın ölçtüğü gerçek ortalama hız: mesafe / süre (uyarı eşiği için).
+    private func corridorTrueAvg(_ state: CorridorSession) -> Int {
         let traveled = state.traveledM
         let elapsedH = Date().timeIntervalSince(state.enteredAt) / 3600
         guard traveled >= 35, elapsedH >= 0.0012 else { return 0 }
         let avg = traveled / 1000 / elapsedH
-        guard avg.isFinite, avg >= 0 else { return 0 }
+        guard avg.isFinite, avg >= 0, avg <= 300 else { return 0 }
         return min(220, Int(avg.rounded()))
     }
 

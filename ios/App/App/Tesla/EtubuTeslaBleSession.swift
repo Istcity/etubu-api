@@ -323,20 +323,24 @@ final class EtubuTeslaBleSession: ObservableObject {
         pollTask = Task { [weak self] in
             guard let self else { return }
             var failStreak = 0
-            // İlk bağlanmada iklim / enerji / lastik / kapaklar hemen gelsin
-            do {
-                let boot = try await client.fetch(.categories([.charge, .climate, .tirePressure, .closures]))
-                await MainActor.run { self.applySnapshot(boot) }
-            } catch {
-                // Kombine istek başarısızsa parçalı dene
-                if let tiresOnly = try? await client.fetch(.categories([.tirePressure])) {
-                    await MainActor.run { self.applySnapshot(tiresOnly) }
-                }
-                if let chargeOnly = try? await client.fetch(.categories([.charge, .climate])) {
-                    await MainActor.run { self.applySnapshot(chargeOnly) }
-                }
-                if let clos = try? await client.fetch(.categories([.closures])) {
-                    await MainActor.run { self.applySnapshot(clos) }
+            var extraFetchStreak = 0  // Arka arkaya kaç kez canlı extra verisi alındı
+            // İlk bağlanmada iklim / enerji / lastik / kapaklar hemen gelsin — 3 deneme
+            for attempt in 1...3 {
+                do {
+                    let boot = try await client.fetch(.categories([.charge, .climate, .tirePressure, .closures]))
+                    await MainActor.run { self.applySnapshot(boot) }
+                    break
+                } catch {
+                    if attempt == 1 {
+                        // Kombine başarısız → parçalı dene
+                        async let tires = client.fetch(.categories([.tirePressure]))
+                        async let chargeClimate = client.fetch(.categories([.charge, .climate]))
+                        async let clos = client.fetch(.categories([.closures]))
+                        if let t = try? await tires { await MainActor.run { self.applySnapshot(t) } }
+                        if let cc = try? await chargeClimate { await MainActor.run { self.applySnapshot(cc) } }
+                        if let cl = try? await clos { await MainActor.run { self.applySnapshot(cl) } }
+                    }
+                    if attempt < 3 { try? await Task.sleep(nanoseconds: 800_000_000) }
                 }
             }
             // Lastik yoksa bir kez daha zorla
@@ -360,8 +364,11 @@ final class EtubuTeslaBleSession: ObservableObject {
 
                     self.tick += 1
                     let parked = await MainActor.run { self.telemetry.kmh < 3 }
+
+                    // Tüm eksik alanlar için kapsamlı kontrol
                     let missingExtras = await MainActor.run {
                         self.telemetry.socPercent == nil
+                            || self.telemetry.rangeKm == nil
                             || self.telemetry.outsideC == nil
                             || self.telemetry.insideC == nil
                             || (self.telemetry.tpmsFL.psi == nil
@@ -370,10 +377,20 @@ final class EtubuTeslaBleSession: ObservableObject {
                                 && self.telemetry.tpmsRR.psi == nil)
                     }
 
-                    // Canlı tut: eksikse her tur; doluyken sık climate+TPMS+closures
-                    if missingExtras || self.tick % (parked ? 3 : 2) == 0 {
+                    // Araç bilgileri eksik veya bayatsa araç uykusundan uyandır (her 8 tickte)
+                    if missingExtras && self.tick % 8 == 0 {
+                        try? await client.send(.security(.wakeVehicle))
+                        try? await Task.sleep(nanoseconds: 500_000_000)
+                    }
+
+                    // Sürüş modunda her tur şarj+iklim+TPMS; park modunda her 2. tur.
+                    // Eksik bilgi varsa her zaman tam fetch.
+                    if missingExtras || self.tick % (parked ? 2 : 1) == 0 {
                         let snap = try await client.fetch(.categories([.charge, .climate, .tirePressure, .closures]))
-                        await MainActor.run { self.applySnapshot(snap) }
+                        await MainActor.run {
+                            self.applySnapshot(snap)
+                            extraFetchStreak += 1
+                        }
                     } else if self.tick % (parked ? 4 : 3) == 0 {
                         let snap = try await client.fetch(.categories([.tirePressure, .climate]))
                         await MainActor.run { self.applySnapshot(snap) }
@@ -386,6 +403,7 @@ final class EtubuTeslaBleSession: ObservableObject {
                     }
                 } catch {
                     failStreak += 1
+                    extraFetchStreak = 0
                     if failStreak < 5 {
                         await MainActor.run {
                             self.telemetry.statusMessage = String(format: EtubuClusterL10n.t("bleWeakSignalFmt"), failStreak)
@@ -408,7 +426,7 @@ final class EtubuTeslaBleSession: ObservableObject {
                     }
                     return
                 }
-                // Moving: ~2 Hz drive; parked + extras ok: ~0.55 Hz
+                // Moving: ~2 Hz drive; parked + all data ok: ~0.7 Hz
                 let sleepNs: UInt64 = await MainActor.run {
                     let parkedNow = self.telemetry.kmh < 3
                     let missing = self.telemetry.socPercent == nil
@@ -418,7 +436,7 @@ final class EtubuTeslaBleSession: ObservableObject {
                             && self.telemetry.tpmsRL.psi == nil
                             && self.telemetry.tpmsRR.psi == nil)
                     if !parkedNow { return 450_000_000 }
-                    return missing ? 1_200_000_000 : 1_800_000_000
+                    return missing ? 900_000_000 : 1_500_000_000
                 }
                 try? await Task.sleep(nanoseconds: sleepNs)
             }
@@ -663,12 +681,12 @@ final class EtubuTeslaBleSession: ObservableObject {
     private static func sanitizeTempC(_ value: Double?, other: Double?) -> Double? {
         guard let value, value.isFinite else { return nil }
         if value < -50 || value > 70 { return nil }
-        // Her iki alan da ~0 → protokol “unset”; kışın gerçek 0 nadiren iki tarafta birden.
+        // Protokol "unset" tespiti: yalnizca her ikisi de tam sifirsa reddet.
         if abs(value) < 0.05 {
             let otherNearZero = other.map { abs($0) < 0.05 } ?? true
             if otherNearZero { return nil }
-            // Bu alan unset, diğeri dolu → yok say
-            return nil
+            // Biri sifir, digeri gecerli -> sifir gercek 0 derece olabilir (kis); goster.
+            return value
         }
         return value
     }
