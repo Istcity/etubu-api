@@ -830,11 +830,13 @@ body.audio-muted .mode-chip {
   position: relative;
   z-index: 2;
   display: grid;
-  grid-template-columns: minmax(175px, 1fr) auto minmax(175px, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: clamp(12px, 3.1vw, 31px);
   padding: 34px clamp(22px, 3.8vw, 41px);
   min-height: inherit;
+  min-width: 0;
+  overflow: hidden;
   touch-action: none;
   -webkit-user-select: none;
   user-select: none;
@@ -1219,12 +1221,199 @@ body.audio-muted .mode-chip {
   text-shadow: 0 1px 10px rgba(0, 0, 0, 0.9);
 }
 
+.speed-hud.is-over-limit {
+  animation: overLimitHudBg 1.1s ease-in-out infinite;
+}
+@keyframes overLimitHudBg {
+  0%, 100% {
+    box-shadow:
+      0 0 0 1px hsla(0, 90%, 55%, 0.55),
+      0 0 48px hsla(0, 95%, 50%, 0.45);
+  }
+  50% {
+    box-shadow:
+      0 0 0 2px hsla(0, 95%, 60%, 0.85),
+      0 0 72px hsla(0, 100%, 52%, 0.65);
+  }
+}
+
 .speed-gauge-stack {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 13px;
+  min-width: 0;
   touch-action: none;
+}
+
+/* Tesla tarzı hız limiti levhası — kadranın sol alt çaprazı */
+.speed-limit-badge {
+  position: absolute;
+  left: 2%;
+  bottom: 14%;
+  z-index: 6;
+  width: clamp(40px, 8.5vw, 58px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: #fff;
+  border: 5px solid #d40000;
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.9),
+    0 4px 14px rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.speed-limit-badge[hidden] {
+  display: none !important;
+}
+.speed-limit-value {
+  font-family: "DM Sans", system-ui, sans-serif;
+  font-weight: 800;
+  font-size: clamp(14px, 3.2vw, 22px);
+  line-height: 1;
+  color: #111;
+  letter-spacing: -0.04em;
+}
+.speed-limit-badge.is-over {
+  transform: scale(1.16);
+  border-color: #ff1a1a;
+  box-shadow:
+    0 0 0 2px #fff,
+    0 0 22px rgba(255, 30, 30, 0.75),
+    0 4px 16px rgba(0, 0, 0, 0.5);
+  animation: speedLimitPulse 1s ease-in-out infinite;
+}
+@keyframes speedLimitPulse {
+  0%, 100% { transform: scale(1.12); }
+  50% { transform: scale(1.22); }
+}
+
+/* Üst uyarı şeridi */
+.hud-warn-band {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 12;
+  height: 44px;
+  min-height: 44px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-sizing: border-box;
+  background: linear-gradient(90deg, rgba(180, 110, 0, 0.92), rgba(140, 80, 0, 0.88));
+  color: #fff;
+  font-family: "DM Sans", system-ui, sans-serif;
+  font-weight: 700;
+  font-size: clamp(13px, 2.4vw, 16px);
+  letter-spacing: 0.01em;
+  pointer-events: none;
+  overflow: hidden;
+}
+.hud-warn-band[hidden] {
+  display: none !important;
+}
+.hud-warn-band.is-urgent {
+  background: linear-gradient(90deg, rgba(190, 20, 30, 0.95), rgba(140, 10, 20, 0.92));
+  animation: warnBandPulse 0.85s ease-in-out infinite;
+}
+.hud-warn-band.is-overspeed {
+  background: linear-gradient(90deg, rgba(210, 0, 40, 0.97), rgba(160, 0, 20, 0.94));
+}
+@keyframes warnBandPulse {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.18); }
+}
+.hud-warn-band-icon {
+  flex-shrink: 0;
+  font-size: 18px;
+  line-height: 1;
+}
+.hud-warn-band-text {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hud-warn-band-dist {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.95;
+}
+.speed-hud.has-warn-band .speed-hud-content {
+  padding-top: calc(44px + 8px);
+}
+
+/* Yakın kritik noktalar listesi */
+.crit-near {
+  width: min(100%, 210px);
+  margin-top: 6px;
+  text-align: left;
+  min-width: 0;
+}
+.crit-near[hidden] {
+  display: none !important;
+}
+.crit-near-label {
+  display: block;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+.crit-near-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 88px;
+  overflow: hidden;
+}
+.crit-near-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.28);
+  border-left: 3px solid var(--crit-color, var(--cyan));
+  font-size: 11px;
+  line-height: 1.2;
+  min-width: 0;
+}
+.crit-near-item .crit-icon { flex-shrink: 0; }
+.crit-near-item .crit-title {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
+}
+.crit-near-item .crit-dist {
+  flex-shrink: 0;
+  font-weight: 700;
+  color: var(--crit-color, var(--cyan));
+  font-variant-numeric: tabular-nums;
+}
+.crit-near-item[data-kind="radar"] { --crit-color: #ff4d6d; }
+.crit-near-item[data-kind="railway"] { --crit-color: #ffb020; }
+.crit-near-item[data-kind="traffic_light"] { --crit-color: #ffd166; }
+.crit-near-item[data-kind="stop"],
+.crit-near-item[data-kind="give_way"] { --crit-color: #ff6b4a; }
+.crit-near-item[data-kind="crossing"],
+.crit-near-item[data-kind="bump"] { --crit-color: #5ce1ff; }
+.crit-near-item.is-critical {
+  background: rgba(180, 30, 40, 0.35);
 }
 
 .speed-gauge-wrap {
@@ -4335,4 +4524,407 @@ body.picker-open {
   .speed-hud-content {
     grid-template-columns: minmax(134px, 1fr) auto minmax(134px, 1fr);
   }
+}
+
+/*
+ * Tesla / araç tarayıcısı — tüm modeller:
+ * - Model 3/Y 15.4" (16:10, daha yüksek)
+ * - Model 3/Y 16" QHD (16:9, daha kısa)
+ * - Model S/X
+ * - Tam / yarım tarayıcı
+ * Ölçek: --vvh/--vvw/--tesla-scale (JS) + density sınıfları
+ */
+body.tesla-browser,
+body.ephemeral-browser {
+  --vvh: 100vh;
+  --vvw: 100vw;
+  --tesla-scale: 1;
+  --tesla-vh-fit: 1;
+  --tesla-pad: clamp(4px, calc(var(--vvh) * 0.012), 12px);
+  --tesla-gauge: min(
+    calc(var(--vvh) * 0.52 * var(--tesla-scale) * var(--tesla-vh-fit)),
+    calc(var(--vvw) * 0.32 * var(--tesla-scale) * var(--tesla-vh-fit)),
+    calc(320px * var(--tesla-scale) * var(--tesla-vh-fit))
+  );
+  --ad-top-h: 0px;
+  --ad-bottom-h: 0px;
+  --ad-middle-h: 0px;
+  --ad-side-w: 0px;
+  --panel-offset: 0px;
+  --stage-pad-top: var(--tesla-pad);
+  --stage-pad-bottom: var(--tesla-pad);
+  overflow: hidden !important;
+  height: var(--vvh);
+  max-height: var(--vvh);
+  overscroll-behavior: none;
+}
+
+body.tesla-browser .ad-rail,
+body.ephemeral-browser .ad-rail,
+body.tesla-browser .site-editorial,
+body.ephemeral-browser .site-editorial,
+body.tesla-browser .top-bar,
+body.ephemeral-browser .top-bar,
+body.tesla-browser .mode-chip,
+body.ephemeral-browser .mode-chip,
+body.tesla-browser .orient-btn,
+body.ephemeral-browser .orient-btn,
+body.tesla-browser .btn-adfree-inline,
+body.ephemeral-browser .btn-adfree-inline {
+  display: none !important;
+}
+
+body.tesla-browser .speed-stage,
+body.ephemeral-browser .speed-stage {
+  inset: 0;
+  width: 100%;
+  height: var(--vvh);
+  max-height: var(--vvh);
+  padding: var(--tesla-pad);
+  box-sizing: border-box;
+  justify-content: center;
+  align-items: center;
+}
+
+body.tesla-browser.drive-focus .speed-stage,
+body.ephemeral-browser.drive-focus .speed-stage {
+  padding: var(--tesla-pad);
+}
+
+body.tesla-browser .speed-stage,
+body.tesla-browser .speed-hud,
+body.tesla-browser .speed-hud-content,
+body.tesla-browser .speed-gauge-stack,
+body.ephemeral-browser .speed-stage,
+body.ephemeral-browser .speed-hud,
+body.ephemeral-browser .speed-hud-content,
+body.ephemeral-browser .speed-gauge-stack {
+  overflow: hidden;
+  min-width: 0;
+}
+
+body.tesla-browser .speed-hud,
+body.ephemeral-browser .speed-hud {
+  width: min(calc(var(--vvw) - var(--tesla-pad) * 2), 1200px);
+  max-width: min(calc(var(--vvw) - var(--tesla-pad) * 2), 1200px);
+  min-height: 0 !important;
+  height: calc(var(--vvh) - var(--tesla-pad) * 2);
+  max-height: calc(var(--vvh) - var(--tesla-pad) * 2);
+  border-radius: clamp(12px, 1.5vh, 22px);
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+body.tesla-browser .speed-hud-content,
+body.ephemeral-browser .speed-hud-content {
+  min-height: 0;
+  min-width: 0;
+  height: 100%;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: clamp(6px, calc(var(--vvh) * 0.02), 18px) clamp(8px, calc(var(--vvw) * 0.018), 28px);
+  gap: clamp(6px, calc(var(--vvw) * 0.012), 20px);
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  overflow: hidden;
+}
+
+body.tesla-browser .speed-gauge-stack,
+body.ephemeral-browser .speed-gauge-stack {
+  gap: clamp(4px, 1vh, 10px);
+  min-width: 0;
+}
+
+body.tesla-browser .speed-limit-badge,
+body.ephemeral-browser .speed-limit-badge {
+  width: clamp(34px, calc(var(--tesla-gauge) * 0.18), 52px);
+  border-width: 4px;
+  left: 0%;
+  bottom: 12%;
+}
+body.tesla-browser .speed-limit-value,
+body.ephemeral-browser .speed-limit-value {
+  font-size: clamp(12px, calc(var(--tesla-gauge) * 0.085), 20px);
+}
+
+body.tesla-browser .hud-warn-band,
+body.ephemeral-browser .hud-warn-band {
+  height: 36px;
+  min-height: 36px;
+  font-size: clamp(11px, 2vh, 14px);
+  padding: 0 10px;
+}
+body.tesla-browser .speed-hud.has-warn-band .speed-hud-content,
+body.ephemeral-browser .speed-hud.has-warn-band .speed-hud-content {
+  padding-top: calc(36px + 4px);
+}
+
+body.tesla-browser .crit-near,
+body.ephemeral-browser .crit-near {
+  width: min(100%, 160px);
+  max-height: 72px;
+  overflow: hidden;
+}
+body.tesla-browser .crit-near-list,
+body.ephemeral-browser .crit-near-list {
+  max-height: 60px;
+}
+body.tesla-browser .crit-near-item,
+body.ephemeral-browser .crit-near-item {
+  font-size: 10px;
+  padding: 2px 4px;
+}
+
+body.tesla-browser .speed-gauge-wrap,
+body.ephemeral-browser .speed-gauge-wrap {
+  width: var(--tesla-gauge);
+  max-width: 100%;
+}
+
+body.tesla-browser .speed-number,
+body.ephemeral-browser .speed-number {
+  font-size: clamp(48px, calc(var(--tesla-gauge) * 0.36), 132px);
+}
+
+body.tesla-browser .minimal-number,
+body.ephemeral-browser .minimal-number {
+  font-size: clamp(56px, calc(var(--tesla-gauge) * 0.42), 150px);
+}
+
+body.tesla-browser .bars-number,
+body.ephemeral-browser .bars-number {
+  font-size: clamp(44px, calc(var(--tesla-gauge) * 0.34), 120px);
+}
+
+body.tesla-browser .analog-number,
+body.ephemeral-browser .analog-number {
+  font-size: clamp(22px, calc(var(--tesla-gauge) * 0.16), 56px);
+}
+
+body.tesla-browser .analog-scale span,
+body.ephemeral-browser .analog-scale span {
+  font-size: clamp(8px, calc(var(--tesla-gauge) * 0.035), 13px);
+  transform:
+    rotate(calc(-120deg + var(--i) * 48deg))
+    translateY(calc(var(--tesla-gauge) * -0.34))
+    rotate(calc(120deg - var(--i) * 48deg));
+}
+
+body.tesla-browser .needle-arm,
+body.ephemeral-browser .needle-arm {
+  height: calc(var(--tesla-gauge) * 0.32);
+}
+
+body.tesla-browser .speed-unit,
+body.tesla-browser .minimal-unit,
+body.tesla-browser .bars-unit,
+body.tesla-browser .analog-unit,
+body.ephemeral-browser .speed-unit,
+body.ephemeral-browser .minimal-unit,
+body.ephemeral-browser .bars-unit,
+body.ephemeral-browser .analog-unit {
+  font-size: clamp(11px, calc(var(--tesla-gauge) * 0.055), 20px);
+}
+
+body.tesla-browser .hud-side,
+body.ephemeral-browser .hud-side {
+  min-width: 0;
+}
+
+body.tesla-browser .hud-label,
+body.ephemeral-browser .hud-label {
+  font-size: clamp(9px, 1.5vh, 12px);
+}
+
+body.tesla-browser .hud-value,
+body.ephemeral-browser .hud-value {
+  font-size: clamp(12px, 2.4vh, 18px);
+}
+
+body.tesla-browser .hud-side--warn,
+body.ephemeral-browser .hud-side--warn {
+  min-height: 0;
+}
+
+body.tesla-browser .warn-reel,
+body.ephemeral-browser .warn-reel {
+  --reel-h: clamp(44px, calc(var(--vvh) * 0.09), 64px);
+  height: var(--reel-h);
+  width: min(100%, clamp(120px, 18vw, 190px));
+  margin-top: 0;
+}
+
+body.tesla-browser .warn-reel-item,
+body.ephemeral-browser .warn-reel-item {
+  flex-basis: var(--reel-h);
+  height: var(--reel-h);
+  padding: 4px 6px;
+}
+
+body.tesla-browser .warn-reel-title,
+body.ephemeral-browser .warn-reel-title {
+  font-size: clamp(11px, 2vh, 15px);
+}
+
+body.tesla-browser .warn-reel-dist,
+body.ephemeral-browser .warn-reel-dist {
+  font-size: clamp(12px, 2.2vh, 16px);
+}
+
+body.tesla-browser .avg-speed-panel,
+body.ephemeral-browser .avg-speed-panel {
+  padding: clamp(6px, 1.2vh, 10px);
+  min-width: clamp(88px, 12vw, 130px);
+  max-width: clamp(110px, 16vw, 150px);
+}
+
+body.tesla-browser .avg-speed-value,
+body.ephemeral-browser .avg-speed-value {
+  font-size: clamp(14px, 3.2vh, 24px);
+}
+
+body.tesla-browser .avg-speed-panel.is-corridor,
+body.ephemeral-browser .avg-speed-panel.is-corridor {
+  transform: scale(1.08);
+  min-width: clamp(120px, 16vw, 170px);
+  max-width: clamp(140px, 20vw, 200px);
+}
+
+body.tesla-browser .route-guard,
+body.ephemeral-browser .route-guard {
+  bottom: var(--tesla-pad);
+  left: 50%;
+  transform: translateX(-50%);
+  max-height: min(calc(var(--vvh) * 0.28), 170px);
+  width: min(360px, calc(var(--vvw) * 0.88));
+  z-index: 36;
+}
+
+body.tesla-browser .route-brief-top,
+body.ephemeral-browser .route-brief-top {
+  top: var(--tesla-pad);
+  max-height: min(calc(var(--vvh) * 0.34), 240px);
+  width: min(400px, calc(var(--vvw) * 0.9));
+}
+
+body.tesla-browser .panel-toggle,
+body.ephemeral-browser .panel-toggle {
+  top: var(--tesla-pad);
+  left: var(--tesla-pad);
+  bottom: auto;
+  width: clamp(32px, 5vh, 40px);
+  height: clamp(32px, 5vh, 40px);
+  border-radius: 10px;
+  border: 1px solid var(--glass-border);
+  font-size: 15px;
+  z-index: 50;
+}
+
+body.tesla-browser.panel-hidden .panel-toggle,
+body.ephemeral-browser.panel-hidden .panel-toggle {
+  left: var(--tesla-pad);
+  bottom: auto;
+}
+
+body.tesla-browser .control-dock,
+body.ephemeral-browser .control-dock {
+  top: 0;
+  bottom: 0;
+  max-height: var(--vvh);
+  width: min(280px, 36vw);
+  padding: 10px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-width: 0;
+}
+
+/* Panel kapalı: alan tamamen serbest — genişlik hatırlanmasın */
+body.tesla-browser.panel-hidden .control-dock,
+body.ephemeral-browser.panel-hidden .control-dock {
+  width: 0;
+  min-width: 0;
+  max-width: 0;
+  padding: 0;
+  opacity: 0;
+  transform: translateX(-100%);
+  pointer-events: none;
+  overflow: hidden;
+}
+
+body.tesla-browser .control-dock .start-circle,
+body.ephemeral-browser .control-dock .start-circle {
+  width: clamp(72px, 14vh, 96px);
+  height: clamp(72px, 14vh, 96px);
+  font-size: clamp(11px, 2vh, 14px);
+}
+
+/* Yoğunluk: kısa ekran (16:9 QHD + chrome / yarım tarayıcı) */
+body.tesla-browser[data-tesla-density="compact"] ,
+body.ephemeral-browser[data-tesla-density="compact"] {
+  --tesla-scale: 0.86;
+}
+
+body.tesla-browser[data-tesla-density="compact"] .speed-hud-content,
+body.ephemeral-browser[data-tesla-density="compact"] .speed-hud-content {
+  padding: 4px 8px;
+  gap: 6px;
+}
+
+body.tesla-browser[data-tesla-density="compact"] .gauge-dots,
+body.ephemeral-browser[data-tesla-density="compact"] .gauge-dots {
+  transform: scale(0.85);
+}
+
+body.tesla-browser[data-tesla-density="compact"] .route-guard,
+body.ephemeral-browser[data-tesla-density="compact"] .route-guard {
+  max-height: min(calc(var(--vvh) * 0.24), 130px);
+}
+
+/* Yoğunluk: yüksek ekran (16:10 eski 3/Y) */
+body.tesla-browser[data-tesla-density="roomy"],
+body.ephemeral-browser[data-tesla-density="roomy"] {
+  --tesla-scale: 1.06;
+}
+
+/* Yarım tarayıcı / dar alan — tüm öğeler görünür alan içinde kalsın */
+body.tesla-browser[data-tesla-layout="half"],
+body.ephemeral-browser[data-tesla-layout="half"] {
+  --tesla-scale: 0.72;
+  --tesla-gauge: min(
+    calc(var(--vvh) * 0.46 * var(--tesla-scale) * var(--tesla-vh-fit)),
+    calc(var(--vvw) * 0.36 * var(--tesla-scale) * var(--tesla-vh-fit)),
+    calc(260px * var(--tesla-scale) * var(--tesla-vh-fit))
+  );
+}
+
+body.tesla-browser[data-tesla-layout="half"] .speed-hud-content,
+body.ephemeral-browser[data-tesla-layout="half"] .speed-hud-content {
+  grid-template-columns: minmax(0, 0.7fr) auto minmax(0, 0.7fr);
+  gap: 4px;
+  padding: 4px 6px;
+  overflow: hidden;
+}
+
+body.tesla-browser[data-tesla-layout="half"] .crit-near,
+body.ephemeral-browser[data-tesla-layout="half"] .crit-near {
+  display: none;
+}
+
+body.tesla-browser[data-tesla-layout="half"] .gauge-dots,
+body.ephemeral-browser[data-tesla-layout="half"] .gauge-dots {
+  transform: scale(0.8);
+}
+
+body.tesla-browser[data-tesla-layout="half"] .hud-side--warn .hud-label,
+body.tesla-browser[data-tesla-layout="half"] .avg-speed-label,
+body.ephemeral-browser[data-tesla-layout="half"] .hud-side--warn .hud-label,
+body.ephemeral-browser[data-tesla-layout="half"] .avg-speed-label {
+  font-size: 9px;
+}
+
+/* Çok kısa: yan panelleri biraz sıkıştır */
+body.tesla-browser[data-tesla-density="compact"] .hud-side--avg,
+body.ephemeral-browser[data-tesla-density="compact"] .hud-side--avg {
+  max-width: 140px;
 }

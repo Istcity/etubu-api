@@ -84,7 +84,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Orbitron:wght@600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css?v=20260730a" />
+  <link rel="stylesheet" href="css/style.css?v=20260810a" />
   <script src="js/etubu-native-shim.js?v=20260728a"></script>
   <script src="js/config.js?v=20260727e"></script>
   <!-- Yandex.RTB -->
@@ -180,6 +180,12 @@
         <span class="hud-map-empty" data-i18n="mapWaiting">Konum bekleniyor…</span>
       </div>
 
+      <div class="hud-warn-band" id="hudWarnBand" hidden aria-live="assertive">
+        <span class="hud-warn-band-icon" id="hudWarnBandIcon" aria-hidden="true"></span>
+        <span class="hud-warn-band-text" id="hudWarnBandText"></span>
+        <span class="hud-warn-band-dist" id="hudWarnBandDist"></span>
+      </div>
+
       <div class="speed-hud-content">
         <div class="hud-side hud-side--warn" id="hudWarnSide">
           <span class="hud-label" id="hudWarnLabel" data-i18n="hudRoadWarn">Yol uyarısı</span>
@@ -191,9 +197,16 @@
           </div>
           <span class="hud-value" id="hudWarn">—</span>
           <span class="hud-warn-meta" id="hudWarnMeta" hidden></span>
+          <div class="crit-near" id="critNear" hidden>
+            <span class="crit-near-label" data-i18n="critNearLabel">Yakın kritik noktalar</span>
+            <ul class="crit-near-list" id="critNearList"></ul>
+          </div>
         </div>
 
         <div class="speed-gauge-stack">
+          <div class="speed-limit-badge" id="speedLimitBadge" hidden aria-label="Speed limit">
+            <span class="speed-limit-value" id="speedLimitValue">—</span>
+          </div>
           <div class="speed-gauge-wrap" id="speedGaugeWrap" data-visual="glow" data-gauge="digital" role="button" tabindex="0" aria-label="Gauge screen">
             <!-- Ekran 1: Dijital halka -->
             <div class="gauge-screen gauge-screen--digital" data-screen="digital">
@@ -498,8 +511,8 @@
     </div>
   </section>
 
-  <script src="js/car-browser.js?v=20260724av"></script>
-  <script src="js/i18n.js?v=20260801a"></script>
+  <script src="js/car-browser.js?v=20260810a"></script>
+  <script src="js/i18n.js?v=20260810a"></script>
   <script src="js/gps-tracker.js?v=20260729r"></script>
   <script src="js/identity.js?v=20260724w"></script>
   <script src="js/audio-engine.js?v=20260730v"></script>
@@ -509,11 +522,12 @@
   <script src="js/scene.js?v=20260727o"></script>
   <script src="js/mini-map.js?v=20260729r"></script>
   <script src="js/radar-alert.js?v=20260729r"></script>
+  <script src="js/osm-hazards.js?v=20260810a"></script>
   <script src="js/route-guard.js?v=20260730u"></script>
   <script src="js/ads.js?v=20260727e"></script>
   <script src="js/paddle-checkout.js?v=20260717s"></script>
   <script src="js/paywall.js?v=20260724w"></script>
   <script src="js/picker.js?v=20260727g"></script>
-  <script src="js/app.js?v=20260728i"></script>
+  <script src="js/app.js?v=20260810a"></script>
 </body>
 </html>

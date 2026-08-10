@@ -29,6 +29,10 @@ Etubu, Tesla (BLE) odaklı bir **sürüş kümesi (cluster)** uygulamasıdır: h
 3. **Bölge cold start:** GPS yokken TR varsayılmaz — ilk fix sonrası pipeline seçilir (Maestro İstanbul GPS ile TR yolu açılır).
 4. **Araç navigasyonu:** Tesla `activeRouteDestination` paylaşırsa ve app’te kullanıcı rotası yoksa → otomatik “Konumum → hedef” planı + kritik nokta servisleri (**Premium** — free’de plan/radar yok; dial + OSM hız + hedef etiketi kalır).
 5. App rotası aktifken Tesla nav hedefi **ezmez** (bağımsız hat).
+6. Araç rotadan **>600 m** sapınca otomatik yeniden plan + EGM/OSM kritik nokta yenileme.
+7. Koridor ortalaması: girişte araç hızı; ilerledikçe mesafe/süre ortalamasına blend; YAVAŞLA ölçülen `trueAvg` ile.
+
+Ayrıntılı BLE poll / duck: `docs/TESLA_BLE_TELEMETRY.md`.
 
 ## Uzaktan komutlar
 

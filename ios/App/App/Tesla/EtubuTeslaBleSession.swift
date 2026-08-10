@@ -18,12 +18,16 @@ final class EtubuTeslaBleSession: ObservableObject {
     private let keyStore = KeychainTeslaKeyStore(service: "com.etubu.app.teslaBLE")
     private var client: TeslaVehicleClient?
     private var pollTask: Task<Void, Never>?
+    private var extrasTask: Task<Void, Never>?
     private var stateTask: Task<Void, Never>?
     private var reconnectTask: Task<Void, Never>?
     private var userStopped = false
     private var reconnectAttempt = 0
-    private var tick = 0
+    private var extrasTick = 0
+    /// Consecutive extras polls still missing SoC/climate/TPMS — wake after ~8.
+    private var extrasMissingStreak = 0
     private var lastLiveActivityPush = Date.distantPast
+    private var lastExtrasWakeAt = Date.distantPast
     private var activePairVIN: String?
     /// Ignore brief BLE disconnect flickers right after a successful connect.
     private var connectedAt: Date?
@@ -289,6 +293,7 @@ final class EtubuTeslaBleSession: ObservableObject {
                 try await c.connect(mode: .normal)
                 // Infotainment uykudaysa SoC/iklim/TPMS boş gelir — uyandır.
                 try? await c.send(.security(.wakeVehicle))
+                lastExtrasWakeAt = Date()
                 try? await Task.sleep(nanoseconds: 700_000_000)
                 reconnectAttempt = 0
                 connectedAt = Date()
@@ -318,79 +323,29 @@ final class EtubuTeslaBleSession: ObservableObject {
         }
     }
 
+    /// Dual-loop telemetry (see docs/TESLA_BLE_TELEMETRY.md):
+    /// - Drive ~10–12 Hz: speed / gear / power only (`fetchDrive`) — never blocked by extras.
+    /// - Extras ~0.7–1.5 Hz: charge / climate / TPMS / closures / media — failures never poison drive.
     private func startPolling(_ client: TeslaVehicleClient) {
         pollTask?.cancel()
+        extrasTask?.cancel()
         pollTask = Task { [weak self] in
             guard let self else { return }
             var failStreak = 0
-            // İlk bağlanmada iklim / enerji / lastik / kapaklar hemen gelsin
-            do {
-                let boot = try await client.fetch(.categories([.charge, .climate, .tirePressure, .closures]))
-                await MainActor.run { self.applySnapshot(boot) }
-            } catch {
-                // Kombine istek başarısızsa parçalı dene
-                if let tiresOnly = try? await client.fetch(.categories([.tirePressure])) {
-                    await MainActor.run { self.applySnapshot(tiresOnly) }
-                }
-                if let chargeOnly = try? await client.fetch(.categories([.charge, .climate])) {
-                    await MainActor.run { self.applySnapshot(chargeOnly) }
-                }
-                if let clos = try? await client.fetch(.categories([.closures])) {
-                    await MainActor.run { self.applySnapshot(clos) }
-                }
-            }
-            // Lastik yoksa bir kez daha zorla
-            let missingTires = await MainActor.run {
-                self.telemetry.tpmsFL.psi == nil
-                    && self.telemetry.tpmsFR.psi == nil
-                    && self.telemetry.tpmsRL.psi == nil
-                    && self.telemetry.tpmsRR.psi == nil
-            }
-            if missingTires, let tires = try? await client.fetch(.categories([.tirePressure])) {
-                await MainActor.run { self.applySnapshot(tires) }
-            }
             while !Task.isCancelled {
                 let suspended = await MainActor.run { self.demoSuspended }
                 if suspended { return }
                 do {
-                    // Drive first + apply immediately — speed/gear/power never wait on extras
-                    let drive = try await client.fetchDrive()
+                    let drive = try await client.fetchDrive(timeout: .milliseconds(1800))
                     failStreak = 0
                     await MainActor.run { self.applyDrive(drive) }
-
-                    self.tick += 1
-                    let parked = await MainActor.run { self.telemetry.kmh < 3 }
-                    let missingExtras = await MainActor.run {
-                        self.telemetry.socPercent == nil
-                            || self.telemetry.outsideC == nil
-                            || self.telemetry.insideC == nil
-                            || (self.telemetry.tpmsFL.psi == nil
-                                && self.telemetry.tpmsFR.psi == nil
-                                && self.telemetry.tpmsRL.psi == nil
-                                && self.telemetry.tpmsRR.psi == nil)
-                    }
-
-                    // Canlı tut: eksikse her tur; doluyken sık climate+TPMS+closures
-                    if missingExtras || self.tick % (parked ? 3 : 2) == 0 {
-                        let snap = try await client.fetch(.categories([.charge, .climate, .tirePressure, .closures]))
-                        await MainActor.run { self.applySnapshot(snap) }
-                    } else if self.tick % (parked ? 4 : 3) == 0 {
-                        let snap = try await client.fetch(.categories([.tirePressure, .climate]))
-                        await MainActor.run { self.applySnapshot(snap) }
-                    } else if self.tick % (parked ? 6 : 4) == 0 {
-                        let snap = try await client.fetch(.categories([.closures]))
-                        await MainActor.run { self.applySnapshot(snap) }
-                    } else if self.tick % (parked ? 14 : 8) == 0 {
-                        let snap = try await client.fetch(.categories([.media, .mediaDetail]))
-                        await MainActor.run { self.applySnapshot(snap) }
-                    }
                 } catch {
                     failStreak += 1
-                    if failStreak < 5 {
+                    if failStreak < 6 {
                         await MainActor.run {
                             self.telemetry.statusMessage = String(format: EtubuClusterL10n.t("bleWeakSignalFmt"), failStreak)
                         }
-                        try? await Task.sleep(nanoseconds: 450_000_000)
+                        try? await Task.sleep(nanoseconds: 350_000_000)
                         continue
                     }
                     await MainActor.run {
@@ -402,23 +357,13 @@ final class EtubuTeslaBleSession: ObservableObject {
                     if auto, let vin {
                         await MainActor.run { self.scheduleReconnect(vin: vin, debounce: 1.5) }
                     } else {
-                        await MainActor.run {
-                            self.telemetry.connectionState = .failed
-                        }
+                        await MainActor.run { self.telemetry.connectionState = .failed }
                     }
                     return
                 }
-                // Moving: ~2 Hz drive; parked + extras ok: ~0.55 Hz
+                // ~10–12 Hz when moving; slower when parked so Infotainment can sleep.
                 let sleepNs: UInt64 = await MainActor.run {
-                    let parkedNow = self.telemetry.kmh < 3
-                    let missing = self.telemetry.socPercent == nil
-                        || self.telemetry.outsideC == nil
-                        || (self.telemetry.tpmsFL.psi == nil
-                            && self.telemetry.tpmsFR.psi == nil
-                            && self.telemetry.tpmsRL.psi == nil
-                            && self.telemetry.tpmsRR.psi == nil)
-                    if !parkedNow { return 450_000_000 }
-                    return missing ? 1_200_000_000 : 1_800_000_000
+                    self.telemetry.kmh < 3 ? 700_000_000 : 85_000_000
                 }
                 try? await Task.sleep(nanoseconds: sleepNs)
             }
@@ -427,21 +372,133 @@ final class EtubuTeslaBleSession: ObservableObject {
                 await MainActor.run { self.scheduleReconnect(vin: vin, debounce: 2.0) }
             }
         }
+        extrasTask = Task { [weak self] in
+            guard let self else { return }
+            await self.bootstrapExtras(client)
+            while !Task.isCancelled {
+                let suspended = await MainActor.run { self.demoSuspended }
+                if suspended { return }
+                await self.pollExtrasOnce(client)
+                let sleepNs: UInt64 = await MainActor.run {
+                    let parked = self.telemetry.kmh < 3
+                    let missing = self.telemetry.needsVehicleExtrasRefresh
+                    if missing { return parked ? 900_000_000 : 650_000_000 }
+                    return parked ? 2_200_000_000 : 1_100_000_000
+                }
+                try? await Task.sleep(nanoseconds: sleepNs)
+            }
+        }
+    }
+
+    /// Boot: tire + charge + climate in parallel, up to 3 retries (closures best-effort).
+    private func bootstrapExtras(_ client: TeslaVehicleClient) async {
+        for attempt in 1...3 {
+            async let tiresTask = try? client.fetch(.categories([.tirePressure]), timeout: .seconds(5))
+            async let chargeClimateTask = try? client.fetch(
+                .categories([.charge, .climate]),
+                timeout: .seconds(6)
+            )
+            async let closTask: TeslaVehicleSnapshot? = attempt == 1
+                ? try? client.fetch(.categories([.closures]), timeout: .seconds(4))
+                : nil
+            let (tires, chargeClimate, clos) = await (tiresTask, chargeClimateTask, closTask)
+            if let tires {
+                await MainActor.run { self.applySnapshot(tires) }
+            }
+            if let chargeClimate {
+                await MainActor.run { self.applySnapshot(chargeClimate) }
+            }
+            if let clos {
+                await MainActor.run { self.applySnapshot(clos) }
+            }
+            let stillMissing = await MainActor.run { self.telemetry.needsVehicleExtrasRefresh }
+            if !stillMissing { return }
+            if attempt < 3 {
+                try? await client.send(.security(.wakeVehicle))
+                await MainActor.run { self.lastExtrasWakeAt = Date() }
+                try? await Task.sleep(nanoseconds: UInt64(attempt) * 450_000_000)
+            }
+        }
+    }
+
+    private func pollExtrasOnce(_ client: TeslaVehicleClient) async {
+        extrasTick += 1
+        let tick = extrasTick
+        let (parked, missing, staleExtras) = await MainActor.run { () -> (Bool, Bool, Bool) in
+            let t = self.telemetry
+            let parked = t.kmh < 3
+            let missing = t.needsVehicleExtrasRefresh
+            let stale: Bool = {
+                guard let at = t.lastExtrasAt else { return true }
+                return Date().timeIntervalSince(at) > (parked ? 12 : 6)
+            }()
+            return (parked, missing, stale)
+        }
+
+        // Infotainment asleep → empty SoC/climate/TPMS; wake after ~8 missing ticks.
+        if missing {
+            extrasMissingStreak += 1
+            let shouldWake = extrasMissingStreak >= 8 || Date().timeIntervalSince(lastExtrasWakeAt) > 18
+            if shouldWake {
+                extrasMissingStreak = 0
+                await MainActor.run { self.lastExtrasWakeAt = Date() }
+                try? await client.send(.security(.wakeVehicle))
+                try? await Task.sleep(nanoseconds: 400_000_000)
+            }
+        } else {
+            extrasMissingStreak = 0
+        }
+
+        // Prefer smaller payloads so one bad category does not block the rest.
+        func fetchCats(_ cats: Set<StateCategory>) async {
+            do {
+                let snap = try await client.fetch(.categories(cats), timeout: .seconds(6))
+                await MainActor.run { self.applySnapshot(snap) }
+            } catch {
+                // Extras never kill the drive loop — try singles on hard miss.
+                if missing {
+                    for cat in cats {
+                        if let one = try? await client.fetch(.categories([cat]), timeout: .seconds(4)) {
+                            await MainActor.run { self.applySnapshot(one) }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Drive: charge + climate + tires every extras tick (not every 2nd).
+        // Parked: every other tick once filled, every tick while missing/stale.
+        if !parked || missing || staleExtras || tick % 2 == 0 {
+            await fetchCats([.charge, .climate, .tirePressure])
+        }
+        if tick % (parked ? 3 : 2) == 0 {
+            await fetchCats([.closures])
+        }
+        if tick % (parked ? 8 : 5) == 0 {
+            await fetchCats([.media, .mediaDetail])
+        }
     }
 
     private func applyDrive(_ drive: DriveState) {
         guard !demoSuspended else { return }
         let mph = drive.speedMph ?? 0
-        // Bozuk / imkansız paket — yayınlama.
-        guard mph.isFinite, mph >= 0, mph <= 175 else { return }
-        let kmh = Int((mph * 1.60934).rounded())
+        // Bozuk / imkansız paket — yayınlama (ama oturum sağlığını taze tut).
+        guard mph.isFinite, mph >= 0, mph <= 175 else {
+            telemetry.touchDriveHealth()
+            return
+        }
+        // Prefer nearest km/h; float mph → km/h without coarse banding.
+        let kmh = max(0, Int((mph * 1.60934).rounded()))
         let gear: String = {
             switch drive.shiftState {
             case .park: return "P"
             case .reverse: return "R"
             case .neutral: return "N"
             case .drive: return "D"
-            case .none: return telemetry.gear
+            case .none:
+                // Unset shift + hareket → stuck "P" park-gate hızı sıfırlamasın.
+                if kmh >= 3 { return "D" }
+                return telemetry.gear
             }
         }()
         let odoKm: Int? = {
@@ -455,9 +512,9 @@ final class EtubuTeslaBleSession: ObservableObject {
             return mi * 1.60934
         }()
         let power: Int? = {
-            guard let kw = drive.powerKW else { return nil }
-            // Aşırı gürültü paketini yutma; geçerli aralıkta bırak.
-            if abs(kw) > 800 { return nil }
+            guard let kw = drive.powerKW else { return telemetry.powerKw }
+            // Aşırı gürültü paketini yutma; önceki gücü koru.
+            if abs(kw) > 800 { return telemetry.powerKw }
             return kw
         }()
         telemetry.applyTeslaDrive(
@@ -499,27 +556,32 @@ final class EtubuTeslaBleSession: ObservableObject {
 
     private func applySnapshot(_ snap: TeslaVehicleSnapshot) {
         if let charge = snap.charge {
+            // SPM VehicleSnapshotMapper maps unset optionals → 0 (not nil). Treat protocol zeros carefully.
             let rangeKm: Int? = {
-                if let mi = charge.estBatteryRangeMiles ?? charge.batteryRangeMiles, mi > 0.5 {
-                    return Int((mi * 1.60934).rounded())
-                }
-                return nil
+                let mi = charge.estBatteryRangeMiles ?? charge.batteryRangeMiles
+                guard let mi, mi.isFinite, mi > 0.5, mi < 800 else { return nil }
+                return Int((mi * 1.60934).rounded())
             }()
             let charging = charge.chargingStatus == .charging || charge.chargingStatus == .starting
-            // SPM mapper unset optional → 0; gerçek 0% yalnızca şarj/menzil kanıtı varsa.
             let soc: Int? = {
                 guard let bl = charge.batteryLevel else { return nil }
-                if bl > 0 { return min(100, bl) }
+                // Unset-as-0 from mapper: only accept 0% with charge/range proof.
+                if bl < 0 || bl > 100 { return nil }
+                if bl > 0 { return bl }
                 if charging { return 0 }
                 if rangeKm != nil { return 0 }
                 return nil
+            }()
+            let limit: Int? = {
+                guard let lim = charge.chargeLimitPercent, (50...100).contains(lim) else { return nil }
+                return lim
             }()
             telemetry.applyTeslaCharge(
                 soc: soc,
                 rangeKm: rangeKm,
                 chargeKw: charge.chargerPower.flatMap { $0 == 0 && !charging ? nil : $0 },
                 charging: charging,
-                limitPercent: charge.chargeLimitPercent.flatMap { $0 > 0 ? $0 : nil },
+                limitPercent: limit,
                 amps: charge.chargerCurrent.flatMap { $0 == 0 && !charging ? nil : $0 },
                 volts: charge.chargerVoltage.flatMap { $0 == 0 && !charging ? nil : $0 },
                 minutesToFull: charge.minutesToFullCharge.flatMap { $0 > 0 ? $0 : nil },
@@ -527,6 +589,7 @@ final class EtubuTeslaBleSession: ObservableObject {
             )
         }
         if let climate = snap.climate {
+            // If one side is exact 0°C and the other is a real temp, keep the 0 (don't nil both).
             let out = Self.sanitizeTempC(climate.outsideTempCelsius, other: climate.insideTempCelsius)
             let inn = Self.sanitizeTempC(climate.insideTempCelsius, other: climate.outsideTempCelsius)
             if out != nil || inn != nil || climate.isClimateOn != nil {
@@ -622,12 +685,19 @@ final class EtubuTeslaBleSession: ObservableObject {
         }
     }
 
-    /// Sürüş / aktif rota varken kopunca yeniden dene; parkta sessiz kal.
+    /// Sürüş / aktif rota / taze Tesla oturumu varken kopunca yeniden dene; uzun parkta sessiz.
     private var shouldAutoReconnect: Bool {
         guard !userStopped, !demoSuspended else { return false }
         guard EtubuTeslaVinStore.vin != nil else { return false }
         let t = telemetry
-        return t.kmh >= 3 || t.routeActive
+        if t.kmh >= 3 || t.routeActive { return true }
+        // Park-gate veya geçici 0 hız olsa bile son drive paketi yeniyse toparla.
+        if t.source == .tesla,
+           let last = t.lastDriveAt,
+           Date().timeIntervalSince(last) < 90 {
+            return true
+        }
+        return false
     }
 
     private func scheduleReconnect(vin: String, debounce: TimeInterval = 0) {
@@ -659,25 +729,27 @@ final class EtubuTeslaBleSession: ObservableObject {
         }
     }
 
-    /// SPM Charge/Climate mapper unset optional → 0; gerçek 0°C ile karıştırma.
+    /// SPM Climate mapper unset optional → 0.0; gerçek 0°C ile karıştırma.
+    /// Exact ~0 alone (both sides unset) → nil; if the other side is a real temp, keep 0°C.
     private static func sanitizeTempC(_ value: Double?, other: Double?) -> Double? {
         guard let value, value.isFinite else { return nil }
         if value < -50 || value > 70 { return nil }
-        // Her iki alan da ~0 → protokol “unset”; kışın gerçek 0 nadiren iki tarafta birden.
         if abs(value) < 0.05 {
-            let otherNearZero = other.map { abs($0) < 0.05 } ?? true
-            if otherNearZero { return nil }
-            // Bu alan unset, diğeri dolu → yok say
-            return nil
+            let otherValid = other.map {
+                $0.isFinite && abs($0) >= 0.05 && $0 >= -50 && $0 <= 70
+            } ?? false
+            return otherValid ? 0 : nil
         }
         return value
     }
 
     private func cancelJobs() {
         pollTask?.cancel()
+        extrasTask?.cancel()
         stateTask?.cancel()
         reconnectTask?.cancel()
         pollTask = nil
+        extrasTask = nil
         stateTask = nil
         reconnectTask = nil
     }

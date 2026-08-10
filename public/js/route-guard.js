@@ -13,6 +13,13 @@ const RouteGuard = (() => {
     } catch (_) {}
     return "https://etubu.com/api/trafik.php";
   })();
+  const CHARGERS_PROXY = (() => {
+    try {
+      const host = String(window.location.hostname || "");
+      if (host === "etubu.com" || host.endsWith(".etubu.com")) return "api/chargers.php";
+    } catch (_) {}
+    return "https://etubu.com/api/chargers.php";
+  })();
   const INDEX_KEY = "etubu_place_index_v4";
   const INDEX_KEY_LEGACY = "etubu_place_index_v3";
   const INDEX_TTL_MS = 7 * 24 * 3600 * 1000;
@@ -1255,7 +1262,8 @@ const RouteGuard = (() => {
   }
 
   function parseSeedHazards(coords) {
-    if (!EtubuRegionHint.inTurkey()) return [];
+    // Caller already gated on domestic route coords — don't require forceTr
+    // (Cap flag can lag first GPS fix after overseas cold start).
     const seeds =
       typeof RadarAlert !== "undefined" && RadarAlert.getCameras
         ? RadarAlert.getCameras()
@@ -1354,7 +1362,7 @@ const RouteGuard = (() => {
     try {
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 12000);
-      const res = await fetch("api/chargers.php", {
+      const res = await fetch(CHARGERS_PROXY, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2057,6 +2065,76 @@ const RouteGuard = (() => {
     }
   }
 
+  /**
+   * Native planNative inject — stash + MiniMap yetmez; Cap listAhead/update aynı hazards’ı görsün.
+   * payload: { from, to, coords:[{lat,lng}], hazards:[], brief?, navOnly? }
+   */
+  function applyNativeRoute(payload) {
+    try {
+      const p = payload || {};
+      const coordsIn = Array.isArray(p.coords) ? p.coords : [];
+      const hazIn = Array.isArray(p.hazards) ? p.hazards : [];
+      routeCoords = coordsIn
+        .map((c) => {
+          const lat = Number(c.lat ?? c.y);
+          const lng = Number(c.lng ?? c.x);
+          if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+          return [lng, lat];
+        })
+        .filter(Boolean);
+      hazards = hazIn
+        .map((h) => {
+          const lat = Number(h.lat);
+          const lng = Number(h.lng);
+          if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+          return {
+            id: h.id || `${h.kind || "radar"}-${lat}-${lng}`,
+            kind: h.kind || "radar",
+            lat,
+            lng,
+            label: h.label || h.name || "",
+            maxspeed: h.maxspeed != null ? Number(h.maxspeed) : null,
+            kw: h.kw != null ? Number(h.kw) : null,
+            routeIdx: h.routeIdx != null ? Number(h.routeIdx) : null,
+            alongKm: h.alongKm != null ? Number(h.alongKm) : null,
+          };
+        })
+        .filter(Boolean);
+      active = routeCoords.length >= 2;
+      touchedCritical = new Set();
+      lastAlertKey = "";
+      const b = p.brief || {};
+      briefing = {
+        Coordinates: routeCoords.map(([x, y]) => ({ x, y })),
+        RadarCount: Number(b.radar) || hazards.filter((h) => h.kind === "radar").length,
+        CorridorCount: Number(b.corridor) || hazards.filter((h) => h.kind === "corridor").length,
+        ChargeCount: Number(b.charge) || hazards.filter((h) => h.kind === "charge").length,
+        WeatherCount: Number(b.weather) || hazards.filter((h) => h.kind === "weather").length,
+        ControlPointCount: Number(b.control) || 0,
+        FromLabel: p.from || "",
+        ToLabel: p.to || "",
+      };
+      briefEnrich = enrichFromHazards();
+      renderBrief(briefing, briefEnrich);
+      if (typeof MiniMap !== "undefined") {
+        if (MiniMap.setRoute) MiniMap.setRoute(routeCoords, hazards);
+        else if (MiniMap.setHazards) MiniMap.setHazards(hazards);
+      }
+      if (fromInput && p.from) fromInput.value = String(p.from);
+      if (toInput && p.to) toInput.value = String(p.to);
+      setStatus(
+        active
+          ? `${p.from || ""} → ${p.to || ""}`.replace(/^\s*→\s*/, "").trim()
+          : ""
+      );
+      syncGo();
+      return { ok: active, hazardCount: hazards.length };
+    } catch (e) {
+      console.warn("RouteGuard.applyNativeRoute", e);
+      return { ok: false };
+    }
+  }
+
   return {
     init,
     syncVisibility,
@@ -2075,6 +2153,7 @@ const RouteGuard = (() => {
     resolvePlace,
     buildPlaceIndex,
     buildRoute: buildRouteForBridge,
+    applyNativeRoute,
   };
 })();
 

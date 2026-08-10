@@ -27,7 +27,17 @@ const CarBrowser = (() => {
 
   function isTesla() {
     const ua = navigator.userAgent || "";
-    return /Tesla|QtCarBrowser|TeslaBrowser/i.test(ua);
+    if (/Tesla|QtCarBrowser|TeslaBrowser/i.test(ua)) return true;
+    // Bazı sürümlerde UA sade Chromium; araç ekranı + ephemeral depo ipucu
+    try {
+      const touch = navigator.maxTouchPoints > 0;
+      const wide = Math.max(window.screen?.width || 0, window.innerWidth || 0) >= 1100;
+      const shortish =
+        Math.min(window.screen?.height || 9999, window.innerHeight || 9999) <= 1200;
+      const noHover = window.matchMedia?.("(hover: none)")?.matches;
+      if (touch && wide && shortish && noHover && !storageWorks()) return true;
+    } catch (_) {}
+    return false;
   }
 
   function storageWorks() {
@@ -230,6 +240,83 @@ const CarBrowser = (() => {
     if (isEphemeral()) document.body.classList.add("ephemeral-browser");
   }
 
+  function readViewportSize() {
+    const vv = window.visualViewport;
+    const w = Math.round(
+      (vv && vv.width) || window.innerWidth || document.documentElement.clientWidth || 0
+    );
+    const h = Math.round(
+      (vv && vv.height) || window.innerHeight || document.documentElement.clientHeight || 0
+    );
+    return { w, h };
+  }
+
+  /** Tüm Tesla ekranları: ölçü + yoğunluk + ölçek */
+  function syncViewportHeight() {
+    try {
+      if (!isTesla() && !isEphemeral()) return;
+      const { w, h } = readViewportSize();
+      if (!w || !h) return;
+
+      const root = document.documentElement;
+      const body = document.body;
+      root.style.setProperty("--vvw", `${w}px`);
+      root.style.setProperty("--vvh", `${h}px`);
+      body.style.setProperty("--vvw", `${w}px`);
+      body.style.setProperty("--vvh", `${h}px`);
+
+      // --tesla-scale CSS’te density/layout ile ayarlanır; inline override taşmaya yol açıyordu.
+      // Yalnızca ince yükseklik düzeltmesi (CSS çarpanı).
+      const vhFit = Math.max(0.85, Math.min(1.05, h / 820));
+      root.style.setProperty("--tesla-vh-fit", vhFit.toFixed(3));
+      body.style.setProperty("--tesla-vh-fit", vhFit.toFixed(3));
+      root.style.removeProperty("--tesla-scale");
+      body.style.removeProperty("--tesla-scale");
+
+      let density = "normal";
+      if (h < 680) density = "compact";
+      else if (h >= 920) density = "roomy";
+      body.setAttribute("data-tesla-density", density);
+      body.setAttribute("data-tesla-aspect", w / h >= 1.7 ? "wide" : "standard");
+      // Yarım ekran / bölünmüş nav: dar veya düşük en-boy
+      body.setAttribute("data-tesla-layout", w < 980 || w / h < 1.25 ? "half" : "full");
+    } catch (_) {}
+  }
+
+  function bindViewportSync() {
+    if (!isTesla() && !isEphemeral()) return;
+    syncViewportHeight();
+    const bump = () => {
+      syncViewportHeight();
+      setTimeout(syncViewportHeight, 160);
+      setTimeout(syncViewportHeight, 500);
+    };
+    window.addEventListener("resize", bump, { passive: true });
+    window.addEventListener("orientationchange", bump, { passive: true });
+    window.addEventListener("pageshow", bump, { passive: true });
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") bump();
+    });
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", bump, { passive: true });
+      window.visualViewport.addEventListener("scroll", syncViewportHeight, {
+        passive: true,
+      });
+    }
+  }
+
+  /** Tüm Tesla’larda reklam / alt şerit yer kaplamasın */
+  function forceCompactChrome() {
+    if (!isTesla() && !isEphemeral()) return;
+    document.body.classList.add("ads-hidden", "drive-focus", "panel-hidden");
+    const editorial = document.getElementById("siteEditorial");
+    if (editorial) editorial.hidden = true;
+    try {
+      typeof Ads !== "undefined" && Ads.hideAll?.();
+    } catch (_) {}
+    syncViewportHeight();
+  }
+
   /**
    * URL’deki daveti uygula (yazmaya gerek yok).
    * Tesla’da ?c= URL’de kalsın — yenilemede tekrar çalışır.
@@ -260,6 +347,8 @@ const CarBrowser = (() => {
 
   function init() {
     applyDomFlags();
+    bindViewportSync();
+    forceCompactChrome();
     // Paywall.init URL davetini uygular (callback’ler hazır olduktan sonra)
     refreshTeslaHint();
   }
@@ -275,6 +364,8 @@ const CarBrowser = (() => {
     bookmarkUrl,
     bootstrapFromUrl,
     refreshTeslaHint,
+    syncViewportHeight,
+    forceCompactChrome,
     normalizeCode,
     getPref,
     setPref,

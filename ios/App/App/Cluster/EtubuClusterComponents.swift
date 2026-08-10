@@ -15,10 +15,11 @@ struct EtubuSpeedDialView: View {
     /// SoC ince halka (0–100).
     var socPercent: Int? = nil
     @ObservedObject private var warnings = EtubuDriveWarnings.shared
-    /// Soft display lerp — keskin sıçrama yok, yumuşak yükseliş.
+    /// Tesla-like display: advances ~1 km/h per tick toward vehicle speed (no spring snap).
     @State private var displayKmh: Double = 0
     @State private var displayPower: Double = 0
     @State private var boostPulse: CGFloat = 0
+    private let dialPulse = Timer.publish(every: 0.05, on: .main, in: .common).autoconnect()
 
     private var rawKmh: Int { warnings.demoActive ? warnings.demoKmh : kmh }
     private var shownGear: String {
@@ -184,18 +185,17 @@ struct EtubuSpeedDialView: View {
             displayKmh = Double(targetKmh)
             displayPower = Double(shownPowerKw ?? 0)
         }
+        .onReceive(dialPulse) { _ in
+            tickDisplaySpeed()
+        }
         .onChange(of: targetKmh) { _, new in
             if new == 0 || isStationary {
-                withAnimation(.easeOut(duration: 0.35)) { displayKmh = 0 }
-                return
-            }
-            withAnimation(.interpolatingSpring(stiffness: 70, damping: 16)) {
-                displayKmh = Double(new)
+                displayKmh = 0
             }
         }
         .onChange(of: shownPowerKw) { _, new in
             let v = Double(new ?? 0)
-            withAnimation(.easeInOut(duration: 0.32)) {
+            withAnimation(.easeInOut(duration: 0.22)) {
                 displayPower = v
             }
             guard v > 55 else {
@@ -207,7 +207,35 @@ struct EtubuSpeedDialView: View {
                 withAnimation(.easeOut(duration: 0.55)) { boostPulse = 0.35 }
             }
         }
-        .animation(.easeInOut(duration: 0.28), value: displayPower)
+        .animation(.easeInOut(duration: 0.22), value: displayPower)
+    }
+
+    /// ~20 Hz: step display toward target by ≤1 km/h (Tesla cluster feel).
+    /// display += clamp(target − display, −1…+1); catch-up ≤3 if lag > 8.
+    private func tickDisplaySpeed() {
+        let target = Double(targetKmh)
+        if isStationary || target <= 0 {
+            if displayKmh != 0 { displayKmh = 0 }
+            return
+        }
+        let delta = target - displayKmh
+        if abs(delta) < 0.05 {
+            if displayKmh != target { displayKmh = target }
+            return
+        }
+        let step: Double
+        if abs(delta) > 8 {
+            step = delta > 0 ? 3 : -3
+        } else if abs(delta) > 3 {
+            step = delta > 0 ? 2 : -2
+        } else {
+            step = delta > 0 ? 1 : -1
+        }
+        var next = max(0, displayKmh + step)
+        if (step > 0 && next > target) || (step < 0 && next < target) {
+            next = target
+        }
+        displayKmh = next
     }
 
     @ViewBuilder
@@ -241,9 +269,9 @@ struct EtubuSpeedDialView: View {
         }
         .frame(width: dialSize, height: dialSize)
         .allowsHitTesting(false)
-        .animation(.easeOut(duration: 0.48), value: shownKmh)
-        .animation(.easeOut(duration: 0.4), value: socProgress)
-        .animation(.easeInOut(duration: 0.28), value: displayPower)
+        .animation(.easeOut(duration: 0.14), value: shownKmh)
+        .animation(.easeOut(duration: 0.28), value: socProgress)
+        .animation(.easeInOut(duration: 0.22), value: displayPower)
     }
 
     @ViewBuilder

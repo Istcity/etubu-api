@@ -784,29 +784,32 @@ enum EtubuRouteBridge {
 
             let hasCharge = existing.contains { $0.kind == "charge" }
             let hasWeather = existing.contains { $0.kind == "weather" }
-            let hasRadarOrCorridor = existing.contains { $0.kind == "radar" || $0.kind == "corridor" }
 
             var merged = existing
-            // Radar her zaman OSM ile taze tut (seed/EGM boş veya bayat olabilir).
             let inTR = latLng.contains { EtubuRegion.inTurkeyBounds(lat: $0.lat, lng: $0.lng) }
-            if inTR && !hasRadarOrCorridor {
+            // Always append TR seed hazards on Turkey routes when enriching.
+            if inTR {
                 merged.append(contentsOf: EtubuTrafikAPI.parseOfficialHazards(
                     data: [:], coords: latLng, includeSeeds: true
                 ))
             }
-            let osmCams = await EtubuTrafikAPI.fetchOsmCamerasAlong(coords: latLng)
+            // Always fetch OSM cameras (EGM empty / navOnly / overseas).
+            async let osmTask = EtubuTrafikAPI.fetchOsmCamerasAlong(coords: latLng)
+            async let chargeTask: [EtubuRouteHazard] = hasCharge
+                ? []
+                : EtubuTrafikAPI.fetchChargersAlong(coords: latLng)
+            async let weatherTask: [EtubuRouteHazard] = hasWeather
+                ? []
+                : EtubuTrafikAPI.fetchWeatherAlong(coords: latLng)
+            let (osmCams, chargeHaz, wxHaz) = await (osmTask, chargeTask, weatherTask)
             merged.append(contentsOf: osmCams)
-            if !hasCharge {
-                merged.append(contentsOf: await EtubuTrafikAPI.fetchChargersAlong(coords: latLng))
-            }
-            if !hasWeather {
-                merged.append(contentsOf: await EtubuTrafikAPI.fetchWeatherAlong(coords: latLng))
-            }
+            merged.append(contentsOf: chargeHaz)
+            merged.append(contentsOf: wxHaz)
             // Dedupe by id
             var seen = Set<String>()
             merged = merged.filter { seen.insert($0.id).inserted }
             merged.sort { ($0.routeIdx ?? 0) < ($1.routeIdx ?? 0) }
-            guard merged.count > existing.count || (!hasRadarOrCorridor && !merged.isEmpty) else { return }
+            guard merged.count > existing.count || !merged.isEmpty else { return }
 
             let brief = EtubuRouteBriefSummary(
                 radarCount: merged.filter { $0.kind == "radar" }.count,
@@ -829,6 +832,26 @@ enum EtubuRouteBridge {
                     w.routeCoords = latLng.map { CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng) }
                 }
                 w.startPolling()
+            }
+        }
+    }
+
+    /// Vehicle >600 m from polyline — rebuild from current GPS to same destination; refresh EGM+OSM.
+    @MainActor
+    static func replanActiveRouteFromCurrentLocation(reason: String) {
+        guard EtubuPremiumManager.shared.isPremium else { return }
+        let t = EtubuVehicleTelemetry.shared
+        guard t.routeActive else { return }
+        let dest = t.routeTo.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard dest.count >= 2 else { return }
+        let fromLabel = EtubuClusterL10n.myLocation
+        plan(from: fromLabel, to: dest, toPlace: nil, fromVehicleNav: routeFromVehicleNav) { ok, _ in
+            if ok {
+                Task { @MainActor in
+                    enrichActiveRouteFromNativeIfNeeded()
+                    EtubuDriveWarnings.shared.startPolling()
+                    _ = reason // keep call-site reason for future diagnostics
+                }
             }
         }
     }
@@ -988,9 +1011,15 @@ enum EtubuRouteBridge {
                     )
                 }
             } else {
-                // Uluslararası: EGM/TR seed yok — Overpass (OSM) kameraları.
-                hazards = await EtubuTrafikAPI.fetchOsmCamerasAlong(coords: latLngCoords)
+                hazards = []
             }
+
+            // Always fetch OSM cameras (EGM empty/navOnly + overseas); parallel with charge/weather later.
+            async let osmEarly = EtubuTrafikAPI.fetchOsmCamerasAlong(coords: latLngCoords)
+            let osmFirst = await osmEarly
+            hazards.append(contentsOf: osmFirst)
+            var seenEarly = Set<String>()
+            hazards = hazards.filter { seenEarly.insert($0.id).inserted }
 
             let remainKm: Double = {
                 guard latLngCoords.count >= 2 else { return 0 }
@@ -1063,22 +1092,15 @@ enum EtubuRouteBridge {
                 completion?(true, msg)
             }
 
-            // Şarj + hava — UI’yi bekletmeden zenginleştir
+            // Şarj + hava — UI’yi bekletmeden zenginleştir (OSM already merged above).
             async let charges = EtubuTrafikAPI.fetchChargersAlong(coords: latLngCoords)
             async let weather = EtubuTrafikAPI.fetchWeatherAlong(coords: latLngCoords)
-            let osmHaz: [EtubuRouteHazard]
-            if domestic {
-                osmHaz = await EtubuTrafikAPI.fetchOsmCamerasAlong(coords: latLngCoords)
-            } else {
-                osmHaz = []
-            }
             let (chargeHaz, wxHaz) = await (charges, weather)
-            guard !chargeHaz.isEmpty || !wxHaz.isEmpty || !osmHaz.isEmpty else { return }
+            guard !chargeHaz.isEmpty || !wxHaz.isEmpty else { return }
 
             await MainActor.run {
                 let w = EtubuDriveWarnings.shared
                 var merged = w.hazards
-                merged.append(contentsOf: osmHaz)
                 merged.append(contentsOf: chargeHaz)
                 merged.append(contentsOf: wxHaz)
                 var seen = Set<String>()
@@ -1241,6 +1263,23 @@ enum EtubuRouteBridge {
             } else if (typeof MiniMap !== 'undefined' && MiniMap.setHazards) {
               MiniMap.setHazards(window.__etubuRouteState.hazards);
             }
+            // RouteGuard dahili hazards/active — Cap listAhead / TTS / warn-reel native ile aynı.
+            if (window.RouteGuard && typeof window.RouteGuard.applyNativeRoute === 'function') {
+              window.RouteGuard.applyNativeRoute({
+                from: \(fromJS),
+                to: \(toJS),
+                coords: window.__etubuRouteState.coords,
+                hazards: window.__etubuRouteState.hazards,
+                navOnly: \(navOnly ? "true" : "false"),
+                brief: {
+                  radar: \(brief.radarCount),
+                  corridor: \(brief.corridorCount),
+                  charge: \(brief.chargeCount),
+                  weather: \(brief.weatherCount),
+                  control: \(brief.controlCount)
+                }
+              });
+            }
           } catch (e) {}
         })();
         """)
@@ -1311,6 +1350,7 @@ enum EtubuRouteBridge {
             t.routeDestLng = nil
             t.capRouteRemainKm = nil
             t.refreshEnergyPlan()
+            EtubuDriveWarnings.shared.clearCriticalAlerts()
             EtubuMapLocationHelper.shared.disableBackgroundUpdates()
         }
     }

@@ -52,6 +52,21 @@ final class EtubuLiveRadarMonitor: ObservableObject {
 
     private init() {
         cameras = EtubuRegion.lastKnownInTurkey ? Self.seedHazards() : []
+        NotificationCenter.default.addObserver(
+            forName: .etubuRegionDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            let inTR = (note.object as? Bool) ?? EtubuRegion.lastKnownInTurkey
+            Task { @MainActor in
+                guard let self else { return }
+                if inTR {
+                    if self.cameras.isEmpty {
+                        self.cameras = Self.seedHazards()
+                    }
+                }
+            }
+        }
     }
 
     /// DriveWarnings poll’undan çağrılır — rota olsun olmasın.
@@ -93,11 +108,13 @@ final class EtubuLiveRadarMonitor: ObservableObject {
                 meta: snap.label
             )
             if snap.over {
+                // YAVAŞLA uses true corridor measurement, not the blended display alone.
+                let shown = snap.trueAvg > 0 ? snap.trueAvg : snap.avg
                 primary = EtubuWarnItem(
                     id: "live-corr-over-\(snap.id)",
                     kind: "corridor",
                     title: EtubuClusterL10n.slowDown,
-                    distanceLabel: "\(snap.avg) / \(snap.limit)",
+                    distanceLabel: "\(shown) / \(snap.limit)",
                     stage: .critical,
                     meta: snap.label
                 )
@@ -116,6 +133,14 @@ final class EtubuLiveRadarMonitor: ObservableObject {
             primary = nil
             return
         }
+        // Receding: if distance climbed vs last primary of same id, clear approaching UI.
+        if let prev = primary, prev.id == nearest.h.id {
+            let prevM = Self.parseDistM(prev.distanceLabel)
+            if let prevM, nearest.dM > prevM + 35, nearest.dM > 180 {
+                primary = nil
+                return
+            }
+        }
         let stage: EtubuWarnStage
         if nearest.dM <= 300 { stage = .critical }
         else if nearest.dM <= 1000 { stage = .near }
@@ -131,6 +156,22 @@ final class EtubuLiveRadarMonitor: ObservableObject {
             stage: stage,
             meta: nearest.h.maxspeed.map { "lim \($0)" } ?? ""
         )
+    }
+
+    private static func parseDistM(_ label: String) -> Double? {
+        let head = label.components(separatedBy: "·").first?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? label
+        if head.contains("km") {
+            let n = head.replacingOccurrences(of: "km", with: "")
+                .trimmingCharacters(in: .whitespaces)
+                .replacingOccurrences(of: ",", with: ".")
+            if let v = Double(n) { return v * 1000 }
+        }
+        if head.contains("m") {
+            let digits = head.filter { $0.isNumber }
+            if let v = Double(digits) { return v }
+        }
+        return nil
     }
 
     private func refreshCamerasIfNeeded(lat: Double, lng: Double) {
@@ -181,7 +222,10 @@ final class EtubuLiveRadarMonitor: ObservableObject {
         var id: String
         var remainM: Double
         var limit: Int
+        /// Blended display avg (instant→historical along corridor progress).
         var avg: Int
+        /// True distance/time corridor measurement — used for YAVAŞLA / over, not the blend alone.
+        var trueAvg: Int
         var over: Bool
         var label: String
         var entered: Bool
@@ -205,13 +249,14 @@ final class EtubuLiveRadarMonitor: ObservableObject {
                 return nil
             }
             corridor = state
-            let avg = corridorAvg(state, kmh: kmh)
+            let (display, trueAvg) = corridorAvgs(state, kmh: kmh)
             return CorridorSnap(
                 id: state.id,
                 remainM: remain,
                 limit: state.limit,
-                avg: avg,
-                over: avg > 0 && avg > state.limit + 2,
+                avg: display,
+                trueAvg: trueAvg,
+                over: trueAvg > 0 && trueAvg > state.limit + 2,
                 label: state.label,
                 entered: false
             )
@@ -247,11 +292,14 @@ final class EtubuLiveRadarMonitor: ObservableObject {
                 phrase: lim > 0 ? "Koridor giriş. Hız sınır \(lim)" : "Koridor giriş"
             )
         }
+        // Entry: show vehicle speed immediately (no blank / 0 waiting for 35 m).
+        let entryAvg = max(0, min(220, kmh))
         return CorridorSnap(
             id: nearest.h.id,
             remainM: lengthM,
             limit: lim,
-            avg: 0,
+            avg: entryAvg,
+            trueAvg: 0,
             over: false,
             label: label,
             entered: true
@@ -267,6 +315,7 @@ final class EtubuLiveRadarMonitor: ObservableObject {
             state.lastLng = lng
             return
         }
+        // Prefer vehicle speed×dt so corridor avg stays consistent with dial; GPS corrects.
         var addM = kmh >= 2 ? (Double(kmh) / 3.6) * dt : 0
         let step = EtubuTrafikAPI.haversineKm(state.lastLat, state.lastLng, lat, lng) * 1000
         let implied = dt > 0 ? (step / dt) * 3.6 : 0
@@ -278,13 +327,32 @@ final class EtubuLiveRadarMonitor: ObservableObject {
         state.lastLng = lng
     }
 
-    private func corridorAvg(_ state: CorridorSession, kmh: Int) -> Int {
+    /// Display blend + true corridor average (camera measurement).
+    /// - Entry / thin samples: display = vehicle speed
+    /// - Progress 0→1: hist weight 50%→90%, instant 50%→10%
+    /// - `trueAvg` is distance/time only (for YAVAŞLA); 0 until ≥35 m & ~4.3 s
+    private func corridorAvgs(_ state: CorridorSession, kmh: Int) -> (display: Int, trueAvg: Int) {
+        let instant = Double(max(0, min(220, kmh)))
         let traveled = state.traveledM
         let elapsedH = Date().timeIntervalSince(state.enteredAt) / 3600
-        guard traveled >= 35, elapsedH >= 0.0012 else { return 0 }
-        let avg = traveled / 1000 / elapsedH
-        guard avg.isFinite, avg >= 0 else { return 0 }
-        return min(220, Int(avg.rounded()))
+        let trueRaw: Double? = {
+            guard traveled >= 35, elapsedH >= 0.0012 else { return nil }
+            let avg = traveled / 1000 / elapsedH
+            guard avg.isFinite, avg >= 0 else { return nil }
+            return min(220, avg)
+        }()
+        let trueAvg = trueRaw.map { Int($0.rounded()) } ?? 0
+        guard let hist = trueRaw else {
+            return (Int(instant.rounded()), 0)
+        }
+        let progress = state.lengthM > 0
+            ? min(1, max(0, traveled / state.lengthM))
+            : 0
+        // Start ~50% historical + 50% instant → end ~90% / 10%.
+        let histW = 0.5 + 0.4 * progress
+        let blended = histW * hist + (1 - histW) * instant
+        let display = min(220, max(0, Int(blended.rounded())))
+        return (display, trueAvg)
     }
 
     // MARK: - Fetch / seeds

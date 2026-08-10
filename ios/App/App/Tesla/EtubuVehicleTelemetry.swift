@@ -42,6 +42,11 @@ final class EtubuVehicleTelemetry: ObservableObject {
     /// TPMS / climate / closures son geçerli örnek.
     @Published var lastExtrasAt: Date?
 
+    /// SoC epoch — UI forces refresh even when percent value is unchanged after re-poll.
+    @Published var chargeEpoch: Int = 0
+    @Published var tpmsEpoch: Int = 0
+    @Published var climateEpoch: Int = 0
+
     /// Demo tick — RootView dial’ının SwiftUI yenilemesi için.
     @Published var demoUIEpoch: Int = 0
 
@@ -217,6 +222,13 @@ final class EtubuVehicleTelemetry: ObservableObject {
     }
     var isAwaitingClimate: Bool {
         isLiveTesla && outsideC == nil && insideC == nil
+    }
+    /// Extras poll: keep requesting until SoC + climate + at least one tire are live.
+    var needsVehicleExtrasRefresh: Bool {
+        socPercent == nil
+            || outsideC == nil
+            || insideC == nil
+            || (tpmsFL.psi == nil && tpmsFR.psi == nil && tpmsRL.psi == nil && tpmsRR.psi == nil)
     }
 
     private func restoreLastChargeSnapshot() {
@@ -398,6 +410,15 @@ final class EtubuVehicleTelemetry: ObservableObject {
         pendingRangeHits = 0
     }
 
+    /// Geçersiz drive paketinde bile bağlantı tazeliğini koru (weak/delayed flash yok).
+    func touchDriveHealth() {
+        guard !EtubuDemoDrive.isActive else { return }
+        let now = Date()
+        lastDriveAt = now
+        lastUpdateAt = now
+        if source != .tesla { source = .tesla }
+    }
+
     /// Geçerli Tesla lastik psi bandı (bar→psi sonrası).
     static func sanitizeTirePsi(_ psi: Double?) -> Double? {
         guard let psi, psi.isFinite else { return nil }
@@ -420,9 +441,14 @@ final class EtubuVehicleTelemetry: ObservableObject {
         // İmkansız hız paketini yutma.
         guard kmh >= 0, kmh <= 280 else { return }
 
-        // Park / creep — yalnızca P/N’de sıfırla; düşük hızı gizleme (yumuşak kadran).
+        // Park / creep — yalnızca gerçek P/N’de sıfırla; düşük hızı gizleme.
+        // Unset/stuck "P" + hareket: hızı yayınla ve vitesi D say.
         let gearU = gear.uppercased()
-        let parked = gearU.hasPrefix("P") || gearU.hasPrefix("N")
+        let looksParked = gearU.hasPrefix("P") || gearU.hasPrefix("N")
+        let movingDespiteGear = looksParked && kmh >= 3
+        let effectiveGear = movingDespiteGear ? "D" : gear
+        let parked = (effectiveGear.uppercased().hasPrefix("P")
+            || effectiveGear.uppercased().hasPrefix("N")) && kmh < 3
         let gatedKmh: Int = {
             if parked { return 0 }
             return max(0, kmh)
@@ -433,11 +459,12 @@ final class EtubuVehicleTelemetry: ObservableObject {
            Date().timeIntervalSince(lastDriveAt) < 2.5,
            abs(gatedKmh - self.kmh) > 70,
            self.kmh > 0 || gatedKmh > 80 {
+            touchDriveHealth()
             return
         }
 
         let gatedPower: Int? = {
-            guard let powerKw else { return nil }
+            guard let powerKw else { return self.powerKw }
             // Dururken HVAC gürültüsü; hareket varken düşük regen’i de göster.
             if gatedKmh == 0 { return abs(powerKw) < 8 ? 0 : powerKw }
             if abs(powerKw) < 4 { return 0 }
@@ -446,10 +473,10 @@ final class EtubuVehicleTelemetry: ObservableObject {
         }()
 
         let kmhChanged = self.kmh != gatedKmh
-        let gearChanged = self.gear != gear
+        let gearChanged = self.gear != effectiveGear
         let powerChanged = self.powerKw != gatedPower
         if kmhChanged { self.kmh = gatedKmh }
-        if gearChanged { self.gear = gear }
+        if gearChanged { self.gear = effectiveGear }
         if powerChanged { self.powerKw = gatedPower }
 
         // Sparkline yalnızca hareket varken — parkta history titreşimi yok.
@@ -494,7 +521,7 @@ final class EtubuVehicleTelemetry: ObservableObject {
         Task { @MainActor in
             EtubuTripHistoryStore.shared.noteTelemetry(
                 kmh: gatedKmh,
-                gear: gear,
+                gear: effectiveGear,
                 odo: self.odometerKm,
                 powerKw: gatedPower,
                 routeTo: tripRoute
@@ -534,16 +561,26 @@ final class EtubuVehicleTelemetry: ObservableObject {
         if let volts { chargerVolts = volts }
         if let minutesToFull { minutesToFullCharge = minutesToFull }
         if let portOpen { chargePortOpen = portOpen }
+        // Always stamp — even identical SoC proves extras poll is live.
         persistLastChargeSnapshot()
-        recomputeEnergyAtArrival()
+        lastExtrasAt = Date()
         lastUpdateAt = Date()
+        chargeEpoch &+= 1
+        recomputeEnergyAtArrival()
+        objectWillChange.send()
         publishWidgetSnapshot()
     }
 
-    /// İlk SoC veya ±2’den büyük sıçrama → 2 ardışık aynı örnek; küçük drift anında.
+    /// İlk SoC anında yayınla; küçük drift (±3) anında; büyük sıçrama → 2 ardışık aynı örnek.
     private func confirmSoc(_ soc: Int, charging: Bool) -> Int? {
         if charging { pendingSoc = nil; pendingSocHits = 0; return soc }
-        if let cur = socPercent, abs(cur - soc) <= 2 {
+        // Cold start / lock reset: ilk geçerli örnekte "—" kalmasın.
+        if socPercent == nil {
+            pendingSoc = nil
+            pendingSocHits = 0
+            return soc
+        }
+        if let cur = socPercent, abs(cur - soc) <= 3 {
             pendingSoc = nil
             pendingSocHits = 0
             return soc
@@ -554,7 +591,6 @@ final class EtubuVehicleTelemetry: ObservableObject {
             pendingSoc = soc
             pendingSocHits = 1
         }
-        // İlk örnek (nil) veya büyük sıçrama: 2 hit.
         if pendingSocHits >= 2 {
             pendingSoc = nil
             pendingSocHits = 0
@@ -598,18 +634,21 @@ final class EtubuVehicleTelemetry: ObservableObject {
             changed = true
         }
         lastExtrasAt = Date()
-        if lastUpdateAt == nil { lastUpdateAt = Date() }
+        lastUpdateAt = Date()
+        climateEpoch &+= 1
         if changed { objectWillChange.send() }
     }
 
     func applyTeslaTPMS(fl: EtubuTireReading, fr: EtubuTireReading, rl: EtubuTireReading, rr: EtubuTireReading) {
         // Gelen psi’yi yaz; nil köşe eski iyi değeri korur (kısmi çerçeve).
+        // 0.15 psi üzeri fark → güncelle (yavaş sızıntı / sıcaklık kayması).
         var changed = false
         func apply(_ next: EtubuTireReading, into keyPath: ReferenceWritableKeyPath<EtubuVehicleTelemetry, EtubuTireReading>) {
             if let psi = Self.sanitizeTirePsi(next.psi) {
-                let reading = EtubuTireReading(psi: psi, warning: next.warning)
-                if self[keyPath: keyPath] != reading {
-                    self[keyPath: keyPath] = reading
+                let prev = self[keyPath: keyPath]
+                let psiDelta = prev.psi.map { abs($0 - psi) } ?? 99
+                if prev.psi == nil || psiDelta >= 0.12 || prev.warning != next.warning {
+                    self[keyPath: keyPath] = EtubuTireReading(psi: psi, warning: next.warning)
                     changed = true
                 }
             } else if next.warning != self[keyPath: keyPath].warning {
@@ -624,6 +663,9 @@ final class EtubuVehicleTelemetry: ObservableObject {
         apply(rl, into: \.tpmsRL)
         apply(rr, into: \.tpmsRR)
         lastExtrasAt = Date()
+        lastUpdateAt = Date()
+        // Always bump epoch so UI knows extras poll landed (even identical psi).
+        tpmsEpoch &+= 1
         if changed { objectWillChange.send() }
     }
 

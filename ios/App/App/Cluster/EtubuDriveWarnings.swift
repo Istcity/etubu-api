@@ -110,6 +110,10 @@ final class EtubuDriveWarnings: ObservableObject {
     @Published var demoPowerKw: Int = 0
 
     private var timer: Timer?
+    /// Last known straight-line distance per hazard — detect receding after pass.
+    private var lastHazardDistM: [String: Double] = [:]
+    /// Hazards touched within PASS_TOUCH_M (passed / approaching contact).
+    private var touchedHazardIds: Set<String> = []
 
     private init() {}
 
@@ -165,6 +169,8 @@ final class EtubuDriveWarnings: ObservableObject {
         queue = []
         hazards = []
         remainingHazards = []
+        lastHazardDistM = [:]
+        touchedHazardIds = []
         brief = EtubuRouteBriefSummary()
         remainingBrief = EtubuRouteBriefSummary()
         corridorActive = false
@@ -187,6 +193,8 @@ final class EtubuDriveWarnings: ObservableObject {
 
     private var lastPollJSONHash: Int = 0
     private var pollIdleTicks = 0
+    /// Debounce auto-replan when >600 m off the active polyline.
+    private var lastOffRouteReplanAt = Date.distantPast
 
     func startPolling() {
         timer?.invalidate()
@@ -394,6 +402,15 @@ final class EtubuDriveWarnings: ObservableObject {
         let lng = t.longitude
         let kmh = t.kmh
 
+        // >600 m off active route → auto replan + refresh EGM/OSM critical points.
+        if t.routeActive, let lat, let lng, routeCoords.count >= 2 {
+            let offM = Self.minDistanceToRouteM(lat: lat, lng: lng, coords: routeCoords)
+            if offM > 600, Date().timeIntervalSince(lastOffRouteReplanAt) > 45 {
+                lastOffRouteReplanAt = Date()
+                EtubuRouteBridge.replanActiveRouteFromCurrentLocation(reason: "off-route-\(Int(offM))m")
+            }
+        }
+
         // Rota yokken de OSM radar / koridor (canlı sürüş) — Premium.
         let live = EtubuLiveRadarMonitor.shared
         if EtubuPremiumManager.shared.isPremium {
@@ -463,18 +480,53 @@ final class EtubuDriveWarnings: ObservableObject {
             var h: EtubuRouteHazard
             var dM: Double
             var stage: EtubuWarnStage
+            var approaching: Bool
         }
+        let heading = t.headingDeg
         var ranked: [Ranked] = []
+        var nextDistMap = lastHazardDistM
         for h in pool {
             let dM = Self.haversineM(lat, lng, h.lat, h.lng)
-            guard dM <= 5500 else { continue }
+            guard dM <= 5500 else {
+                nextDistMap.removeValue(forKey: h.id)
+                touchedHazardIds.remove(h.id)
+                continue
+            }
+            // Touch zone — mark passed contact.
+            if dM <= 80 { touchedHazardIds.insert(h.id) }
+
+            let prev = lastHazardDistM[h.id]
+            let approaching: Bool = {
+                guard let prev else { return true }
+                // Distance increasing by ≥12 m → receding (passed / moving away).
+                return dM <= prev + 12
+            }()
+            nextDistMap[h.id] = dM
+
+            // Heading gate: only show points roughly ahead (unless very close).
+            if let heading, heading >= 0, dM > 120 {
+                let b = Self.bearingDeg(lat, lng, h.lat, h.lng)
+                let diff = Self.angleDiff(b, heading)
+                if diff > 70 { continue }
+            }
+
+            // After touch + distancing: drop from approaching UI immediately.
+            if touchedHazardIds.contains(h.id), dM > 160 {
+                continue
+            }
+            // Receding without touch but clearly behind/away: hide.
+            if !approaching, dM > 200, let prev, dM > prev + 25 {
+                continue
+            }
+
             let stage: EtubuWarnStage
             if dM <= 300 { stage = .critical }
             else if dM <= 1000 { stage = .near }
             else if dM <= 2000 { stage = .mid }
             else { stage = .far }
-            ranked.append(Ranked(h: h, dM: dM, stage: stage))
+            ranked.append(Ranked(h: h, dM: dM, stage: stage, approaching: approaching))
         }
+        lastHazardDistM = nextDistMap
         ranked.sort { a, b in
             let pa = Self.warnPriority(a.h.kind)
             let pb = Self.warnPriority(b.h.kind)
@@ -494,15 +546,20 @@ final class EtubuDriveWarnings: ObservableObject {
             )
         }
 
-        // Canlı koridor primary’yi ezme.
+        // Canlı koridor primary’yi ezme; rota aktifken native GPS mesafesini Cap kuyruğuna tercih et.
         if !live.corridorActive {
-            if queue.isEmpty || primary == nil {
+            let preferNative = t.routeActive && (!hazards.isEmpty || !remainingHazards.isEmpty)
+            if preferNative || queue.isEmpty || primary == nil || !(nativeQueue.contains { $0.id == primary?.id }) {
                 if !nativeQueue.isEmpty {
                     queue = nativeQueue
                     primary = nativeQueue.first
                 } else if let p = live.primary {
                     primary = p
                     queue = [p]
+                } else {
+                    // Nothing ahead — hide approaching critical UI immediately.
+                    primary = nil
+                    queue = []
                 }
             }
         } else if !nativeQueue.isEmpty {
@@ -538,14 +595,34 @@ final class EtubuDriveWarnings: ObservableObject {
             corridorOver = kmh > lim + 2
         }
 
-        if !ranked.isEmpty {
+        // Cap tarzı: remaining = rotadaki henüz geçilmemiş / yaklaşan noktalar.
+        if t.routeActive {
+            let fullPool = hazards.isEmpty ? remainingHazards : hazards
+            if !fullPool.isEmpty {
+                remainingHazards = Self.prunePassedHazards(
+                    fullPool,
+                    lat: lat,
+                    lng: lng,
+                    heading: heading,
+                    coords: routeCoords,
+                    touched: &touchedHazardIds,
+                    lastDist: &lastHazardDistM
+                )
+                remainingBrief = Self.briefFromHazards(remainingHazards)
+            }
+        } else if !ranked.isEmpty {
             remainingHazards = ranked.map(\.h)
             remainingBrief = Self.briefFromHazards(remainingHazards)
-            if !t.routeActive {
-                // Rotasız harita pinleri — yakındaki canlı radar/koridor.
-                hazards = remainingHazards
-                brief = remainingBrief
+            // Rotasız harita pinleri — yakındaki canlı radar/koridor.
+            hazards = remainingHazards
+            brief = remainingBrief
+        } else {
+            // Nothing ahead — clear approaching UI.
+            if primary != nil, !live.corridorActive {
+                primary = nil
+                queue = []
             }
+            remainingHazards = []
         }
 
         maybeSpeakPrimaryWarn()
@@ -579,6 +656,95 @@ final class EtubuDriveWarnings: ObservableObject {
 
     private static func haversineM(_ lat1: Double, _ lon1: Double, _ lat2: Double, _ lon2: Double) -> Double {
         EtubuTrafikAPI.haversineKm(lat1, lon1, lat2, lon2) * 1000
+    }
+
+    /// Minimum distance from point to route polyline (metres).
+    private static func minDistanceToRouteM(
+        lat: Double, lng: Double,
+        coords: [CLLocationCoordinate2D]
+    ) -> Double {
+        guard coords.count >= 2 else { return .greatestFiniteMagnitude }
+        var best = Double.greatestFiniteMagnitude
+        // Sample vertices + mid-segments for a cheap off-route check.
+        for i in 0..<coords.count {
+            let c = coords[i]
+            best = min(best, haversineM(lat, lng, c.latitude, c.longitude))
+            if i + 1 < coords.count {
+                let n = coords[i + 1]
+                let midLat = (c.latitude + n.latitude) * 0.5
+                let midLng = (c.longitude + n.longitude) * 0.5
+                best = min(best, haversineM(lat, lng, midLat, midLng))
+            }
+            if best < 80 { return best }
+        }
+        return best
+    }
+
+    /// Cap / web RouteGuard: drop passed points via routeIdx, heading-behind, or touch+distance.
+    private static func prunePassedHazards(
+        _ list: [EtubuRouteHazard],
+        lat: Double,
+        lng: Double,
+        heading: Double?,
+        coords: [CLLocationCoordinate2D],
+        touched: inout Set<String>,
+        lastDist: inout [String: Double]
+    ) -> [EtubuRouteHazard] {
+        guard !list.isEmpty else { return list }
+        let userIdx: Int = {
+            guard coords.count >= 2 else { return 0 }
+            var best = 0
+            var bestD = Double.greatestFiniteMagnitude
+            for (i, c) in coords.enumerated() {
+                let d = haversineM(lat, lng, c.latitude, c.longitude)
+                if d < bestD {
+                    bestD = d
+                    best = i
+                }
+            }
+            return best
+        }()
+        return list.filter { h in
+            let d = haversineM(lat, lng, h.lat, h.lng)
+            if d <= 80 { touched.insert(h.id) }
+            let prev = lastDist[h.id]
+            lastDist[h.id] = d
+
+            if let idx = h.routeIdx {
+                if idx < userIdx - 1 {
+                    // Behind on polyline.
+                    if let heading, heading >= 0 {
+                        let b = bearingDeg(lat, lng, h.lat, h.lng)
+                        if angleDiff(b, heading) > 95 { return false }
+                    } else if d > 150 {
+                        return false
+                    }
+                }
+            }
+            // Touched and distancing → remove from ahead list.
+            if touched.contains(h.id), d > 160 { return false }
+            // Receding fast after being closer.
+            if let prev, d > prev + 40, d > 220 { return false }
+            // Far behind absolute.
+            if d > 25_000 { return false }
+            return true
+        }
+    }
+
+    private static func bearingDeg(_ lat1: Double, _ lon1: Double, _ lat2: Double, _ lon2: Double) -> Double {
+        let p1 = lat1 * .pi / 180
+        let p2 = lat2 * .pi / 180
+        let dl = (lon2 - lon1) * .pi / 180
+        let y = sin(dl) * cos(p2)
+        let x = cos(p1) * sin(p2) - sin(p1) * cos(p2) * cos(dl)
+        var deg = atan2(y, x) * 180 / .pi
+        if deg < 0 { deg += 360 }
+        return deg
+    }
+
+    private static func angleDiff(_ a: Double, _ b: Double) -> Double {
+        let d = abs(a - b).truncatingRemainder(dividingBy: 360)
+        return d > 180 ? 360 - d : d
     }
 
     private static func fmtDist(_ m: Double) -> String {
@@ -615,13 +781,19 @@ final class EtubuDriveWarnings: ObservableObject {
     private func maybeSpeakPrimaryWarn() {
         guard !EtubuDemoDrive.isActive else { return }
         guard let item = primary else { return }
-        guard item.stage == .far || item.stage == .near || item.stage == .critical else { return }
+        // Include mid — approach countdown voice must fire before near/critical.
+        guard item.stage == .far || item.stage == .mid || item.stage == .near || item.stage == .critical else { return }
         let stage = item.stage.rawValue
         if item.id == lastSpokenWarnId, stage == lastSpokenWarnStage { return }
         lastSpokenWarnId = item.id
         lastSpokenWarnStage = stage
-        // Ekran metni lokalize; TTS yalnızca TR klipler (kök TR).
-        let phrase = EtubuHazardChrome.speakRootTR(item.kind)
+        // TTS TR kök + mesafe (composeKeys: "radar 500 metre").
+        let root = EtubuHazardChrome.speakRootTR(item.kind)
+        let dist = item.distanceLabel
+            .components(separatedBy: "·")
+            .first?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let phrase = dist.isEmpty ? root : "\(root) \(dist)"
         guard !phrase.isEmpty else { return }
         EtubuClusterAudioBridge.playWarnCue(
             id: item.id,

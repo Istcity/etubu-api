@@ -414,15 +414,31 @@ const RadarAlert = (() => {
     return ahead;
   }
 
-  function corridorAvgNow(kmh) {
+  /** True distance/time corridor avg (camera measurement). 0 until ≥35 m & ~4.3 s. */
+  function corridorTrueAvgNow() {
     if (!corridorState) return 0;
     const traveled = corridorState.traveledM || 0;
     const elapsedH = (Date.now() - corridorState.enteredAt) / 3600000;
-    // Girişte sıfır — yeterli mesafe/süre yoksa 0 göster
     if (traveled < 35 || elapsedH < 0.0012) return 0;
     const avg = traveled / 1000 / elapsedH;
     if (!Number.isFinite(avg) || avg < 0) return 0;
     return Math.min(220, avg);
+  }
+
+  /**
+   * Display avg: on entry show vehicle speed; as progress grows blend toward true avg
+   * (start ~50% hist + 50% instant → end ~90% / 10%). YAVAŞLA uses corridorTrueAvgNow.
+   */
+  function corridorAvgNow(kmh) {
+    if (!corridorState) return 0;
+    const instant = Math.max(0, Math.min(220, Number(kmh) || 0));
+    const trueAvg = corridorTrueAvgNow();
+    if (!(trueAvg > 0)) return instant;
+    const lengthM = corridorState.lengthM || 1;
+    const progress = Math.min(1, Math.max(0, (corridorState.traveledM || 0) / lengthM));
+    const histW = 0.5 + 0.4 * progress;
+    const blended = histW * trueAvg + (1 - histW) * instant;
+    return Math.min(220, Math.max(0, blended));
   }
 
   function tickCorridorTravel(lat, lng, kmh) {
@@ -496,6 +512,7 @@ const RadarAlert = (() => {
       }
 
       const avg = corridorAvgNow(kmh);
+      const trueAvg = corridorTrueAvgNow();
       return {
         kind: "corridor-in",
         stage: remain < 400 ? "near" : "mid",
@@ -503,7 +520,8 @@ const RadarAlert = (() => {
         remainM: remain,
         limit: corridorState.limit,
         avg,
-        over: avg > 0 && avg > corridorState.limit + 2,
+        trueAvg,
+        over: trueAvg > 0 && trueAvg > corridorState.limit + 2,
         label: corridorState.label,
         id: corridorState.id,
         active: true,
@@ -546,7 +564,9 @@ const RadarAlert = (() => {
         distM: d,
         remainM: lengthM,
         limit: corridorState.limit,
-        avg: 0,
+        // Entry: show vehicle speed immediately (no blank waiting for 35 m).
+        avg: Math.max(0, Math.min(220, Number(kmh) || 0)),
+        trueAvg: 0,
         over: false,
         label: corridorState.label,
         id: corridorState.id,
@@ -696,13 +716,15 @@ const RadarAlert = (() => {
     const traveled = corridorState.traveledM || 0;
     const remain = Math.max(0, corridorState.lengthM - traveled);
     const avg = corridorAvgNow(kmh);
+    const trueAvg = corridorTrueAvgNow();
     return {
       active: true,
       id: corridorState.id,
       avg,
+      trueAvg,
       limit: corridorState.limit,
       remainM: remain,
-      over: avg > 0 && avg > corridorState.limit + 2,
+      over: trueAvg > 0 && trueAvg > corridorState.limit + 2,
       label: corridorState.label,
       entered: false,
     };

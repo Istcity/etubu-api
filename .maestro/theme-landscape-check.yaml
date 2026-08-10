@@ -15,15 +15,16 @@ appId: com.etubu.app
 - extendedWaitUntil:
     visible: "Uygulama hakkında"
     timeout: 10000
+# Align timeouts with theme-apply-check (flake: 25s scroll often misses Tema mağazası)
 - scrollUntilVisible:
     element: "Tema mağazası"
     direction: DOWN
-    timeout: 25000
+    timeout: 30000
 - scrollUntilVisible:
     element:
       id: "etubu.theme.tesla"
     direction: DOWN
-    timeout: 20000
+    timeout: 25000
 - assertVisible:
     id: "etubu.theme.tesla"
 - assertVisible:

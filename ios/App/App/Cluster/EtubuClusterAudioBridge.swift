@@ -10,7 +10,7 @@ enum EtubuClusterAudioBridge {
             if #available(iOS 16.2, *) {
                 EtubuLiveActivityController.ensureAudioSession(mixWithOthers: mode != "solo")
             }
-            // Uyarılar müziğin üstüne yazsın — duckOthers kullanma
+            // Uyarılar müziğin üstüne yazsın — duckOthers warn path'te (activateAlertDuckSession).
             AppDelegate.activateDriveAudioSession()
         }
         evalJS("""
@@ -527,18 +527,24 @@ enum EtubuClusterAudioBridge {
 
         let urgent = (stage == "critical" || stage == "near")
         let beeps = (beepsOn && urgent) ? 2 : (beepsOn ? 1 : 0)
-        // Mesafe (m/km/dk) TTS’e girmez — yalnızca bildirim metni.
-        let speakPhrase = Self.stripDistanceFromPhrase(phrase)
+        // Keep metres/km for WarnVoice composeKeys ("radar 500 metre"); strip only speed ratios.
+        let speakPhrase = Self.sanitizeWarnPhrase(phrase)
         let safePhrase = speakPhrase
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "'", with: "\\'")
             .replacingOccurrences(of: "\n", with: " ")
-        AppDelegate.activateDriveAudioSession()
+        AppDelegate.activateAlertDuckSession()
 
         if ttsOn, !speakPhrase.isEmpty,
            EtubuWarnVoice.speak(speakPhrase, key: key, urgent: urgent) {
             if beeps > 0 { Self.fireBeeps(count: beeps, urgent: urgent) }
             return
+        }
+
+        // Cap / system TTS path — duck for beeps+speech, then unduck.
+        let duckMs = max(0.9, Double(beeps) * 0.35 + (ttsOn && !speakPhrase.isEmpty ? 2.4 : 0.6))
+        DispatchQueue.main.asyncAfter(deadline: .now() + duckMs) {
+            AppDelegate.deactivateAlertDuckSession()
         }
 
         evalJS("""
@@ -593,6 +599,7 @@ enum EtubuClusterAudioBridge {
 
     private static func fireBeeps(count: Int, urgent: Bool) {
         guard count > 0 else { return }
+        AppDelegate.activateAlertDuckSession()
         evalJS("""
         (function(){
           try {
@@ -624,21 +631,21 @@ enum EtubuClusterAudioBridge {
     }
 
     /// "Radar 250 m" / "1.2 km" gibi mesafe parçalarını TTS’ten çıkar.
-    private static func stripDistanceFromPhrase(_ phrase: String) -> String {
+    private static func sanitizeWarnPhrase(_ phrase: String) -> String {
         var s = phrase
-        let patterns = [
-            #"\b\d+[.,]?\d*\s*(m|metre|meters?|km|kilometre|kilometers?|ft|mi|dk|min|mins?)\b"#,
-            #"\b\d+\s*/\s*\d+\b"#, // 95/80 hız oranı
-        ]
-        for p in patterns {
-            if let re = try? NSRegularExpression(pattern: p, options: .caseInsensitive) {
-                let range = NSRange(s.startIndex..<s.endIndex, in: s)
-                s = re.stringByReplacingMatches(in: s, options: [], range: range, withTemplate: "")
-            }
+        // Drop speed-ratio fragments ("95 / 80") — keep distance for countdown TTS.
+        if let re = try? NSRegularExpression(pattern: #"\b\d+\s*/\s*\d+\b"#, options: []) {
+            let range = NSRange(s.startIndex..<s.endIndex, in: s)
+            s = re.stringByReplacingMatches(in: s, options: [], range: range, withTemplate: "")
         }
         return s
             .replacingOccurrences(of: #"\s{2,}"#, with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Legacy helper — distance kept for warn TTS; ratios stripped.
+    private static func stripDistanceFromPhrase(_ phrase: String) -> String {
+        sanitizeWarnPhrase(phrase)
     }
 
     static func endDrive() {

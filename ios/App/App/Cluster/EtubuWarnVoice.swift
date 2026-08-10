@@ -35,7 +35,7 @@ enum EtubuWarnVoice {
         let urls = keys.compactMap { urlForClip($0) }
         guard urls.count == keys.count else { return false }
 
-        AppDelegate.activateDriveAudioSession()
+        AppDelegate.activateAlertDuckSession()
         playToken &+= 1
         let token = playToken
         players.forEach { $0.stop() }
@@ -53,15 +53,22 @@ enum EtubuWarnVoice {
         players.removeAll()
         lastKey = ""
         lastAt = Date.distantPast
+        AppDelegate.deactivateAlertDuckSession()
     }
 
     private static func playSequence(urls: [URL], index: Int, token: Int, volume: Float) {
-        guard token == playToken, index < urls.count else { return }
+        guard token == playToken else { return }
+        guard index < urls.count else {
+            AppDelegate.deactivateAlertDuckSession()
+            return
+        }
         do {
             let player = try AVAudioPlayer(contentsOf: urls[index])
             player.volume = volume
             player.prepareToPlay()
             players = [player]
+            // Re-assert duck session in case Music stole the route mid-sequence.
+            AppDelegate.activateAlertDuckSession()
             player.play()
             let delay = player.duration + (urgentGap(index: index, total: urls.count))
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) {

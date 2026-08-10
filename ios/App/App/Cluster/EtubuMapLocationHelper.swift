@@ -127,7 +127,12 @@ final class EtubuMapLocationHelper: NSObject, ObservableObject, CLLocationManage
         DispatchQueue.main.async {
             // Demo kendi rota koordinatlarını yazar — gerçek GPS ile ezme.
             if EtubuDemoDrive.isActive { return }
+            let hadRegion = EtubuRegion.hasKnownRegion
+            let beforeTR = EtubuRegion.lastKnownInTurkey
             EtubuRegion.updateFrom(lat: lat, lng: lng)
+            if !hadRegion || beforeTR != EtubuRegion.lastKnownInTurkey {
+                Self.syncForceTrRouteFlag()
+            }
             let t = EtubuVehicleTelemetry.shared
             t.applyMapLocation(
                 lat: lat,
@@ -149,10 +154,28 @@ final class EtubuMapLocationHelper: NSObject, ObservableObject, CLLocationManage
             })();
             """)
             // Timer arka planda durabilir — konum callback’inden uyarı tick.
-            if t.routeActive || EtubuDriveWarnings.shared.hazards.isEmpty == false {
+            let premiumMoving = EtubuPremiumManager.shared.isPremium && t.kmh >= 5
+            if t.routeActive
+                || EtubuDriveWarnings.shared.hazards.isEmpty == false
+                || premiumMoving {
                 EtubuDriveWarnings.shared.tickFromLocation()
             }
         }
+    }
+
+    /// Cap forceTr — GPS TR’ye girince seed/autocomplete yurt dışı kalmasın.
+    private static func syncForceTrRouteFlag() {
+        let forceTr = EtubuRegion.lastKnownInTurkey ? "1" : "0"
+        EtubuClusterAudioBridge.evalJS("""
+        (function(){
+          try {
+            var forceTr = '\(forceTr)';
+            localStorage.setItem('etubu_force_tr_route', forceTr);
+            sessionStorage.setItem('etubu_force_tr_route', forceTr);
+            window.__etubuForceTrRoute = +forceTr;
+          } catch (e) {}
+        })();
+        """)
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {

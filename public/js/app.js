@@ -25,6 +25,15 @@
   const hudWarnMeta = $("hudWarnMeta");
   const warnReel = $("warnReel");
   const warnReelTrack = $("warnReelTrack");
+  const hudWarnBand = $("hudWarnBand");
+  const hudWarnBandIcon = $("hudWarnBandIcon");
+  const hudWarnBandText = $("hudWarnBandText");
+  const hudWarnBandDist = $("hudWarnBandDist");
+  const speedLimitBadge = $("speedLimitBadge");
+  const speedLimitValue = $("speedLimitValue");
+  const critNear = $("critNear");
+  const critNearList = $("critNearList");
+  const speedHudEl = $("speedHud");
   let warnReelKey = "";
   let warnReelIndex = 0;
   const ringFill = $("ringFill");
@@ -350,13 +359,20 @@
     populateVisuals();
     Picker.refreshAll?.();
     if (inviteDock) inviteDock.hidden = true;
-    // Web: her zaman reklam (ücretsiz model)
-    document.body.classList.remove("ads-hidden");
-    if (!Paywall.isAdFree()) {
-      Ads.showRails?.();
-    } else {
+    // Web: her zaman reklam (ücretsiz model) — Tesla’da yer kaplamasın
+    const tesla = typeof CarBrowser !== "undefined" && CarBrowser.isTesla?.();
+    if (tesla || (typeof CarBrowser !== "undefined" && CarBrowser.isEphemeral?.())) {
       document.body.classList.add("ads-hidden");
       Ads.hideAll?.();
+      CarBrowser.forceCompactChrome?.();
+    } else {
+      document.body.classList.remove("ads-hidden");
+      if (!Paywall.isAdFree()) {
+        Ads.showRails?.();
+      } else {
+        document.body.classList.add("ads-hidden");
+        Ads.hideAll?.();
+      }
     }
     syncDriveFocus(document.body.classList.contains("panel-hidden"));
   }
@@ -1024,6 +1040,91 @@
       .replace(/"/g, "&quot;");
   }
 
+  function paintSpeedLimitBadge(limit, overLimit) {
+    if (!speedLimitBadge || !speedLimitValue) return;
+    if (limit == null || !Number.isFinite(limit) || limit <= 0) {
+      speedLimitBadge.hidden = true;
+      speedLimitBadge.classList.remove("is-over");
+      speedLimitValue.textContent = "—";
+      return;
+    }
+    speedLimitBadge.hidden = false;
+    speedLimitValue.textContent = String(Math.round(limit));
+    speedLimitBadge.classList.toggle("is-over", !!overLimit);
+    speedHudEl?.classList.toggle("is-over-limit", !!overLimit);
+  }
+
+  function paintCritNearList(list) {
+    if (!critNear || !critNearList) return;
+    const items = Array.isArray(list) ? list.slice(0, 4) : [];
+    if (!items.length) {
+      critNear.hidden = true;
+      critNearList.innerHTML = "";
+      return;
+    }
+    critNear.hidden = false;
+    critNearList.innerHTML = items
+      .map((it) => {
+        const crit = it.critical || it.stage === "critical" ? " is-critical" : "";
+        return `<li class="crit-near-item${crit}" data-kind="${escapeHtml(it.kind || it.type || "")}">
+          <span class="crit-icon">${escapeHtml(it.icon || "")}</span>
+          <span class="crit-title">${escapeHtml(it.title || it.label || "")}</span>
+          <span class="crit-dist">${escapeHtml(it.dist || "")}</span>
+        </li>`;
+      })
+      .join("");
+  }
+
+  function paintWarnBand(osm, roadWarn) {
+    if (!hudWarnBand) return;
+    let text = "";
+    let dist = "";
+    let icon = "⚠️";
+    let urgent = false;
+    let overspeed = false;
+
+    if (osm?.overLimit) {
+      text = `⚡ Hız Aşıldı!`;
+      dist = `+${osm.overBy || 0} km/s`;
+      icon = "⚡";
+      urgent = true;
+      overspeed = true;
+    } else if (roadWarn && (roadWarn.stage === "critical" || roadWarn.over)) {
+      text = roadWarn.title || t("hudRoadWarn");
+      dist = roadWarn.dist || "";
+      icon = "🚨";
+      urgent = true;
+    } else if (osm?.alert && (osm.alert.critical || osm.alert.stage === "critical" || osm.alert.stage === "near")) {
+      text = osm.alert.title || t("hudRoadWarn");
+      dist = osm.alert.dist || "";
+      icon = "⚠️";
+      urgent = osm.alert.stage === "critical";
+    } else if (roadWarn) {
+      text = roadWarn.title || t("hudRoadWarn");
+      dist = roadWarn.dist || "";
+      icon = "⚠️";
+      urgent = false;
+    } else if (osm?.alert) {
+      text = osm.alert.title || t("hudRoadWarn");
+      dist = osm.alert.dist || "";
+      icon = "⚠️";
+    }
+
+    if (!text) {
+      hudWarnBand.hidden = true;
+      hudWarnBand.classList.remove("is-urgent", "is-overspeed");
+      speedHudEl?.classList.remove("has-warn-band");
+      return;
+    }
+    hudWarnBand.hidden = false;
+    speedHudEl?.classList.add("has-warn-band");
+    hudWarnBand.classList.toggle("is-urgent", urgent);
+    hudWarnBand.classList.toggle("is-overspeed", overspeed);
+    if (hudWarnBandIcon) hudWarnBandIcon.textContent = icon;
+    if (hudWarnBandText) hudWarnBandText.textContent = text;
+    if (hudWarnBandDist) hudWarnBandDist.textContent = dist;
+  }
+
   function paintHudWarn(info, queue) {
     if (!hudWarn) return;
     if (!info) {
@@ -1089,12 +1190,29 @@
       let routeInfo = null;
       let radarQueue = [];
       let routeQueue = [];
+      let osm = null;
       if (typeof RadarAlert !== "undefined") {
         const radar = RadarAlert.update(meta.lat, meta.lng, meta.heading, kmh);
         lastCorridorInfo = radar?.corridor || null;
         if (radar?.alert) roadWarn = radar.alert;
         radarQueue = radar?.queue || [];
         noteCorridorOverAudio(lastCorridorInfo);
+        // Radar/koridor limiti varsa OSM levhasına da yansıt
+        const lim =
+          radar?.alert?.limit ||
+          radar?.corridor?.limit ||
+          null;
+        if (
+          lim != null &&
+          typeof OsmHazards !== "undefined" &&
+          OsmHazards.setRoadMaxspeed &&
+          !OsmHazards.getRoadMaxspeed?.()
+        ) {
+          OsmHazards.setRoadMaxspeed(lim);
+        }
+      }
+      if (typeof OsmHazards !== "undefined") {
+        osm = OsmHazards.update(meta.lat, meta.lng, meta.heading, kmh);
       }
       if (typeof RouteGuard !== "undefined") {
         routeInfo = RouteGuard.update?.(meta.lat, meta.lng, meta.heading, kmh) || null;
@@ -1154,10 +1272,50 @@
           };
         }
       }
-      const queue = mergeWarnQueue(radarQueue, routeQueue, roadWarn);
+      // OSM kritik nokta — radar yoksa HUD’a
+      if (!roadWarn && osm?.alert) {
+        roadWarn = osm.alert;
+      } else if (
+        osm?.alert &&
+        roadWarn &&
+        !isRadarOrCorridor(roadWarn) &&
+        (osm.alert.distM ?? Infinity) < (roadWarn.distM ?? Infinity)
+      ) {
+        roadWarn = osm.alert;
+      }
+      // Hız aşımı en yüksek öncelik (HUD + şerit)
+      if (osm?.overLimit) {
+        roadWarn = {
+          title: "⚡ Hız Aşıldı!",
+          dist: `+${osm.overBy || 0} km/s`,
+          meta: osm.maxspeed ? `Limit ${osm.maxspeed}` : "",
+          kind: "radar",
+          stage: "critical",
+          over: true,
+          id: "overspeed",
+          distM: 0,
+          limit: osm.maxspeed,
+        };
+      }
+      const osmQueue = (osm?.list || []).map((it) => ({
+        id: it.id,
+        kind: it.kind || it.type || "radar",
+        title: it.title || it.label,
+        dist: it.dist,
+        distM: it.distM,
+        meta: "",
+        stage: it.stage || "mid",
+      }));
+      const queue = mergeWarnQueue(radarQueue, [...routeQueue, ...osmQueue], roadWarn);
       paintHudWarn(roadWarn, queue);
+      paintSpeedLimitBadge(osm?.maxspeed ?? null, !!osm?.overLimit);
+      paintCritNearList(osm?.list || []);
+      paintWarnBand(osm, roadWarn);
     } else if (running) {
       updateTripAvgFromSpeed(kmh);
+      paintSpeedLimitBadge(null, false);
+      paintCritNearList([]);
+      paintWarnBand(null, null);
     }
     renderAvgSpeedPanel(kmh);
     const shownKmh = Math.round(kmh);
@@ -1368,7 +1526,11 @@
     AudioEngine.stop();
     MiniMap.clear?.();
     if (typeof RadarAlert !== "undefined") RadarAlert.clear();
+    if (typeof OsmHazards !== "undefined") OsmHazards.clear?.();
     paintHudWarn(null);
+    paintSpeedLimitBadge(null, false);
+    paintCritNearList([]);
+    paintWarnBand(null, null);
     resetTripAvg();
 
     if (wakeLock) {
@@ -2114,8 +2276,14 @@
       $("langSelect")?.addEventListener("change", () => setTimeout(refreshAfterLang, 0));
     });
     step("panel", () => {
-      if (CarBrowser.isTesla?.()) setPanelHidden(true, false);
-      else loadPanelState();
+      if (CarBrowser.isTesla?.() || CarBrowser.isEphemeral?.()) {
+        setPanelHidden(true, false);
+        document.body.classList.add("ads-hidden", "drive-focus");
+        CarBrowser.forceCompactChrome?.();
+        CarBrowser.syncViewportHeight?.();
+      } else {
+        loadPanelState();
+      }
     });
     step("events", () => {
       document.addEventListener("etubu:trial-reset", () => {

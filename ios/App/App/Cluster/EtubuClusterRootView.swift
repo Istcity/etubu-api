@@ -108,7 +108,8 @@ struct EtubuClusterRootView: View {
         }
         let g = telemetry.gear.uppercased()
         if g.hasPrefix("P") || g.hasPrefix("N") { return 0 }
-        return telemetry.kmh < 5 ? 0 : telemetry.kmh
+        // Tesla araç hızı birincil — creep’i gizleme (<5 floor kaldırıldı).
+        return max(0, telemetry.kmh)
     }
     private var dialGear: String {
         if warnings.demoActive {
@@ -123,6 +124,8 @@ struct EtubuClusterRootView: View {
             if (g.isEmpty || g == "P"), kmh >= 3 { return "D" }
             return g.isEmpty ? "D" : g
         }
+        let g = telemetry.gear.uppercased()
+        if (g.isEmpty || g.hasPrefix("P") || g.hasPrefix("N")), telemetry.kmh >= 3 { return "D" }
         return telemetry.gear
     }
     private var dialPowerKw: Int? {

@@ -513,7 +513,7 @@ final class EtubuDemoDrive: ObservableObject {
             id: item.id,
             kind: item.kind,
             stage: item.stage.rawValue,
-            phrase: "\(item.title) \(item.distanceLabel)"
+            phrase: "\(next.speakRootTR) \(distLabel)"
         )
         _ = kmh
         _ = remainM

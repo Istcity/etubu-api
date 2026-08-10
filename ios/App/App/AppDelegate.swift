@@ -77,6 +77,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         driveAudioActive = true
         let session = AVAudioSession.sharedInstance()
         do {
+            // Mix EV hum with car BT media (YouTube/Music) without interrupting A2DP route.
             try session.setCategory(
                 .playback,
                 mode: .default,
@@ -89,6 +90,51 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             print("ETUBU audio session activate:", error)
         }
     }
+
+    /// Warn TTS / beeps over car Bluetooth while Music/YouTube plays — duck others, keep A2DP.
+    static func activateAlertDuckSession() {
+        driveAudioActive = true
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.setCategory(
+                .playback,
+                mode: .default,
+                options: [.duckOthers, .allowBluetoothA2DP, .allowAirPlay]
+            )
+            try session.setActive(true, options: [])
+        } catch {
+            // Fallback: mix without duck if category rejected.
+            do {
+                try session.setCategory(
+                    .playback,
+                    mode: .default,
+                    options: [.mixWithOthers, .allowBluetoothA2DP, .allowAirPlay]
+                )
+                try session.setActive(true, options: [])
+            } catch {
+                print("ETUBU alert duck session:", error)
+            }
+        }
+    }
+
+    /// After warn clips finish — notify others + restore mix-with-media so Music unducks.
+    static func deactivateAlertDuckSession() {
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.setActive(false, options: .notifyOthersOnDeactivation)
+        } catch {
+            // Still restore drive mix below.
+        }
+        guard driveAudioActive else {
+            activateSilentSafeSession()
+            return
+        }
+        activateDriveAudioSession()
+    }
+
+    /// Legacy aliases — prefer activateAlertDuckSession / deactivateAlertDuckSession.
+    static func activateWarnAudioSession() { activateAlertDuckSession() }
+    static func restoreDriveAudioAfterWarn() { deactivateAlertDuckSession() }
 
     static func activateSilentSafeSession() {
         guard !driveAudioActive else {

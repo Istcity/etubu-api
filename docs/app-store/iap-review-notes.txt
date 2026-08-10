@@ -1,0 +1,26 @@
+Etubu Premium — App Review Notes
+
+Product ID: com.etubu.premium
+Type: Non-Consumable (one-time unlock)
+Price: 249 TRY (Turkey) / StoreKit shows localized App Store price
+
+What Premium unlocks
+- All cluster themes and wallpapers (free tier: Tesla theme only)
+- Live MapKit background
+- Route planning (radar / corridor / chargers / weather along route)
+- Live radar & average-speed corridor alerts
+Free tier still shows the OSM road speed-limit sign while driving.
+
+How to test
+1. Open the app and accept the legal screen if shown.
+2. Tap Settings (gear).
+3. Open the Premium section at the top.
+4. Tap “Sign in with Apple” (or purchase will prompt Sign in with Apple first).
+5. Tap Unlock / Buy to purchase com.etubu.premium with a Sandbox Apple ID.
+6. After purchase, Premium should show as active; themes, map toggle, and route planning unlock.
+7. Optional restore test: delete and reinstall the app → Settings → Premium → Restore purchase (same Sandbox Apple ID). Entitlement returns via StoreKit.
+
+Notes for reviewers
+- Sign in with Apple is required before purchase so the account is linked in-app; the StoreKit entitlement is tied to the Apple ID and restores after reinstall.
+- No account/password is required beyond Sign in with Apple and a Sandbox App Store account.
+- IAP review screenshot shows the in-app Premium settings / unlock UI.
