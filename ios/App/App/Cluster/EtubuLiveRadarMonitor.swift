@@ -141,11 +141,8 @@ final class EtubuLiveRadarMonitor: ObservableObject {
                 return
             }
         }
-        let stage: EtubuWarnStage
-        if nearest.dM <= 300 { stage = .critical }
-        else if nearest.dM <= 1000 { stage = .near }
-        else if nearest.dM <= 2000 { stage = .mid }
-        else { stage = .far }
+        var stage = EtubuHazardMerge.stage(for: nearest.h.kind, distM: nearest.dM)
+        if stage == .idle { stage = .far }
         let lim = nearest.h.maxspeed.map { " · \($0)" } ?? ""
         let title = nearest.h.label.isEmpty ? nearest.h.kindTitle : nearest.h.label
         primary = EtubuWarnItem(
@@ -377,14 +374,11 @@ final class EtubuLiveRadarMonitor: ObservableObject {
     }
 
     private static func merge(seeds: [EtubuRouteHazard], remote: [EtubuRouteHazard]) -> [EtubuRouteHazard] {
-        var map: [String: EtubuRouteHazard] = [:]
-        for h in seeds + remote {
-            let key = h.id.isEmpty
-                ? "\(h.kind)-\(Int(h.lat * 1000))-\(Int(h.lng * 1000))"
-                : h.id
-            if map[key] == nil { map[key] = h }
-        }
-        return Array(map.values)
+        // Seeds / EGM-style points are official; OSM remote supplements without cutting them.
+        let mode: EtubuHazardMerge.OsmMode = EtubuRegion.lastKnownInTurkey && !seeds.isEmpty
+            ? .supplement
+            : .led
+        return EtubuHazardMerge.merge(official: seeds, osm: remote, mode: mode)
     }
 
     private static func fetchOverpass(

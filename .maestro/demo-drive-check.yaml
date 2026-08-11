@@ -8,6 +8,7 @@ appId: com.etubu.app
     arguments:
       etubuSkipOnboarding: true
       etubuForcePremium: true
+- setOrientation: PORTRAIT
 - runFlow: dismiss-permissions.yaml
 - extendedWaitUntil:
     visible:
@@ -28,14 +29,7 @@ appId: com.etubu.app
     timeout: 25000
 - tapOn:
     id: "etubu.settings.open"
-- extendedWaitUntil:
-    visible: "Uygulama hakkında"
-    timeout: 10000
-- scrollUntilVisible:
-    element:
-      id: "etubu.demo.toggle"
-    direction: DOWN
-    timeout: 30000
+- runFlow: scroll-to-demo.yaml
 - tapOn:
     id: "etubu.demo.toggle"
 - waitForAnimationToEnd:

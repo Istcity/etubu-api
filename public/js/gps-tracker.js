@@ -515,6 +515,43 @@ const GpsTracker = (() => {
 
   let simTimer = null;
 
+  /** Bağcılar / İstanbul — GPS izni yokken Cap yedek sim (Maestro native GPS’i ezmez). */
+  function startBagcilarSim(callbacks = {}) {
+    if (simTimer) return;
+    if (window.__ETUBU_NATIVE_CLUSTER__) return;
+    window.__ETUBU_GPS_SIM__ = true;
+    const homeLat = 41.0391;
+    const homeLng = 28.8567;
+    let angle = 0;
+    const id = setInterval(() => {
+      angle = (angle + 8) % 360;
+      const rad = (angle * Math.PI) / 180;
+      const dLat = (180 / Math.PI) * (Math.cos(rad) * 0.0016);
+      const dLng =
+        ((180 / Math.PI) * (Math.sin(rad) * 0.0016)) /
+        Math.cos((homeLat * Math.PI) / 180);
+      const lat = homeLat + dLat;
+      const lng = homeLng + dLng;
+      lastLat = lat;
+      lastLng = lng;
+      accuracyM = 25;
+      headingDeg = (angle + 90) % 360;
+      applyGpsReading(28 / 3.6, { lat, lng, accuracy: 25 }, Date.now(), "sim");
+      callbacks.onUpdate?.({
+        kmh: displayKmh,
+        audioKmh: displayKmh,
+        rawKmh: 28,
+        source: "sim",
+        lat,
+        lng,
+        heading: headingDeg,
+        accuracy: 25,
+        sim: true,
+      });
+    }, 1200);
+    simTimer = id;
+  }
+
   function start(callbacks = {}) {
     // Önceki GPS / demo izlemeyi temizle — çift watch birikmesin
     stop({ silent: true });
@@ -564,8 +601,17 @@ const GpsTracker = (() => {
     };
 
     watchId = navigator.geolocation.watchPosition(
-      (pos) => onPos(pos, "watchA"),
-      (err) => callbacks.onError?.(err.message),
+      (pos) => {
+        window.__ETUBU_GPS_SIM__ = false;
+        onPos(pos, "watchA");
+      },
+      (err) => {
+        callbacks.onError?.(err.message);
+        // Permission denied / unavailable → Bağcılar sim (native cluster owns GPS when armed).
+        if (!window.__ETUBU_NATIVE_CLUSTER__) {
+          startBagcilarSim(callbacks);
+        }
+      },
       { enableHighAccuracy: true, maximumAge: 0, timeout: 12000 }
     );
 

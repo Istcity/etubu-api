@@ -101,10 +101,12 @@ struct EtubuChargeDetailChip: View {
     @ObservedObject var telemetry: EtubuVehicleTelemetry
 
     private var soc: CGFloat {
-        CGFloat(telemetry.displaySocPercent ?? telemetry.socPercent ?? 0) / 100
+        let _ = telemetry.chargeEpoch
+        return CGFloat(telemetry.displaySocPercent ?? 0) / 100
     }
 
     var body: some View {
+        let _ = telemetry.chargeEpoch
         if telemetry.isCharging || telemetry.chargePortOpen == true || telemetry.displaySocPercent != nil {
             HStack(spacing: 8) {
                 ZStack {

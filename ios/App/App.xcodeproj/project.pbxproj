@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B2C3D4E5F60718293A4B5C6D /* EtubuAppExit.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5C /* EtubuAppExit.swift */; };
 		A77FC1B2277D4CD98E8C4CC7 /* EtubuWarnVoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C2E36FD196C4AD9BAA20D2F /* EtubuWarnVoice.swift */; };
 		D8E4A91F2C7B4E0A9F31C6D2 /* EtubuNativeDriveAudio.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9F5B02A3D8C4F1B0A42D7E3 /* EtubuNativeDriveAudio.swift */; };
 		D4BCDAD7890A45CEAB9D3E08 /* EtubuClusterHotspots.swift in Sources */ = {isa = PBXBuildFile; fileRef = B67E1884622C423EA48A68EA /* EtubuClusterHotspots.swift */; };
@@ -39,6 +40,8 @@
 		092E851E354A4ED9AC1E9CBF /* EtubuClusterLayoutMetrics.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACC01D7F9C404162B498B1C7 /* EtubuClusterLayoutMetrics.swift */; };
 		2F252AFA26EA4EDDA8CA8C74 /* EtubuRuntimeProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE1FD476103B49E0B26A6B17 /* EtubuRuntimeProfile.swift */; };
 		A2LIVERADAR00000000001 /* EtubuLiveRadarMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2LIVERADARREF000000001 /* EtubuLiveRadarMonitor.swift */; };
+		A3OSMHAZMON00000000001 /* EtubuOsmHazardsMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3OSMHAZMONREF00000001 /* EtubuOsmHazardsMonitor.swift */; };
+		A3HAZMERGE000000000001 /* EtubuHazardMerge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3HAZMERGEREF000000001 /* EtubuHazardMerge.swift */; };
 		0A9CD6BC82CB417487BEDC3F /* EtubuSharedDriveSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBBD99538A6A4806AFCECC82 /* EtubuSharedDriveSnapshot.swift */; };
 		A2TRIPHIST000000000001 /* EtubuTripHistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2TRIPHISTREF000000001 /* EtubuTripHistoryStore.swift */; };
 		A2TRIPANAL000000000001 /* EtubuTripAnalyticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2TRIPANALREF000000001 /* EtubuTripAnalyticsView.swift */; };
@@ -124,6 +127,7 @@ A1STATUSWIDGETBUILD001 /* EtubuStatusWidget.swift in Sources */ = {isa = PBXBuil
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		A1B2C3D4E5F60718293A4B5C /* EtubuAppExit.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuAppExit.swift; sourceTree = "<group>"; };
 		B67E1884622C423EA48A68EA /* EtubuClusterHotspots.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuClusterHotspots.swift; sourceTree = "<group>"; };
 		FC7496DCE28D2B084DE2D7BB /* EtubuBrandMark.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuBrandMark.swift; sourceTree = "<group>"; };
 		AFD2F4DDF4A94910B67BE762 /* EtubuAppSummary.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuAppSummary.swift; sourceTree = "<group>"; };
@@ -188,6 +192,8 @@ A1STATUSWIDGETBUILD001 /* EtubuStatusWidget.swift in Sources */ = {isa = PBXBuil
 		ACC01D7F9C404162B498B1C7 /* EtubuClusterLayoutMetrics.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuClusterLayoutMetrics.swift; sourceTree = "<group>"; };
 		DE1FD476103B49E0B26A6B17 /* EtubuRuntimeProfile.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuRuntimeProfile.swift; sourceTree = "<group>"; };
 		A2LIVERADARREF000000001 /* EtubuLiveRadarMonitor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuLiveRadarMonitor.swift; sourceTree = "<group>"; };
+		A3OSMHAZMONREF00000001 /* EtubuOsmHazardsMonitor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuOsmHazardsMonitor.swift; sourceTree = "<group>"; };
+		A3HAZMERGEREF000000001 /* EtubuHazardMerge.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuHazardMerge.swift; sourceTree = "<group>"; };
 		EBBD99538A6A4806AFCECC82 /* EtubuSharedDriveSnapshot.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuSharedDriveSnapshot.swift; sourceTree = "<group>"; };
 		A2TRIPHISTREF000000001 /* EtubuTripHistoryStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuTripHistoryStore.swift; sourceTree = "<group>"; };
 		A2TRIPANALREF000000001 /* EtubuTripAnalyticsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuTripAnalyticsView.swift; sourceTree = "<group>"; };
@@ -272,6 +278,8 @@ A1STATUSWIDGETFILEREF01 /* EtubuStatusWidget.swift */ = {isa = PBXFileReference;
 				ACC01D7F9C404162B498B1C7 /* EtubuClusterLayoutMetrics.swift */,
 				DE1FD476103B49E0B26A6B17 /* EtubuRuntimeProfile.swift */,
 				A2LIVERADARREF000000001 /* EtubuLiveRadarMonitor.swift */,
+				A3OSMHAZMONREF00000001 /* EtubuOsmHazardsMonitor.swift */,
+				A3HAZMERGEREF000000001 /* EtubuHazardMerge.swift */,
 				EBBD99538A6A4806AFCECC82 /* EtubuSharedDriveSnapshot.swift */,
 				A2TRIPHISTREF000000001 /* EtubuTripHistoryStore.swift */,
 				A2TRIPANALREF000000001 /* EtubuTripAnalyticsView.swift */,
@@ -284,6 +292,7 @@ A1STATUSWIDGETFILEREF01 /* EtubuStatusWidget.swift */ = {isa = PBXFileReference;
 				E9F5B02A3D8C4F1B0A42D7E3 /* EtubuNativeDriveAudio.swift */,
 				FE46C929135374CA2FCB40FF /* EtubuClusterAudioBridge.swift */,
 				FF992E9F8FF9FD1410C7C698 /* EtubuClusterComponents.swift */,
+				A1B2C3D4E5F60718293A4B5C /* EtubuAppExit.swift */,
 				626F3BFA180A5A546CC8690F /* EtubuClusterFonts.swift */,
 				F3C0A0A5E70E7F945B3BE33A /* EtubuClusterL10n.swift */,
 				2CD1FEDB9D02A1C787A41D4D /* EtubuClusterPresenter.swift */,
@@ -518,7 +527,7 @@ A1STATUSWIDGETFILEREF01 /* EtubuStatusWidget.swift */ = {isa = PBXFileReference;
 			);
 			mainGroup = 504EC2FB1FED79650016851F;
 			packageReferences = (
-				79A33E40C9F7ACCB9C60A494 /* XCRemoteSwiftPackageReference "swift-tesla-ble" */,
+				79A33E40C9F7ACCB9C60A494 /* XCLocalSwiftPackageReference "swift-tesla-ble" */,
 			);
 			productRefGroup = 504EC3051FED79650016851F /* Products */;
 			projectDirPath = "";
@@ -606,6 +615,8 @@ A1STATUSWIDGETFILEREF01 /* EtubuStatusWidget.swift */ = {isa = PBXFileReference;
 				092E851E354A4ED9AC1E9CBF /* EtubuClusterLayoutMetrics.swift in Sources */,
 				2F252AFA26EA4EDDA8CA8C74 /* EtubuRuntimeProfile.swift in Sources */,
 				A2LIVERADAR00000000001 /* EtubuLiveRadarMonitor.swift in Sources */,
+				A3OSMHAZMON00000000001 /* EtubuOsmHazardsMonitor.swift in Sources */,
+				A3HAZMERGE000000000001 /* EtubuHazardMerge.swift in Sources */,
 				0A9CD6BC82CB417487BEDC3F /* EtubuSharedDriveSnapshot.swift in Sources */,
 				A2TRIPHIST000000000001 /* EtubuTripHistoryStore.swift in Sources */,
 				A2TRIPANAL000000000001 /* EtubuTripAnalyticsView.swift in Sources */,
@@ -620,6 +631,7 @@ A1STATUSWIDGETFILEREF01 /* EtubuStatusWidget.swift */ = {isa = PBXFileReference;
 				D8E4A91F2C7B4E0A9F31C6D2 /* EtubuNativeDriveAudio.swift in Sources */,
 				C52403B05251C8A6F439B2DD /* EtubuClusterAudioBridge.swift in Sources */,
 				F7B9E498C41B1DAD786CC501 /* EtubuClusterComponents.swift in Sources */,
+				B2C3D4E5F60718293A4B5C6D /* EtubuAppExit.swift in Sources */,
 				685B9805251CFB3BBFD309C0 /* EtubuClusterFonts.swift in Sources */,
 				0A503F7D2005DA0F00D3C937 /* EtubuClusterL10n.swift in Sources */,
 				0C5CBD55AAE06F7BC2B1A3DC /* EtubuClusterPresenter.swift in Sources */,
@@ -955,21 +967,16 @@ A1STATUSWIDGETFILEREF01 /* EtubuStatusWidget.swift */ = {isa = PBXFileReference;
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		79A33E40C9F7ACCB9C60A494 /* XCRemoteSwiftPackageReference "swift-tesla-ble" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/shoujiaxin/swift-tesla-ble";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 1.0.0;
-			};
+/* Begin XCLocalSwiftPackageReference section */
+		79A33E40C9F7ACCB9C60A494 /* XCLocalSwiftPackageReference "swift-tesla-ble" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../Vendor/swift-tesla-ble;
 		};
-/* End XCRemoteSwiftPackageReference section */
+/* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
 		3CEA99BB36FC8843A6397BAC /* TeslaBLE */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 79A33E40C9F7ACCB9C60A494 /* XCRemoteSwiftPackageReference "swift-tesla-ble" */;
 			productName = TeslaBLE;
 		};
 /* End XCSwiftPackageProductDependency section */

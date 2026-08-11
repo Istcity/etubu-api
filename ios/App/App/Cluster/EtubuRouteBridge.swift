@@ -686,7 +686,9 @@ enum EtubuRouteBridge {
     static func adaptVehicleNavIfNeeded(
         destination: String?,
         remainKm: Double?,
-        etaMinutes: Double?
+        etaMinutes: Double?,
+        destLat: Double? = nil,
+        destLng: Double? = nil
     ) {
         let dest = (destination ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard dest.count >= 2 else { return }
@@ -698,26 +700,7 @@ enum EtubuRouteBridge {
         if t.routeActive, !routeFromVehicleNav { return }
         if let until = suppressVehicleNavAdaptUntil, Date() < until { return }
 
-        // Aynı hedef — kalan mesafe güncelle + arka planda hazard yenile (radar bayatlamasın).
-        let key = dest.lowercased()
-        if t.routeActive, routeFromVehicleNav, key == lastVehicleNavDestKey {
-            if let remainKm, remainKm > 0 {
-                t.applyCapRouteRemain(active: true, remainKm: remainKm)
-            }
-            if let etaMinutes, etaMinutes >= 0 {
-                t.navEtaMinutes = etaMinutes
-            }
-            t.navDestination = dest
-            t.routeTo = dest
-            // Periyodik zenginleştirme (OSM/EGM radar)
-            enrichActiveRouteFromNativeIfNeeded()
-            Task { @MainActor in
-                EtubuDriveWarnings.shared.startPolling()
-            }
-            return
-        }
-
-        // UI’yi hemen güncelle; polyline arka planda.
+        // UI’yi hemen güncelle.
         t.navDestination = dest
         t.routeTo = dest
         if let remainKm, remainKm > 0 {
@@ -727,11 +710,74 @@ enum EtubuRouteBridge {
             t.navEtaMinutes = etaMinutes
         }
 
+        // Aynı hedef — kalan mesafe güncelle + arka planda hazard yenile (radar bayatlamasın).
+        let key = dest.lowercased()
+        if t.routeActive, routeFromVehicleNav, key == lastVehicleNavDestKey {
+            enrichActiveRouteFromNativeIfNeeded()
+            Task { @MainActor in
+                EtubuDriveWarnings.shared.startPolling()
+            }
+            return
+        }
+
+        // Resolve coordinates: Tesla route pin → Home/Work saved pins → geocode.
+        // Never invent Home/Work via Nominatim (wrong cities).
+        let coordPlace: EtubuRoutePlace? = {
+            if let destLat, let destLng,
+               destLat.isFinite, destLng.isFinite,
+               abs(destLat) > 0.01 || abs(destLng) > 0.01 {
+                return EtubuRoutePlace(
+                    label: dest,
+                    cityName: "",
+                    districtName: "",
+                    isMyLocation: false,
+                    lat: destLat,
+                    lng: destLng
+                )
+            }
+            if let pin = EtubuVehicleTelemetry.savedPin(for: dest) {
+                return EtubuRoutePlace(
+                    label: dest,
+                    cityName: "",
+                    districtName: "",
+                    isMyLocation: false,
+                    lat: pin.lat,
+                    lng: pin.lng
+                )
+            }
+            return nil
+        }()
+
+        if isAmbiguousVehicleDest(dest), coordPlace == nil {
+            // Label + remain only — do not plan garbage Home/Work routes.
+            return
+        }
+
         vehicleNavAdaptWork?.cancel()
         let work = DispatchWorkItem {
             lastVehicleNavDestKey = key
-            // Önce Nominatim/TR resolve ile toPlace al — EGM il/ilçe eşlemesi arka planda.
+            if let place = coordPlace {
+                plan(from: "Konumum", to: dest, toPlace: place, fromVehicleNav: true) { ok, _ in
+                    if ok {
+                        Task { @MainActor in
+                            EtubuVehicleTelemetry.shared.routeActive = true
+                            EtubuVehicleTelemetry.shared.routeTo = dest
+                            EtubuVehicleTelemetry.shared.navDestination = dest
+                            EtubuVehicleTelemetry.shared.routeDestLat = place.lat
+                            EtubuVehicleTelemetry.shared.routeDestLng = place.lng
+                            EtubuDriveWarnings.shared.startPolling()
+                            EtubuMapLocationHelper.shared.enableBackgroundForRouteIfNeeded()
+                            enrichActiveRouteFromNativeIfNeeded()
+                        }
+                    }
+                }
+                return
+            }
+            // Named place (not Home/Work) — geocode; drop if resolve fails.
             resolve(text: dest) { place in
+                guard let place, place.lat != nil, place.lng != nil else { return }
+                // Reject geocode that looks like a wrong Home/Work substitute.
+                if isAmbiguousVehicleDest(dest) { return }
                 plan(from: "Konumum", to: dest, toPlace: place, fromVehicleNav: true) { ok, _ in
                     if ok {
                         Task { @MainActor in
@@ -748,6 +794,17 @@ enum EtubuRouteBridge {
         }
         vehicleNavAdaptWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: work)
+    }
+
+    /// Tesla "Home"/"Work"/localized favorites — must not Nominatim to random cities.
+    private static func isAmbiguousVehicleDest(_ dest: String) -> Bool {
+        let fold = dest.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let ambiguous: Set<String> = [
+            "home", "work", "ev", "iş", "is", "office",
+            "casa", "maison", "zuhause", "arbeit", "travail",
+            "oficina", "家", "仕事", "my home", "my work",
+        ]
+        return ambiguous.contains(fold)
     }
 
     /// If Cap RouteGuard left hazards empty (Radars[] often blank), fill from native enrichers.
@@ -793,7 +850,7 @@ enum EtubuRouteBridge {
                     data: [:], coords: latLng, includeSeeds: true
                 ))
             }
-            // Always fetch OSM cameras (EGM empty / navOnly / overseas).
+            // OSM cameras: led outside TR / empty EGM; supplement inside TR (no cut of official).
             async let osmTask = EtubuTrafikAPI.fetchOsmCamerasAlong(coords: latLng)
             async let chargeTask: [EtubuRouteHazard] = hasCharge
                 ? []
@@ -802,12 +859,16 @@ enum EtubuRouteBridge {
                 ? []
                 : EtubuTrafikAPI.fetchWeatherAlong(coords: latLng)
             let (osmCams, chargeHaz, wxHaz) = await (osmTask, chargeTask, weatherTask)
-            merged.append(contentsOf: osmCams)
+            let officialPart = merged.filter { !EtubuHazardMerge.isOsmSource($0) }
+            let priorOsm = merged.filter { EtubuHazardMerge.isOsmSource($0) }
+            merged = EtubuTrafikAPI.mergeOfficialWithOsm(
+                official: officialPart,
+                osm: priorOsm + osmCams,
+                inTurkey: inTR
+            )
             merged.append(contentsOf: chargeHaz)
             merged.append(contentsOf: wxHaz)
-            // Dedupe by id
-            var seen = Set<String>()
-            merged = merged.filter { seen.insert($0.id).inserted }
+            merged = EtubuHazardMerge.dedupePreferOfficial(merged)
             merged.sort { ($0.routeIdx ?? 0) < ($1.routeIdx ?? 0) }
             guard merged.count > existing.count || !merged.isEmpty else { return }
 
@@ -1014,12 +1075,14 @@ enum EtubuRouteBridge {
                 hazards = []
             }
 
-            // Always fetch OSM cameras (EGM empty/navOnly + overseas); parallel with charge/weather later.
+            // OSM: led outside TR / empty EGM; supplement in TR (official wins on conflict).
             async let osmEarly = EtubuTrafikAPI.fetchOsmCamerasAlong(coords: latLngCoords)
             let osmFirst = await osmEarly
-            hazards.append(contentsOf: osmFirst)
-            var seenEarly = Set<String>()
-            hazards = hazards.filter { seenEarly.insert($0.id).inserted }
+            hazards = EtubuTrafikAPI.mergeOfficialWithOsm(
+                official: hazards,
+                osm: osmFirst,
+                inTurkey: domestic
+            )
 
             let remainKm: Double = {
                 guard latLngCoords.count >= 2 else { return 0 }

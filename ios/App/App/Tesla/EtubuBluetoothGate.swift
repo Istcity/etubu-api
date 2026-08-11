@@ -55,6 +55,8 @@ final class EtubuBluetoothGate: NSObject, CBCentralManagerDelegate {
                 EtubuVehicleTelemetry.shared.statusMessage = "Bluetooth kapalı"
             } else if central.state == .unauthorized {
                 EtubuVehicleTelemetry.shared.statusMessage = "Bluetooth izni gerekli"
+            } else if central.state == .poweredOn {
+                EtubuTeslaBleSession.shared.resumeAutoConnectIfNeeded()
             }
         }
     }

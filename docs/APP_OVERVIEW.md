@@ -18,19 +18,22 @@ Etubu, Tesla (BLE) odaklı bir **sürüş kümesi (cluster)** uygulamasıdır: h
 | Capacitor Web (`RouteGuard`, AudioEngine) | Rota/uyarı/ses yedeği |
 | `EtubuTeslaBleSession` | BLE telemetri + komutlar |
 | `EtubuRouteBridge` | Rota planı (EGM TR / OSRM+OSM global) |
-| `EtubuDriveWarnings` + `EtubuLiveRadarMonitor` | Radar / koridor / yaklaşma |
+| `EtubuDriveWarnings` + `EtubuLiveRadarMonitor` + `EtubuOsmHazardsMonitor` | Radar / koridor / OSM yerel + yaklaşma |
+| `EtubuHazardMerge` | EGM primary / OSM supplement|led dedupe |
 | `EtubuPremiumManager` | StoreKit lifetime premium |
 | Live Activity | Dynamic Island özeti |
 
 ## Rota mantığı
 
-1. **Uygulamada rota:** Kullanıcı varış yazar → TR’de EGM (+ seed/OSM), yurt dışında OSRM + Overpass.
+1. **Uygulamada rota:** Kullanıcı varış yazar → TR’de EGM (+ seed; OSM gap fill), yurt dışında OSRM + Overpass. Kaynak birleşimi: `docs/HAZARD_SOURCES.md`.
 2. **İl/ilçe:** UI’da zorunlu değil; arka planda TR index veya Nominatim ile çözülür.
 3. **Bölge cold start:** GPS yokken TR varsayılmaz — ilk fix sonrası pipeline seçilir (Maestro İstanbul GPS ile TR yolu açılır).
 4. **Araç navigasyonu:** Tesla `activeRouteDestination` paylaşırsa ve app’te kullanıcı rotası yoksa → otomatik “Konumum → hedef” planı + kritik nokta servisleri (**Premium** — free’de plan/radar yok; dial + OSM hız + hedef etiketi kalır).
 5. App rotası aktifken Tesla nav hedefi **ezmez** (bağımsız hat).
 6. Araç rotadan **>600 m** sapınca otomatik yeniden plan + EGM/OSM kritik nokta yenileme.
 7. Koridor ortalaması: girişte araç hızı; ilerledikçe mesafe/süre ortalamasına blend; YAVAŞLA ölçülen `trueAvg` ile.
+8. **GPS chip:** üst bar `GPS ✓` / `İzin yok` / `Sim`; izin yok veya sim ortamında Bağcılar yedek konum (Maestro İstanbul fix’i ezilmez).
+9. **Canlı OSM:** araç ±150 m / 60 s Overpass (geçit, ışık, tümsek…); EGM varken OSM yalnızca boşluk doldurur.
 
 Ayrıntılı BLE poll / duck: `docs/TESLA_BLE_TELEMETRY.md`.
 

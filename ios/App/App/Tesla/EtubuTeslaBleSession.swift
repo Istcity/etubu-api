@@ -318,7 +318,10 @@ final class EtubuTeslaBleSession: ObservableObject {
                 pairStep = allowPairFallback ? .none : .failed
                 telemetry.connectionState = .failed
                 telemetry.statusMessage = error.localizedDescription
-                // Otomatik yeniden bağlanma yok — yalnızca uygulama açılışı / kullanıcı.
+                // Otomatik yeniden bağlanma — eşleşmiş VIN varsa tekrar dene.
+                if allowPairFallback, EtubuTeslaVinStore.pairedConfirmed(for: vin) {
+                    scheduleReconnect(vin: vin, debounce: 2.5)
+                }
             }
         }
     }
@@ -382,8 +385,9 @@ final class EtubuTeslaBleSession: ObservableObject {
                 let sleepNs: UInt64 = await MainActor.run {
                     let parked = self.telemetry.kmh < 3
                     let missing = self.telemetry.needsVehicleExtrasRefresh
-                    if missing { return parked ? 900_000_000 : 650_000_000 }
-                    return parked ? 2_200_000_000 : 1_100_000_000
+                    // Charge/climate: prefer higher refresh while connected.
+                    if missing { return parked ? 700_000_000 : 450_000_000 }
+                    return parked ? 1_400_000_000 : 700_000_000
                 }
                 try? await Task.sleep(nanoseconds: sleepNs)
             }
@@ -481,24 +485,27 @@ final class EtubuTeslaBleSession: ObservableObject {
 
     private func applyDrive(_ drive: DriveState) {
         guard !demoSuspended else { return }
-        let mph = drive.speedMph ?? 0
-        // Bozuk / imkansız paket — yayınlama (ama oturum sağlığını taze tut).
-        guard mph.isFinite, mph >= 0, mph <= 175 else {
+        // Nil speedMph → keep prior km/h (do not publish 0).
+        let kmh: Int? = {
+            guard let mph = drive.speedMph, mph.isFinite, mph >= 0, mph <= 175 else {
+                return nil
+            }
+            return max(0, Int((mph * 1.60934).rounded()))
+        }()
+        if kmh == nil, drive.shiftState == nil, drive.powerKW == nil,
+           drive.activeRouteDestination == nil {
             telemetry.touchDriveHealth()
             return
         }
-        // Prefer nearest km/h; float mph → km/h without coarse banding.
-        let kmh = max(0, Int((mph * 1.60934).rounded()))
-        let gear: String = {
+        let gear: String? = {
             switch drive.shiftState {
             case .park: return "P"
             case .reverse: return "R"
             case .neutral: return "N"
             case .drive: return "D"
             case .none:
-                // Unset shift + hareket → stuck "P" park-gate hızı sıfırlamasın.
-                if kmh >= 3 { return "D" }
-                return telemetry.gear
+                if let kmh, kmh >= 3 { return "D" }
+                return nil
             }
         }()
         let odoKm: Int? = {
@@ -512,11 +519,19 @@ final class EtubuTeslaBleSession: ObservableObject {
             return mi * 1.60934
         }()
         let power: Int? = {
-            guard let kw = drive.powerKW else { return telemetry.powerKw }
-            // Aşırı gürültü paketini yutma; önceki gücü koru.
-            if abs(kw) > 800 { return telemetry.powerKw }
+            guard let kw = drive.powerKW else { return nil }
+            if abs(kw) > 800 { return nil }
             return kw
         }()
+        let vehicleArrival: Int? = {
+            guard let e = drive.activeRouteEnergyAtArrival, e.isFinite else { return nil }
+            // Tesla may report 0–1 fraction or 0–100 percent.
+            let pct = e <= 1.5 ? e * 100.0 : e
+            guard pct >= 0, pct <= 100 else { return nil }
+            return Int(pct.rounded())
+        }()
+        let destLat = drive.activeRouteLatitude
+        let destLng = drive.activeRouteLongitude
         telemetry.applyTeslaDrive(
             kmh: kmh,
             gear: gear,
@@ -524,7 +539,10 @@ final class EtubuTeslaBleSession: ObservableObject {
             odometerKm: odoKm,
             navDestination: drive.activeRouteDestination,
             navRemainKm: remainKm,
-            navEtaMinutes: drive.activeRouteMinutesToArrival
+            navEtaMinutes: drive.activeRouteMinutesToArrival,
+            vehicleEnergyAtArrival: vehicleArrival,
+            navDestLat: destLat,
+            navDestLng: destLng
         )
         // EV ses — kullanıcı açtıysa Tesla’da da demo gibi motoru ayakta tut.
         if EtubuClusterAudioBridge.isSoundWanted {
@@ -545,7 +563,9 @@ final class EtubuTeslaBleSession: ObservableObject {
         EtubuRouteBridge.adaptVehicleNavIfNeeded(
             destination: drive.activeRouteDestination,
             remainKm: remainKm,
-            etaMinutes: drive.activeRouteMinutesToArrival
+            etaMinutes: drive.activeRouteMinutesToArrival,
+            destLat: destLat,
+            destLng: destLng
         )
         // Live Activity: max ~2 Hz so faster drive poll doesn't spam
         if Date().timeIntervalSince(lastLiveActivityPush) >= 0.5 {
@@ -556,7 +576,7 @@ final class EtubuTeslaBleSession: ObservableObject {
 
     private func applySnapshot(_ snap: TeslaVehicleSnapshot) {
         if let charge = snap.charge {
-            // SPM VehicleSnapshotMapper maps unset optionals → 0 (not nil). Treat protocol zeros carefully.
+            // Mapper now preserves optionals (unset ≠ 0).
             let rangeKm: Int? = {
                 let mi = charge.estBatteryRangeMiles ?? charge.batteryRangeMiles
                 guard let mi, mi.isFinite, mi > 0.5, mi < 800 else { return nil }
@@ -565,12 +585,8 @@ final class EtubuTeslaBleSession: ObservableObject {
             let charging = charge.chargingStatus == .charging || charge.chargingStatus == .starting
             let soc: Int? = {
                 guard let bl = charge.batteryLevel else { return nil }
-                // Unset-as-0 from mapper: only accept 0% with charge/range proof.
                 if bl < 0 || bl > 100 { return nil }
-                if bl > 0 { return bl }
-                if charging { return 0 }
-                if rangeKm != nil { return 0 }
-                return nil
+                return bl
             }()
             let limit: Int? = {
                 guard let lim = charge.chargeLimitPercent, (50...100).contains(lim) else { return nil }
@@ -585,13 +601,17 @@ final class EtubuTeslaBleSession: ObservableObject {
                 amps: charge.chargerCurrent.flatMap { $0 == 0 && !charging ? nil : $0 },
                 volts: charge.chargerVoltage.flatMap { $0 == 0 && !charging ? nil : $0 },
                 minutesToFull: charge.minutesToFullCharge.flatMap { $0 > 0 ? $0 : nil },
-                portOpen: charge.chargePortOpen
+                portOpen: charge.chargePortOpen,
+                homeLat: charge.homeLatitude,
+                homeLng: charge.homeLongitude,
+                workLat: charge.workLatitude,
+                workLng: charge.workLongitude
             )
         }
         if let climate = snap.climate {
-            // If one side is exact 0°C and the other is a real temp, keep the 0 (don't nil both).
-            let out = Self.sanitizeTempC(climate.outsideTempCelsius, other: climate.insideTempCelsius)
-            let inn = Self.sanitizeTempC(climate.insideTempCelsius, other: climate.outsideTempCelsius)
+            // Optionals are real now — no unset→0.0 fake temps.
+            let out = climate.outsideTempCelsius.flatMap { Self.sanitizeTempC($0, other: climate.insideTempCelsius) }
+            let inn = climate.insideTempCelsius.flatMap { Self.sanitizeTempC($0, other: climate.outsideTempCelsius) }
             if out != nil || inn != nil || climate.isClimateOn != nil {
                 telemetry.applyTeslaClimate(
                     outsideC: out,
@@ -685,33 +705,31 @@ final class EtubuTeslaBleSession: ObservableObject {
         }
     }
 
-    /// Sürüş / aktif rota / taze Tesla oturumu varken kopunca yeniden dene; uzun parkta sessiz.
+    /// Sürüş / aktif rota / eşleşmiş VIN varken kopunca yeniden dene.
     private var shouldAutoReconnect: Bool {
         guard !userStopped, !demoSuspended else { return false }
-        guard EtubuTeslaVinStore.vin != nil else { return false }
-        let t = telemetry
-        if t.kmh >= 3 || t.routeActive { return true }
-        // Park-gate veya geçici 0 hız olsa bile son drive paketi yeniyse toparla.
-        if t.source == .tesla,
-           let last = t.lastDriveAt,
-           Date().timeIntervalSince(last) < 90 {
-            return true
-        }
-        return false
+        guard let vin = EtubuTeslaVinStore.vin,
+              EtubuTeslaVinStore.pairedConfirmed(for: vin) else { return false }
+        return true
     }
 
     private func scheduleReconnect(vin: String, debounce: TimeInterval = 0) {
         guard shouldAutoReconnect else { return }
         guard EtubuTeslaVinStore.pairedConfirmed(for: vin) else { return }
         if isSessionHealthy { return }
-        guard reconnectAttempt < 4 else {
+        guard reconnectAttempt < 8 else {
             telemetry.connectionState = .failed
             telemetry.statusMessage = EtubuClusterL10n.t("bleConnectFailed")
+            // Allow another wave after cooldown when phone re-enters car BT range.
+            Task { [weak self] in
+                try? await Task.sleep(nanoseconds: 30_000_000_000)
+                await MainActor.run { self?.reconnectAttempt = 0 }
+            }
             return
         }
         reconnectTask?.cancel()
         reconnectAttempt += 1
-        let delay = max(debounce, min(8.0, pow(2.0, Double(min(reconnectAttempt, 4) - 1))))
+        let delay = max(debounce, min(10.0, pow(2.0, Double(min(reconnectAttempt, 5) - 1))))
         telemetry.connectionState = .reconnecting
         telemetry.statusMessage = String(format: EtubuClusterL10n.t("bleReconnectInFmt"), Int(delay))
         reconnectTask = Task { [weak self] in
@@ -729,10 +747,23 @@ final class EtubuTeslaBleSession: ObservableObject {
         }
     }
 
-    /// SPM Climate mapper unset optional → 0.0; gerçek 0°C ile karıştırma.
-    /// Exact ~0 alone (both sides unset) → nil; if the other side is a real temp, keep 0°C.
-    private static func sanitizeTempC(_ value: Double?, other: Double?) -> Double? {
-        guard let value, value.isFinite else { return nil }
+    /// Foreground / BT ready — restore paired session without re-pair.
+    func resumeAutoConnectIfNeeded() {
+        guard !demoSuspended, !userStopped else { return }
+        guard let vin = EtubuTeslaVinStore.vin,
+              EtubuTeslaVinStore.pairedConfirmed(for: vin) else { return }
+        if isSessionHealthy {
+            if pollTask == nil, let client { startPolling(client) }
+            return
+        }
+        reconnectAttempt = 0
+        bootstrapIfPossible(reason: .userRequested)
+    }
+
+    /// SPM Climate mapper unset optional → nil; gerçek 0°C ile karıştırma.
+    /// Exact ~0 alone (both sides unset/nil) → nil; if the other side is a real temp, keep 0°C.
+    private static func sanitizeTempC(_ value: Double, other: Double?) -> Double? {
+        guard value.isFinite else { return nil }
         if value < -50 || value > 70 { return nil }
         if abs(value) < 0.05 {
             let otherValid = other.map {

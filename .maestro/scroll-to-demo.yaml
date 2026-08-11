@@ -1,0 +1,31 @@
+appId: com.etubu.app
+---
+# Settings → Demo toggle. Skip scroll if already visible (extra swipe can dismiss sheet).
+- extendedWaitUntil:
+    visible: "Uygulama hakkında"
+    timeout: 10000
+- runFlow:
+    when:
+      notVisible:
+        id: "etubu.demo.toggle"
+    commands:
+      - scrollUntilVisible:
+          element:
+            text: "Demo.*"
+          direction: DOWN
+          timeout: 20000
+          speed: 35
+          visibilityPercentage: 25
+          centerElement: false
+      - scrollUntilVisible:
+          element:
+            id: "etubu.demo.toggle"
+          direction: DOWN
+          timeout: 25000
+          speed: 35
+          visibilityPercentage: 25
+          centerElement: false
+- extendedWaitUntil:
+    visible:
+      id: "etubu.demo.toggle"
+    timeout: 8000

@@ -1,11 +1,13 @@
 /**
  * OSM Overpass — canlı sürüş kritik noktaları + yol hız limiti.
+ * EGM/official birincil; OSM led (yurt dışı / EGM boş) veya supplement (TR gap fill).
  * RadarAlert kameralarından ayrı: daha sık yenileme, daha geniş tehlike türleri.
  */
 const OsmHazards = (() => {
   const FETCH_RADIUS_M = 900;
   const REFETCH_DIST_M = 150;
   const REFETCH_AGE_MS = 60 * 1000;
+  const DEDUPE_M = 70;
   const OVERPASS_URLS = [
     "https://overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
@@ -14,6 +16,7 @@ const OsmHazards = (() => {
   /** Mesafe eşikleri (m) — normal / acil */
   const RULES = {
     radar: { warn: 350, critical: 120, label: "Radar", icon: "📸", kind: "radar" },
+    corridor: { warn: 350, critical: 120, label: "Hız koridoru", icon: "🛣️", kind: "corridor" },
     railway: { warn: 250, critical: 80, label: "Demiryolu geçidi", icon: "🚂", kind: "railway" },
     traffic_light: { warn: 100, critical: 35, label: "Trafik lambası", icon: "🚦", kind: "traffic_light" },
     stop: { warn: 80, critical: 25, label: "Dur", icon: "🛑", kind: "stop" },
@@ -23,6 +26,9 @@ const OsmHazards = (() => {
   };
 
   let points = [];
+  /** Official / EGM / route points — OSM bunları kesmez. */
+  let officialPoints = [];
+  let inTurkey = true;
   let roadMaxspeed = null;
   let fetchCenter = null;
   let fetchedAt = 0;
@@ -30,6 +36,7 @@ const OsmHazards = (() => {
   let urlIndex = 0;
   let lastSpokenId = "";
   let lastSpokenAt = 0;
+  let lastFetchFailed = false;
 
   function haversineM(lat1, lon1, lat2, lon2) {
     const R = 6371000;
@@ -59,6 +66,66 @@ const OsmHazards = (() => {
     return d > 180 ? 360 - d : d;
   }
 
+  function isOsmId(id) {
+    return typeof id === "string" && (id.startsWith("osm-") || id.startsWith("osmhz-"));
+  }
+
+  function isEnforcement(kind) {
+    return kind === "radar" || kind === "corridor" || kind === "control";
+  }
+
+  function sameTypeFamily(a, b) {
+    if (a === b) return true;
+    const stop = { stop: 1, give_way: 1 };
+    return !!(stop[a] && stop[b]);
+  }
+
+  function osmMode() {
+    const officialEnforcement = (officialPoints || []).some(
+      (p) => !isOsmId(p.id) && isEnforcement(p.kind || p.type)
+    );
+    if (!inTurkey) return "led";
+    if (!officialEnforcement) return "led";
+    return "supplement";
+  }
+
+  /**
+   * Official wins on same-type proximity; OSM only fills gaps in supplement mode.
+   */
+  function mergeOfficialPrimary(official, osm, mode) {
+    const out = (official || []).slice();
+    for (const cand of osm || []) {
+      const kind = cand.kind || cand.type;
+      if (mode === "supplement" && isEnforcement(kind)) {
+        const clash = out.some((o) => {
+          const ok = o.kind || o.type;
+          return (
+            isEnforcement(ok) &&
+            haversineM(o.lat, o.lng, cand.lat, cand.lng) <= DEDUPE_M
+          );
+        });
+        if (clash) continue;
+      }
+      const dup = out.some(
+        (o) =>
+          sameTypeFamily(o.kind || o.type, kind) &&
+          haversineM(o.lat, o.lng, cand.lat, cand.lng) <= DEDUPE_M
+      );
+      if (dup) continue;
+      out.push(cand);
+    }
+    return out;
+  }
+
+  function setOfficialPoints(list, opts = {}) {
+    officialPoints = Array.isArray(list) ? list.filter((p) => p && p.lat != null && p.lng != null) : [];
+    if (typeof opts.inTurkey === "boolean") inTurkey = opts.inTurkey;
+  }
+
+  function setInTurkey(v) {
+    inTurkey = !!v;
+  }
+
   function classifyNode(tags) {
     if (!tags) return null;
     if (
@@ -67,6 +134,13 @@ const OsmHazards = (() => {
       tags["camera:type"] === "speed"
     ) {
       return "radar";
+    }
+    if (
+      tags.enforcement === "average_speed" ||
+      tags["camera:type"] === "section" ||
+      tags.traffic_sign === "average_speed"
+    ) {
+      return "corridor";
     }
     if (
       tags.railway === "level_crossing" ||
@@ -131,6 +205,7 @@ const OsmHazards = (() => {
     const query = `[out:json][timeout:18];(
       node["highway"="speed_camera"](around:${r},${lat},${lng});
       node["enforcement"="maxspeed"](around:${r},${lat},${lng});
+      node["enforcement"="average_speed"](around:${r},${lat},${lng});
       node["railway"="level_crossing"](around:${r},${lat},${lng});
       node["railway"="crossing"](around:${r},${lat},${lng});
       node["highway"="traffic_signals"](around:${r},${lat},${lng});
@@ -175,8 +250,9 @@ const OsmHazards = (() => {
         const type = classifyNode(tags);
         if (!type || !RULES[type]) continue;
         next.push({
-          id: `osm-hz-${el.id}`,
+          id: `osmhz-${el.id}`,
           type,
+          kind: type,
           lat: nlat,
           lng: nlng,
           maxspeed: parseMaxspeed(tags.maxspeed),
@@ -184,7 +260,9 @@ const OsmHazards = (() => {
         });
       }
 
-      points = next;
+      const mode = osmMode();
+      points = mergeOfficialPrimary([], next, mode);
+      lastFetchFailed = false;
       if (nearestWayLimit != null && nearestWayDist < 90) {
         roadMaxspeed = nearestWayLimit;
       }
@@ -192,6 +270,7 @@ const OsmHazards = (() => {
       fetchedAt = Date.now();
     } catch (_) {
       urlIndex += 1;
+      lastFetchFailed = true;
       fetchedAt = Date.now() - REFETCH_AGE_MS + 20 * 1000;
     } finally {
       fetching = false;
@@ -204,18 +283,25 @@ const OsmHazards = (() => {
     return `${(m / 1000).toFixed(m < 10000 ? 1 : 0)} km`;
   }
 
+  function activePoints() {
+    const mode = osmMode();
+    return mergeOfficialPrimary(officialPoints, points, mode);
+  }
+
   function listNearby(lat, lng, heading, limit = 4) {
     const headingOk = Number.isFinite(heading);
     const scored = [];
-    for (const p of points) {
+    for (const p of activePoints()) {
+      const type = p.type || p.kind;
       const distM = haversineM(lat, lng, p.lat, p.lng);
-      const rule = RULES[p.type];
+      const rule = RULES[type];
       if (!rule || distM > rule.warn * 1.4) continue;
       const brg = bearingDeg(lat, lng, p.lat, p.lng);
       const ahead = !headingOk || angleDiff(heading, brg) <= 75;
       if (!ahead && distM > 40) continue;
       scored.push({
         ...p,
+        type,
         distM,
         dist: formatDist(distM),
         icon: rule.icon,
@@ -223,6 +309,7 @@ const OsmHazards = (() => {
         kind: rule.kind,
         stage: distM <= rule.critical ? "critical" : distM <= rule.warn * 0.55 ? "near" : "mid",
         critical: distM <= rule.critical,
+        source: isOsmId(p.id) ? "osm" : "official",
       });
     }
     scored.sort((a, b) => a.distM - b.distM);
@@ -233,10 +320,9 @@ const OsmHazards = (() => {
     const list = listNearby(lat, lng, heading, 8);
     if (!list.length) return null;
     const top = list[0];
-    const rule = RULES[top.type];
+    const rule = RULES[top.type || top.kind];
     if (!rule || top.distM > rule.warn) return null;
 
-    // Speak once per point near critical
     const now = Date.now();
     if (
       top.critical &&
@@ -264,6 +350,7 @@ const OsmHazards = (() => {
       over: false,
       id: top.id,
       list,
+      source: top.source,
     };
   }
 
@@ -277,20 +364,28 @@ const OsmHazards = (() => {
   }
 
   /**
-   * @returns {{ alert: object|null, list: array, maxspeed: number|null, overLimit: boolean }}
+   * @returns {{ alert: object|null, list: array, maxspeed: number|null, overLimit: boolean, mode: string }}
    */
   function update(lat, lng, heading, kmh) {
     if (lat == null || lng == null) {
-      return { alert: null, list: [], maxspeed: roadMaxspeed, overLimit: false };
+      return {
+        alert: null,
+        list: [],
+        maxspeed: roadMaxspeed,
+        overLimit: false,
+        mode: osmMode(),
+      };
+    }
+    if (typeof window.__etubuForceTrRoute !== "undefined") {
+      inTurkey = !!Number(window.__etubuForceTrRoute);
     }
     fetchAround(lat, lng);
     const list = listNearby(lat, lng, heading, 4);
     const alert = nearestAlert(lat, lng, heading, kmh);
     const limit = roadMaxspeed;
-    // Camera limit from alert if closer radar has maxspeed
     let effective = limit;
     if (alert?.kind === "radar") {
-      const p = points.find((x) => x.id === alert.id);
+      const p = activePoints().find((x) => x.id === alert.id);
       if (p?.maxspeed) effective = p.maxspeed;
     }
     const overLimit =
@@ -301,14 +396,17 @@ const OsmHazards = (() => {
       maxspeed: effective ?? limit,
       overLimit,
       overBy: overLimit && effective != null ? Math.round(kmh - effective) : 0,
+      mode: osmMode(),
     };
   }
 
   function clear() {
     points = [];
+    officialPoints = [];
     roadMaxspeed = null;
     fetchCenter = null;
     fetchedAt = 0;
+    lastFetchFailed = false;
   }
 
   return {
@@ -317,7 +415,11 @@ const OsmHazards = (() => {
     listNearby,
     getRoadMaxspeed,
     setRoadMaxspeed,
+    setOfficialPoints,
+    setInTurkey,
+    mergeOfficialPrimary,
     clear,
     RULES,
+    DEDUPE_M,
   };
 })();

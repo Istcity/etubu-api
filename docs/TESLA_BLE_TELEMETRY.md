@@ -1,19 +1,19 @@
 # Tesla BLE telemetry field map
 
-Etubu uses `swift-tesla-ble` (`TeslaVehicleClient`) Infotainment `getVehicleData` — not Fleet streaming.
+Etubu uses a **vendored** `swift-tesla-ble` (`ios/Vendor/swift-tesla-ble`) Infotainment `getVehicleData` — not Fleet streaming.
 
 ## Poll architecture
 
 | Loop | Rate (moving) | Query | Fields |
 |------|---------------|-------|--------|
-| Drive | ~10–12 Hz (`85 ms` sleep) | `fetchDrive()` / `.driveOnly` | speed, gear, power, odo, active route |
-| Extras | ~0.7–1.5 Hz (every tick while driving) | `.categories([.charge,.climate,.tirePressure,…])` | SoC, range, temps, TPMS, closures, media |
+| Drive | ~10–12 Hz (`85 ms` sleep) | `fetchDrive()` / `.driveOnly` | speed, gear, power, odo, active route (+ coords / energy@arrival) |
+| Extras | ~0.7–1.4 Hz | `.categories([.charge,.climate,.tirePressure,…])` | SoC, range, temps, TPMS, closures, media |
 
-Extras failures **never** cancel the drive loop (previously a combined `try` caused reconnect storms and “half-live” speed).
+Extras failures **never** cancel the drive loop.
 
 **Boot:** tire + charge/climate fire as **parallel** requests with up to **3 retries** (wake between attempts).
 
-**Drive:** charge + climate + tires on **every** extras tick (not every 2nd). Closures/media stay lower cadence.
+**Drive:** charge + climate + tires on **every** extras tick. Closures/media stay lower cadence.
 
 Infotainment asleep → empty charge/climate/TPMS: `wakeVehicle` on connect and after **~8 missing extras ticks** (also capped ~18 s).
 
@@ -21,14 +21,30 @@ Infotainment asleep → empty charge/climate/TPMS: `wakeVehicle` on connect and 
 
 | UI | Source | Notes |
 |----|--------|-------|
-| Speed km/h | `DriveState.speedMph` × 1.60934 | Dial display steps ≤1 km/h toward target @ 20 Hz |
+| Speed km/h | `DriveState.speedMph` × 1.60934 | **Nil mph keeps prior km/h** (never publish 0). Dial steps **±1 km/h @ 20 Hz** toward vehicle target |
 | Gear | `shiftState` | Unset + moving ≥3 → treat as `D`; P/N + &lt;3 → park-gate 0 |
 | Power kW | `powerKW` | Reject \|kw\| &gt; 800 |
-| SoC % | `ChargeState.batteryLevel` | SPM maps unset→0; accept 0 only if charging or range present |
-| Range km | `estBatteryRangeMiles` ?? `batteryRangeMiles` | × 1.60934; ignore ≤0.5 mi |
-| Outside/inside °C | `ClimateState.*TempCelsius` | Exact ~0.0 alone = unset; if the **other** side is a real temp, keep **0°C** |
+| SoC % | `usableBatteryLevel` ?? `batteryLevel` | Mapper preserves optionals (unset ≠ 0). Live only after BLE confirm — disk cache never shown as live |
+| Range km | `estBatteryRangeMiles` ?? `batteryRangeMiles` | × 1.60934; ignore ≤0.5 mi; optionals preserved |
+| Outside/inside °C | `ClimateState.*TempCelsius` | Optionals preserved; exact ~0.0 alone = unset; if other side real, keep **0°C** |
+| Arrival energy % | `activeRouteEnergyAtArrival` (vehicle) else SoC×(1−remain/range) | Chrome chip right of Settings |
+| Nav dest coords | `activeRouteCoordinates` | Plan with Tesla pin; Home/Work use saved charge-state pins — **never Nominatim garbage** |
+| Home/Work pins | `ChargeState.homeLocation` / `workLocation` | Cached for ambiguous dest labels |
 | TPMS psi | `TirePressureState.*.pressureBar` | bar / kPa / psi normalize via `tireRawToPsi` |
-| Closures / media | closures + media categories | Lower priority cadence |
+
+## UI epochs / live flags
+
+`chargeEpoch` / `tpmsEpoch` / `climateEpoch` bump on every successful extras apply.
+
+`liveChargeConfirmed` / `liveClimateConfirmed` gate display so restored UserDefaults SoC/temps are not treated as live.
+
+## Auto-reconnect
+
+After one-time VIN pair (`pairedConfirmed` + Keychain key): bootstrap on launch, **foreground**, and **BT poweredOn**. Disconnect while paired schedules reconnect (up to 8 attempts, then 30 s cooldown).
+
+## Exit
+
+Settings → **Çıkış / Exit** (`etubu.app.exit`): end Live Activity, disconnect BLE, stop audio, `exit(0)`.
 
 ## Corridor average (native + Cap)
 
@@ -37,10 +53,6 @@ Display blend (not blank on entry):
 - Entry: show **vehicle speed** immediately
 - Progress `p = traveled/length`: `histW = 0.5 + 0.4·p` (50%→90% historical), rest instant
 - **YAVAŞLA** uses `corridorTrueAvg` = distance/time only (≥35 m & ~4.3 s), not the blend alone
-
-## UI epochs
-
-`chargeEpoch` / `tpmsEpoch` / `climateEpoch` bump on every successful extras apply so SwiftUI can refresh even when values are unchanged.
 
 ## Audio duck (alerts over car BT)
 

@@ -577,15 +577,20 @@ enum EtubuTrafikAPI {
     ]
 
     private static func dedupeHazards(_ list: [EtubuRouteHazard]) -> [EtubuRouteHazard] {
-        var seen = Set<String>()
-        var out: [EtubuRouteHazard] = []
-        for h in list {
-            let key = "\(h.kind)-\(Int(h.lat * 1000))-\(Int(h.lng * 1000))"
-            if seen.contains(key) { continue }
-            seen.insert(key)
-            out.append(h)
-        }
-        return out.sorted { ($0.routeIdx ?? 0) < ($1.routeIdx ?? 0) }
+        EtubuHazardMerge.dedupePreferOfficial(list)
+    }
+
+    /// Merge OSM cameras onto official EGM/seed list without cutting official points.
+    static func mergeOfficialWithOsm(
+        official: [EtubuRouteHazard],
+        osm: [EtubuRouteHazard],
+        inTurkey: Bool
+    ) -> [EtubuRouteHazard] {
+        let mode = EtubuHazardMerge.osmMode(
+            inTurkey: inTurkey,
+            officialAvailable: official.contains { EtubuHazardMerge.isEnforcement($0.kind) }
+        )
+        return EtubuHazardMerge.merge(official: official, osm: osm, mode: mode)
     }
 
     static func sampleAlong(

@@ -211,7 +211,7 @@ struct EtubuSpeedDialView: View {
     }
 
     /// ~20 Hz: step display toward target by ≤1 km/h (Tesla cluster feel).
-    /// display += clamp(target − display, −1…+1); catch-up ≤3 if lag > 8.
+    /// Strict ±1 only — no ±2/±3 catch-up (that lagged behind the car dial).
     private func tickDisplaySpeed() {
         let target = Double(targetKmh)
         if isStationary || target <= 0 {
@@ -223,14 +223,7 @@ struct EtubuSpeedDialView: View {
             if displayKmh != target { displayKmh = target }
             return
         }
-        let step: Double
-        if abs(delta) > 8 {
-            step = delta > 0 ? 3 : -3
-        } else if abs(delta) > 3 {
-            step = delta > 0 ? 2 : -2
-        } else {
-            step = delta > 0 ? 1 : -1
-        }
+        let step: Double = delta > 0 ? 1 : -1
         var next = max(0, displayKmh + step)
         if (step > 0 && next > target) || (step < 0 && next < target) {
             next = target
@@ -422,6 +415,12 @@ enum EtubuHazardChrome {
         case "charge": return "bolt.fill"
         case "weather": return "cloud.rain.fill"
         case "control": return "shield.fill"
+        case "railway": return "tram.fill"
+        case "traffic_light": return "trafficlight.fill"
+        case "stop": return "octagon.fill"
+        case "give_way": return "exclamationmark.triangle.fill"
+        case "crossing": return "figure.walk"
+        case "bump": return "arrow.up.and.down"
         default: return "camera.metering.spot"
         }
     }
@@ -432,6 +431,12 @@ enum EtubuHazardChrome {
         case "charge": return EtubuClusterL10n.t("warnKickerCharge")
         case "weather": return EtubuClusterL10n.t("warnKickerWeather")
         case "control": return EtubuClusterL10n.t("warnKickerControl")
+        case "railway": return EtubuClusterL10n.t("warnKindRailway")
+        case "traffic_light": return EtubuClusterL10n.t("warnKindTrafficLight")
+        case "stop": return EtubuClusterL10n.t("warnKindStop")
+        case "give_way": return EtubuClusterL10n.t("warnKindGiveWay")
+        case "crossing": return EtubuClusterL10n.t("warnKindCrossing")
+        case "bump": return EtubuClusterL10n.t("warnKindBump")
         default: return urgent ? EtubuClusterL10n.t("warnKickerCritical") : EtubuClusterL10n.t("warnKickerRadar")
         }
     }
@@ -443,6 +448,12 @@ enum EtubuHazardChrome {
         case "charge": return "şarj istasyonu"
         case "weather": return "hava olayı"
         case "control": return "kontrol"
+        case "railway": return "demiryolu geçidi"
+        case "traffic_light": return "trafik lambası"
+        case "stop": return "dur"
+        case "give_way": return "yol ver"
+        case "crossing": return "yaya geçidi"
+        case "bump": return "tümsek"
         default: return "radar"
         }
     }
@@ -454,6 +465,9 @@ enum EtubuHazardChrome {
         case "charge": return Color(red: 0.18, green: 1.0, blue: 0.60) // #2dff9a
         case "weather": return Color(red: 0.56, green: 0.78, blue: 1.0) // #8ec8ff
         case "control": return Color(red: 1.0, green: 0.54, blue: 0.30) // #ff8a4d
+        case "railway": return Color(red: 0.75, green: 0.55, blue: 1.0)
+        case "traffic_light", "stop", "give_way": return Color(red: 1.0, green: 0.62, blue: 0.28)
+        case "crossing", "bump": return Color(red: 0.95, green: 0.72, blue: 0.35)
         default: return urgent ? Color(red: 1.0, green: 0.35, blue: 0.35) : theme.accent
         }
     }
@@ -465,6 +479,9 @@ enum EtubuHazardChrome {
         case "charge": return Color(red: 0.18, green: 1.0, blue: 0.60)
         case "weather": return Color(red: 0.56, green: 0.78, blue: 1.0)
         case "control": return Color(red: 1.0, green: 0.54, blue: 0.30)
+        case "railway": return Color(red: 0.75, green: 0.55, blue: 1.0)
+        case "traffic_light", "stop", "give_way": return Color(red: 1.0, green: 0.62, blue: 0.28)
+        case "crossing", "bump": return Color(red: 0.95, green: 0.72, blue: 0.35)
         default: return Color(red: 1.0, green: 0.35, blue: 0.35) // #ff5a5a
         }
     }

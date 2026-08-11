@@ -12,6 +12,7 @@ struct EtubuClusterRootView: View {
     @ObservedObject private var evPlan = EtubuEvRoutePlanner.shared
     @ObservedObject private var trips = EtubuTripHistoryStore.shared
     @ObservedObject private var premium = EtubuPremiumManager.shared
+    @ObservedObject private var mapLocation = EtubuMapLocationHelper.shared
 
     @State private var theme: ClusterTheme = ClusterTheme.stored
     @State private var wallpaper: EtubuWallpaperStyle = EtubuWallpaperStyle.stored
@@ -559,6 +560,24 @@ struct EtubuClusterRootView: View {
         EtubuRouteBridge.primeWarningAudio()
         EtubuClusterAudioBridge.armPowerRegenHook()
         UIApplication.shared.isIdleTimerDisabled = true
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            Task { @MainActor in
+                EtubuTeslaBleSession.shared.resumeAutoConnectIfNeeded()
+            }
+        }
+        NotificationCenter.default.addObserver(
+            forName: UIScene.willEnterForegroundNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            Task { @MainActor in
+                EtubuTeslaBleSession.shared.resumeAutoConnectIfNeeded()
+            }
+        }
         if !locationEnabled {
             EtubuMapLocationHelper.shared.stop()
         }
@@ -1087,7 +1106,9 @@ struct EtubuClusterRootView: View {
     }
 
     private var landscapeTopBar: some View {
-        HStack(spacing: 12) {
+        let _ = telemetry.climateEpoch
+        let _ = telemetry.chargeEpoch
+        return HStack(spacing: 12) {
             Text(timeString)
                 .font(EtubuClusterFonts.ui(15, weight: .semibold))
                 .monospacedDigit()
@@ -1111,6 +1132,7 @@ struct EtubuClusterRootView: View {
                     .foregroundStyle(theme.mutedText)
             }
             speedSourceChip
+            gpsStatusChip
             Text(telemetry.connectionQualityLabel)
                 .font(EtubuClusterFonts.ui(11, weight: .semibold))
                 .foregroundStyle(statusColor.opacity(0.9))
@@ -1167,7 +1189,31 @@ struct EtubuClusterRootView: View {
             .accessibilityLabel(EtubuClusterL10n.settings)
             .accessibilityIdentifier("etubu.settings.open")
             .clusterHotspot(.settings)
+
+            arrivalEnergyChip(compact: true)
         }
+    }
+
+    /// Settings sağında varış enerji (araç SoC / menzil / kalan rota).
+    @ViewBuilder
+    private func arrivalEnergyChip(compact: Bool) -> some View {
+        let _ = telemetry.chargeEpoch
+        let _ = telemetry.demoUIEpoch
+        let label = telemetry.energyAtArrivalPercent.map { "\($0)%" } ?? "—"
+        HStack(spacing: compact ? 3 : 4) {
+            Image(systemName: "bolt.car.fill")
+                .font(.system(size: compact ? 10 : 11, weight: .semibold))
+            Text(label)
+                .font(EtubuClusterFonts.ui(compact ? 11 : 12, weight: .bold))
+                .monospacedDigit()
+        }
+        .foregroundStyle(arrivalSocTint)
+        .padding(.horizontal, compact ? 7 : 8)
+        .padding(.vertical, compact ? 5 : 6)
+        .background(Capsule().fill(theme.surface.opacity(0.9)))
+        .accessibilityLabel(EtubuClusterL10n.energyAtArrival)
+        .accessibilityValue(label)
+        .accessibilityIdentifier("etubu.ev.arrivalSoc.chrome")
     }
 
     private var routeDestinationText: String {
@@ -1432,6 +1478,7 @@ struct EtubuClusterRootView: View {
                 }
                 .clusterHotspot(.pair)
                 speedSourceChip
+                gpsStatusChip
                 Spacer(minLength: 0)
                 if criticalAlertsOn {
                     Button {
@@ -1468,6 +1515,7 @@ struct EtubuClusterRootView: View {
                 .accessibilityLabel(EtubuClusterL10n.settings)
                 .accessibilityIdentifier("etubu.settings.open")
                 .clusterHotspot(.settings)
+                arrivalEnergyChip(compact: true)
             }
             .padding(.horizontal, hPad)
             .padding(.top, topChrome)
@@ -1545,6 +1593,7 @@ struct EtubuClusterRootView: View {
                     .layoutPriority(2)
                 Spacer(minLength: 4)
                 VStack(alignment: .trailing, spacing: 6) {
+                    let _ = telemetry.chargeEpoch
                     Text(timeString)
                         .font(EtubuClusterFonts.gauge(short ? 26 : 36))
                         .monospacedDigit()
@@ -2021,6 +2070,32 @@ struct EtubuClusterRootView: View {
                     }
                 }
 
+                // Near top — Maestro can reach without deep scroll (remote grid used to bury this).
+                Section(EtubuClusterL10n.t("demoSection")) {
+                    Button {
+                        if demo.isRunning {
+                            demo.stop()
+                        } else {
+                            demo.start()
+                            selectedVoice = EtubuClusterAudioBridge.defaultDriveVoice
+                            soundOn = true
+                            DispatchQueue.main.async {
+                                showSettings = false
+                            }
+                        }
+                    } label: {
+                        Label(
+                            demo.isRunning ? EtubuClusterL10n.t("demoStopBtn") : EtubuClusterL10n.t("demoStart"),
+                            systemImage: demo.isRunning ? "stop.fill" : "play.fill"
+                        )
+                    }
+                    .accessibilityIdentifier("etubu.demo.toggle")
+                    Toggle(EtubuClusterL10n.t("demoMirror"), isOn: $demo.mirrorEnabled)
+                    Text(EtubuClusterL10n.t("demoHint"))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+
                 Section(EtubuClusterL10n.t("evRoutePlan")) {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
@@ -2067,44 +2142,23 @@ struct EtubuClusterRootView: View {
                 }
 
                 Section(EtubuClusterL10n.t("remoteCmdSection")) {
-                    EtubuRemoteCommandCards(tesla: tesla)
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack {
-                            Text(EtubuClusterL10n.t("cmdChargeLimit"))
-                            Spacer()
-                            Text("\(Int(remoteChargeLimit))%")
-                                .monospacedDigit()
-                        }
-                        Slider(value: $remoteChargeLimit, in: 50...100, step: 5)
-                        Button(EtubuClusterL10n.t("cmdApplyLimit")) {
-                            Task { await tesla.setChargeLimit(Int(remoteChargeLimit)) }
-                        }
-                    }
-                }
-
-                Section(EtubuClusterL10n.t("demoSection")) {
-                    Button {
-                        if demo.isRunning {
-                            demo.stop()
-                        } else {
-                            demo.start()
-                            selectedVoice = EtubuClusterAudioBridge.defaultDriveVoice
-                            soundOn = true
-                            DispatchQueue.main.async {
-                                showSettings = false
+                    DisclosureGroup {
+                        EtubuRemoteCommandCards(tesla: tesla)
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Text(EtubuClusterL10n.t("cmdChargeLimit"))
+                                Spacer()
+                                Text("\(Int(remoteChargeLimit))%")
+                                    .monospacedDigit()
+                            }
+                            Slider(value: $remoteChargeLimit, in: 50...100, step: 5)
+                            Button(EtubuClusterL10n.t("cmdApplyLimit")) {
+                                Task { await tesla.setChargeLimit(Int(remoteChargeLimit)) }
                             }
                         }
                     } label: {
-                        Label(
-                            demo.isRunning ? EtubuClusterL10n.t("demoStopBtn") : EtubuClusterL10n.t("demoStart"),
-                            systemImage: demo.isRunning ? "stop.fill" : "play.fill"
-                        )
+                        Label(EtubuClusterL10n.t("remoteCmdSection"), systemImage: "car.side.front.open")
                     }
-                    .accessibilityIdentifier("etubu.demo.toggle")
-                    Toggle(EtubuClusterL10n.t("demoMirror"), isOn: $demo.mirrorEnabled)
-                    Text(EtubuClusterL10n.t("demoHint"))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
                 }
 
                 Section(EtubuClusterL10n.t("vehicleNotifySection")) {
@@ -2281,6 +2335,16 @@ struct EtubuClusterRootView: View {
                     }
                     Button(EtubuClusterL10n.obdFallback) { showObdMenu = true }
                 }
+                Section {
+                    Button(role: .destructive) {
+                        showSettings = false
+                        EtubuAppExit.quitFully()
+                    } label: {
+                        Label(EtubuClusterL10n.appExit, systemImage: "xmark.circle.fill")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .accessibilityIdentifier("etubu.app.exit")
+                }
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -2348,6 +2412,34 @@ struct EtubuClusterRootView: View {
             )
             .accessibilityLabel(telemetry.speedSourceLabel)
             .accessibilityIdentifier("etubu.source.chip")
+    }
+
+    private var gpsStatusChip: some View {
+        let ind = mapLocation.gpsIndicator
+        let fill: Color = {
+            switch ind {
+            case .ok: return Color.green.opacity(0.9)
+            case .denied: return Color.red.opacity(0.9)
+            case .sim: return Color.orange.opacity(0.9)
+            }
+        }()
+        // Compact labels — avoid crowding route/remote/settings hit targets (Maestro).
+        let short: String = {
+            switch ind {
+            case .ok: return "GPS ✓"
+            case .denied: return "İzin yok"
+            case .sim: return "Sim"
+            }
+        }()
+        return Text(short)
+            .font(EtubuClusterFonts.ui(9, weight: .bold))
+            .tracking(0.2)
+            .foregroundStyle(Color.white)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(Capsule().fill(fill))
+            .accessibilityLabel(ind.label)
+            .accessibilityIdentifier(ind.accessibilityId)
     }
 
     private var sourceChipFill: Color {

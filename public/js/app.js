@@ -1210,6 +1210,29 @@
         ) {
           OsmHazards.setRoadMaxspeed(lim);
         }
+        // EGM/official kameraları OsmHazards’a — OSM duplicate kesmesin.
+        if (typeof OsmHazards !== "undefined" && OsmHazards.setOfficialPoints) {
+          const cams = typeof RadarAlert.getCameras === "function"
+            ? RadarAlert.getCameras()
+            : radar?.cameras || [];
+          const official = (cams || []).map((c) => ({
+            id: c.id || `radar-${c.lat}-${c.lng}`,
+            kind: c.type === "avg" || c.type === "corridor" ? "corridor" : "radar",
+            type: c.type === "avg" || c.type === "corridor" ? "corridor" : "radar",
+            lat: c.lat,
+            lng: c.lng,
+            label: c.label,
+            maxspeed: c.maxspeed,
+          }));
+          const forceTr = Number(window.__etubuForceTrRoute || 0) === 1;
+          const inTR =
+            forceTr ||
+            (meta.lat >= 35.8 &&
+              meta.lat <= 42.35 &&
+              meta.lng >= 25.6 &&
+              meta.lng <= 45.0);
+          OsmHazards.setOfficialPoints(official, { inTurkey: inTR });
+        }
       }
       if (typeof OsmHazards !== "undefined") {
         osm = OsmHazards.update(meta.lat, meta.lng, meta.heading, kmh);
@@ -1217,6 +1240,33 @@
       if (typeof RouteGuard !== "undefined") {
         routeInfo = RouteGuard.update?.(meta.lat, meta.lng, meta.heading, kmh) || null;
         routeQueue = routeInfo?.queue || [];
+        if (
+          typeof OsmHazards !== "undefined" &&
+          OsmHazards.setOfficialPoints &&
+          typeof RouteGuard.getHazards === "function"
+        ) {
+          const rh = RouteGuard.getHazards() || [];
+          if (rh.length) {
+            const inTR =
+              Number(window.__etubuForceTrRoute || 0) === 1 ||
+              (meta.lat >= 35.8 &&
+                meta.lat <= 42.35 &&
+                meta.lng >= 25.6 &&
+                meta.lng <= 45.0);
+            OsmHazards.setOfficialPoints(
+              rh.map((h) => ({
+                id: h.id,
+                kind: h.kind,
+                type: h.kind,
+                lat: h.lat,
+                lng: h.lng,
+                label: h.label || h.name,
+                maxspeed: h.maxspeed,
+              })),
+              { inTurkey: inTR }
+            );
+          }
+        }
       }
       // Öncelik: radar/koridor > şarj > hava (uzak radar bile şarjı ezer)
       const isRadarOrCorridor = (w) => {

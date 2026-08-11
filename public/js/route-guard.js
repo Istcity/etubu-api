@@ -1452,13 +1452,48 @@ const RouteGuard = (() => {
   }
 
   function mergeHazards(...groups) {
-    const byId = new Map();
+    // Flatten preserving order (official/seed first callers → OSM last).
+    const flat = [];
     for (const g of groups) {
-      for (const h of g) {
-        if (!byId.has(h.id)) byId.set(h.id, h);
-      }
+      for (const h of g || []) flat.push(h);
     }
-    return [...byId.values()].sort((a, b) => a.routeIdx - b.routeIdx);
+    const DEDUPE_M = 70;
+    const isOsm = (id) =>
+      typeof id === "string" && (id.startsWith("osm-") || id.startsWith("osmhz-"));
+    const sameFamily = (a, b) => {
+      if (a === b) return true;
+      const stop = { stop: 1, give_way: 1 };
+      return !!(stop[a] && stop[b]);
+    };
+    const distM = (a, b) => {
+      const R = 6371000;
+      const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+      const dLon = ((b.lng - a.lng) * Math.PI) / 180;
+      const x =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos((a.lat * Math.PI) / 180) *
+          Math.cos((b.lat * Math.PI) / 180) *
+          Math.sin(dLon / 2) ** 2;
+      return 2 * R * Math.asin(Math.sqrt(x));
+    };
+    // Official first, then by routeIdx.
+    flat.sort((a, b) => {
+      const ao = isOsm(a.id);
+      const bo = isOsm(b.id);
+      if (ao !== bo) return ao ? 1 : -1;
+      return (a.routeIdx || 0) - (b.routeIdx || 0);
+    });
+    const out = [];
+    for (const h of flat) {
+      const kind = h.kind || h.type;
+      const dup = out.some(
+        (o) =>
+          sameFamily(o.kind || o.type, kind) && distM(o, h) <= DEDUPE_M
+      );
+      if (dup) continue;
+      out.push(h);
+    }
+    return out.sort((a, b) => (a.routeIdx || 0) - (b.routeIdx || 0));
   }
 
   async function enrichRouteAsync(data, coords, baseHazards) {
@@ -1538,15 +1573,17 @@ const RouteGuard = (() => {
       if (!coords.length) throw new Error("noroute");
       routeCoords = coords;
 
-      // TR: resmi + seed; yurt dışı: OSM Overpass kameraları
+      // TR: resmi + seed birincil; OSM yurt dışı / EGM boşsa led, TR’de gap fill (merge dedupe).
       const official = domestic ? parseOfficialHazards(data, coords) : [];
       const seeds = domestic ? parseSeedHazards(coords) : [];
       let baseHazards = mergeHazards(official, seeds);
-      if (!domestic || !baseHazards.length) {
-        try {
-          const osmCams = await fetchOverpassCamerasAlong(coords);
-          baseHazards = mergeHazards(baseHazards, osmCams);
-        } catch (_) {}
+      // OSM cameras when overseas OR official empty OR always as supplement (dedupe keeps official).
+      try {
+        const osmCams = await fetchOverpassCamerasAlong(coords);
+        baseHazards = mergeHazards(baseHazards, osmCams);
+      } catch (_) {}
+      if (typeof OsmHazards !== "undefined" && OsmHazards.setOfficialPoints) {
+        OsmHazards.setOfficialPoints(baseHazards, { inTurkey: domestic });
       }
       hazards = baseHazards;
       active = true;
@@ -2144,6 +2181,7 @@ const RouteGuard = (() => {
     clear: () => clearRoute(true),
     isActive: () => active,
     isVisible: () => isTurkeyTurkish(),
+    getHazards: () => (hazards || []).slice(),
     /** Cap / native cluster — same autocomplete & resolve as web UI */
     suggest: suggestForBridge,
     resolve: resolveForBridge,

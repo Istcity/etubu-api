@@ -300,7 +300,8 @@ struct EtubuRoutePickerView: View {
                 .focused($toFocused)
                 .accessibilityLabel(EtubuClusterL10n.t("cityDistrict"))
                 .accessibilityIdentifier("etubu.route.to")
-                .onSubmit {
+                        .onSubmit {
+                    toFocused = false
                     if canPlanRoute { planRoute(andDismiss: false) }
                     else { commitDestination() }
                 }
@@ -577,6 +578,8 @@ struct EtubuRoutePickerView: View {
         destinationNeedsDistrict = false
         statusMessage = ""
         suggestions = []
+        // Drop focus so landscape keyboard doesn't cover "Rotayı kur" (Maestro + thumb).
+        toFocused = false
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
             suppressFieldChange = false

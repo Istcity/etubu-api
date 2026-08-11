@@ -46,19 +46,19 @@ struct EtubuRouteHazard: Equatable, Identifiable {
         case "charge": return EtubuClusterL10n.t("warnKindCharge")
         case "weather": return EtubuClusterL10n.t("warnKindWeather")
         case "control": return EtubuClusterL10n.t("warnKindControl")
+        case "railway": return EtubuClusterL10n.t("warnKindRailway")
+        case "traffic_light": return EtubuClusterL10n.t("warnKindTrafficLight")
+        case "stop": return EtubuClusterL10n.t("warnKindStop")
+        case "give_way": return EtubuClusterL10n.t("warnKindGiveWay")
+        case "crossing": return EtubuClusterL10n.t("warnKindCrossing")
+        case "bump": return EtubuClusterL10n.t("warnKindBump")
         default: return EtubuClusterL10n.t("warnKindRadar")
         }
     }
 
     /// TTS clip composer için sabit Türkçe kök (UI dili bağımsız).
     var speakRootTR: String {
-        switch kind {
-        case "corridor": return "hız koridoru"
-        case "charge": return "şarj istasyonu"
-        case "weather": return "hava olayı"
-        case "control": return "kontrol"
-        default: return "radar"
-        }
+        EtubuHazardChrome.speakRootTR(kind)
     }
 
     /// Geriye dönük çağrılar.
@@ -411,15 +411,17 @@ final class EtubuDriveWarnings: ObservableObject {
             }
         }
 
-        // Rota yokken de OSM radar / koridor (canlı sürüş) — Premium.
+        // Rota yokken de OSM radar / koridor + yerel Overpass (canlı sürüş) — Premium.
         let live = EtubuLiveRadarMonitor.shared
+        let osmLocal = EtubuOsmHazardsMonitor.shared
         if EtubuPremiumManager.shared.isPremium {
             live.tick(lat: lat, lng: lng, heading: t.headingDeg, kmh: kmh)
+            osmLocal.tick(lat: lat, lng: lng, kmh: kmh)
         }
 
         updateOsmOverSpeed(kmh: kmh)
 
-        // Rota hazard + canlı kameralar birleşik havuz.
+        // Rota hazard + canlı kameralar birleşik havuz (EGM primary, OSM supplement/led).
         var pool = remainingHazards.isEmpty ? hazards : remainingHazards
         if !EtubuPremiumManager.shared.isPremium {
             // Ücretsiz: yalnızca OSM hız levhası — radar/koridor/şarj/hava yok.
@@ -441,13 +443,28 @@ final class EtubuDriveWarnings: ObservableObject {
             return
         }
 
+        let inTR = EtubuRegion.lastKnownInTurkey
+        let officialEnforcement = pool.filter {
+            !EtubuHazardMerge.isOsmSource($0) && EtubuHazardMerge.isEnforcement($0.kind)
+        }
+        let liveOfficial = live.cameras.filter { !EtubuHazardMerge.isOsmSource($0) }
+        let liveOsm = live.cameras.filter { EtubuHazardMerge.isOsmSource($0) }
+        let mode: EtubuHazardMerge.OsmMode = EtubuHazardMerge.osmMode(
+            inTurkey: inTR,
+            officialAvailable: !officialEnforcement.isEmpty || !liveOfficial.isEmpty
+        )
+
         if !t.routeActive {
-            pool = live.cameras
-        } else if !live.cameras.isEmpty {
-            var seen = Set(pool.map(\.id))
-            for c in live.cameras where !seen.contains(c.id) {
-                pool.append(c)
-                seen.insert(c.id)
+            let base = liveOfficial
+            pool = EtubuHazardMerge.merge(official: base, osm: liveOsm + osmLocal.points, mode: mode)
+        } else {
+            pool = EtubuHazardMerge.merge(
+                official: pool,
+                osm: liveOsm + osmLocal.points,
+                mode: mode
+            )
+            if !liveOfficial.isEmpty {
+                pool = EtubuHazardMerge.dedupePreferOfficial(pool + liveOfficial)
             }
         }
 
@@ -519,11 +536,8 @@ final class EtubuDriveWarnings: ObservableObject {
                 continue
             }
 
-            let stage: EtubuWarnStage
-            if dM <= 300 { stage = .critical }
-            else if dM <= 1000 { stage = .near }
-            else if dM <= 2000 { stage = .mid }
-            else { stage = .far }
+            let stage = EtubuHazardMerge.stage(for: h.kind, distM: dM)
+            guard stage != .idle else { continue }
             ranked.append(Ranked(h: h, dM: dM, stage: stage, approaching: approaching))
         }
         lastHazardDistM = nextDistMap
@@ -831,9 +845,11 @@ final class EtubuDriveWarnings: ObservableObject {
     private static func warnPriority(_ kind: String) -> Int {
         switch kind {
         case "corridor", "radar": return 0
-        case "charge": return 1
-        case "weather": return 2
-        default: return 3
+        case "railway", "control": return 1
+        case "traffic_light", "stop", "give_way", "crossing", "bump": return 2
+        case "charge": return 3
+        case "weather": return 4
+        default: return 5
         }
     }
 

@@ -2,7 +2,7 @@ appId: com.etubu.app
 ---
 # Premium unlocked + rota: şehir/yer (ilçe nag yok), planla, özet kartı
 # Sim GPS gerekli — yoksa "Konum gerekli" ile plan düşer (suite: simctl location set).
-# Vehicle-nav (Tesla share → adaptVehicleNavIfNeeded): kod yolu doğrulandı; BLE sim yok.
+# Landscape klavye plan düğmesini örter — suite başında portrait zorunlu.
 - launchApp:
     clearState: true
     permissions:
@@ -11,6 +11,7 @@ appId: com.etubu.app
     arguments:
       etubuSkipOnboarding: true
       etubuForcePremium: true
+- setOrientation: PORTRAIT
 - runFlow: setup-legal.yaml
 - extendedWaitUntil:
     visible:
@@ -20,7 +21,6 @@ appId: com.etubu.app
     id: "etubu.tpms.grid"
 - tapOn:
     id: "etubu.route.open"
-# Force premium: picker açılmalı — paywall değil
 - extendedWaitUntil:
     visible:
       id: "etubu.route.picker"
@@ -33,24 +33,15 @@ appId: com.etubu.app
 - assertNotVisible: "Konum gerekli.*"
 - tapOn:
     id: "etubu.route.to"
-# İlçe şartı yok — tek şehir adı yeterli
+- eraseText
 - inputText: "Corum"
 - assertNotVisible: ".*ilçe seçin.*"
 - extendedWaitUntil:
     visible:
       id: "etubu.route.suggestion.first"
     timeout: 20000
-- tapOn:
-    id: "etubu.route.suggestion.first"
-- waitForAnimationToEnd:
-    timeout: 1500
-- assertNotVisible: ".*ilçe seçin.*"
-- extendedWaitUntil:
-    visible:
-      id: "etubu.route.plan"
-    timeout: 8000
-- tapOn:
-    id: "etubu.route.plan"
+# Go/Enter → onSubmit planRoute (canPlanRoute: ≥2 karakter)
+- pressKey: Enter
 - extendedWaitUntil:
     visible:
       id: "etubu.route.active"

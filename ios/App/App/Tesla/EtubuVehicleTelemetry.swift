@@ -46,6 +46,10 @@ final class EtubuVehicleTelemetry: ObservableObject {
     @Published var chargeEpoch: Int = 0
     @Published var tpmsEpoch: Int = 0
     @Published var climateEpoch: Int = 0
+    /// True only after a BLE charge packet with real SoC/range (not UserDefaults cache).
+    @Published private(set) var liveChargeConfirmed: Bool = false
+    /// True after a BLE climate packet with at least one real temp.
+    @Published private(set) var liveClimateConfirmed: Bool = false
 
     /// Demo tick — RootView dial’ının SwiftUI yenilemesi için.
     @Published var demoUIEpoch: Int = 0
@@ -155,25 +159,23 @@ final class EtubuVehicleTelemetry: ObservableObject {
     private var preDemoInsideC: Double?
     private var preDemoClimateOn: Bool?
 
-    /// SoC büyük sıçrama / ilk örnek — 2 ardışık aynı değer olmadan yayınlama.
-    private var pendingSoc: Int?
-    private var pendingSocHits: Int = 0
-    /// Menzil büyük sıçrama onayı.
-    private var pendingRangeKm: Int?
-    private var pendingRangeHits: Int = 0
-
     /// Bağlı değilken UI’da gösterilen şarj (canlı veya son bilinen, stale değilse).
     static let chargeStaleSeconds: TimeInterval = 6 * 3600
 
     var displaySocPercent: Int? {
         if source == .demo { return socPercent }
-        if isLiveTesla { return socPercent }
+        if isLiveTesla {
+            // Cache-as-live was the stuck-SoC bug: restored UserDefaults looked "live".
+            return liveChargeConfirmed ? socPercent : nil
+        }
         if isChargeStale { return nil }
         return socPercent
     }
     var displayRangeKm: Int? {
         if source == .demo { return rangeKm }
-        if isLiveTesla { return rangeKm }
+        if isLiveTesla {
+            return liveChargeConfirmed ? rangeKm : nil
+        }
         if isChargeStale { return nil }
         return rangeKm
     }
@@ -214,20 +216,20 @@ final class EtubuVehicleTelemetry: ObservableObject {
     /// Canlı Tesla bağlı ama TPMS/iklim henüz boş.
     var isAwaitingVehicleExtras: Bool {
         isLiveTesla
-            && (tpmsFL.psi == nil && tpmsFR.psi == nil && tpmsRL.psi == nil && tpmsRR.psi == nil
-                || outsideC == nil || insideC == nil)
+            && (!liveChargeConfirmed
+                || (tpmsFL.psi == nil && tpmsFR.psi == nil && tpmsRL.psi == nil && tpmsRR.psi == nil)
+                || !liveClimateConfirmed)
     }
     var isAwaitingTPMS: Bool {
         isLiveTesla && tpmsFL.psi == nil && tpmsFR.psi == nil && tpmsRL.psi == nil && tpmsRR.psi == nil
     }
     var isAwaitingClimate: Bool {
-        isLiveTesla && outsideC == nil && insideC == nil
+        isLiveTesla && !liveClimateConfirmed
     }
-    /// Extras poll: keep requesting until SoC + climate + at least one tire are live.
+    /// Extras poll: keep requesting until live SoC + climate + at least one tire are confirmed.
     var needsVehicleExtrasRefresh: Bool {
-        socPercent == nil
-            || outsideC == nil
-            || insideC == nil
+        !liveChargeConfirmed
+            || !liveClimateConfirmed
             || (tpmsFL.psi == nil && tpmsFR.psi == nil && tpmsRL.psi == nil && tpmsRR.psi == nil)
     }
 
@@ -308,6 +310,8 @@ final class EtubuVehicleTelemetry: ObservableObject {
         outsideC = 18
         insideC = 21
         climateOn = true
+        liveChargeConfirmed = true
+        liveClimateConfirmed = true
     }
 
     /// Demo bitince araç cache’ine / önceki değerlere dön.
@@ -337,11 +341,18 @@ final class EtubuVehicleTelemetry: ObservableObject {
         outsideC = preDemoOutsideC
         insideC = preDemoInsideC
         climateOn = preDemoClimateOn
+        let hadPreDemoSoc = preDemoSoc != nil
         preDemoSoc = nil
         preDemoRangeKm = nil
         preDemoOutsideC = nil
         preDemoInsideC = nil
         preDemoClimateOn = nil
+        liveChargeConfirmed = hadPreDemoSoc || (
+            UserDefaults.standard.string(forKey: Self.lastSourceKey) == Self.vehicleSourceValue
+            && socPercent != nil
+        )
+        // After demo, require a fresh extras sample before treating temps as live.
+        liveClimateConfirmed = false
         if socPercent == 42, rangeKm == 180,
            UserDefaults.standard.string(forKey: Self.lastSourceKey) != Self.vehicleSourceValue {
             socPercent = nil
@@ -404,10 +415,9 @@ final class EtubuVehicleTelemetry: ObservableObject {
     func lockToTeslaSource() {
         guard !EtubuDemoDrive.isActive else { return }
         source = .tesla
-        pendingSoc = nil
-        pendingSocHits = 0
-        pendingRangeKm = nil
-        pendingRangeHits = 0
+        // Don't treat disk cache as live until first BLE charge/climate packet.
+        liveChargeConfirmed = false
+        liveClimateConfirmed = false
     }
 
     /// Geçersiz drive paketinde bile bağlantı tazeliğini koru (weak/delayed flash yok).
@@ -428,34 +438,41 @@ final class EtubuVehicleTelemetry: ObservableObject {
     }
 
     func applyTeslaDrive(
-        kmh: Int,
-        gear: String,
+        kmh: Int?,
+        gear: String?,
         powerKw: Int?,
         odometerKm: Int?,
         navDestination: String?,
         navRemainKm: Double?,
-        navEtaMinutes: Double?
+        navEtaMinutes: Double?,
+        vehicleEnergyAtArrival: Int? = nil,
+        navDestLat: Double? = nil,
+        navDestLng: Double? = nil
     ) {
         guard !EtubuDemoDrive.isActive else { return }
 
-        // İmkansız hız paketini yutma.
-        guard kmh >= 0, kmh <= 280 else { return }
+        // Missing speed packet → keep prior km/h (nil mph used to publish 0 and desync dial).
+        let hasSpeed = kmh != nil
+        let rawKmh = kmh.map { max(0, min(280, $0)) }
 
-        // Park / creep — yalnızca gerçek P/N’de sıfırla; düşük hızı gizleme.
-        // Unset/stuck "P" + hareket: hızı yayınla ve vitesi D say.
-        let gearU = gear.uppercased()
+        let gearIn = (gear?.isEmpty == false) ? gear! : self.gear
+        let gearU = gearIn.uppercased()
         let looksParked = gearU.hasPrefix("P") || gearU.hasPrefix("N")
-        let movingDespiteGear = looksParked && kmh >= 3
-        let effectiveGear = movingDespiteGear ? "D" : gear
+        let speedForGate = rawKmh ?? self.kmh
+        let movingDespiteGear = looksParked && speedForGate >= 3
+        let effectiveGear = movingDespiteGear ? "D" : gearIn
         let parked = (effectiveGear.uppercased().hasPrefix("P")
-            || effectiveGear.uppercased().hasPrefix("N")) && kmh < 3
+            || effectiveGear.uppercased().hasPrefix("N")) && speedForGate < 3
+
         let gatedKmh: Int = {
+            guard let rawKmh else { return self.kmh }
             if parked { return 0 }
-            return max(0, kmh)
+            return rawKmh
         }()
 
         // Ani sıçrama (paket bozulması) — taze örnek varken >70 km/h delta’yı reddet.
-        if let lastDriveAt,
+        if hasSpeed,
+           let lastDriveAt,
            Date().timeIntervalSince(lastDriveAt) < 2.5,
            abs(gatedKmh - self.kmh) > 70,
            self.kmh > 0 || gatedKmh > 80 {
@@ -465,28 +482,25 @@ final class EtubuVehicleTelemetry: ObservableObject {
 
         let gatedPower: Int? = {
             guard let powerKw else { return self.powerKw }
-            // Dururken HVAC gürültüsü; hareket varken düşük regen’i de göster.
             if gatedKmh == 0 { return abs(powerKw) < 8 ? 0 : powerKw }
             if abs(powerKw) < 4 { return 0 }
             if abs(powerKw) > 800 { return self.powerKw }
             return powerKw
         }()
 
-        let kmhChanged = self.kmh != gatedKmh
+        let kmhChanged = hasSpeed && self.kmh != gatedKmh
         let gearChanged = self.gear != effectiveGear
         let powerChanged = self.powerKw != gatedPower
-        if kmhChanged { self.kmh = gatedKmh }
+        if hasSpeed, kmhChanged { self.kmh = gatedKmh }
         if gearChanged { self.gear = effectiveGear }
         if powerChanged { self.powerKw = gatedPower }
 
-        // Sparkline yalnızca hareket varken — parkta history titreşimi yok.
         if gatedKmh > 0, let gatedPower {
             var hist = powerHistory
             hist.append(gatedPower)
             if hist.count > 40 { hist.removeFirst(hist.count - 40) }
             powerHistory = hist
         }
-        // Odo: geriye gitmesin / tek tick’te >80 km zıplamasın.
         if let odometerKm, odometerKm > 0 {
             if let prev = self.odometerKm {
                 let delta = odometerKm - prev
@@ -508,8 +522,19 @@ final class EtubuVehicleTelemetry: ObservableObject {
             if let navEtaMinutes, navEtaMinutes >= 0, navEtaMinutes < 10_000 {
                 self.navEtaMinutes = navEtaMinutes
             }
+            if let navDestLat, let navDestLng,
+               navDestLat.isFinite, navDestLng.isFinite,
+               abs(navDestLat) > 0.01 || abs(navDestLng) > 0.01 {
+                routeDestLat = navDestLat
+                routeDestLng = navDestLng
+            }
         }
-        recomputeEnergyAtArrival()
+        if let vehicleEnergyAtArrival, (0...100).contains(vehicleEnergyAtArrival) {
+            energyAtArrivalPercent = vehicleEnergyAtArrival
+            Task { @MainActor in EtubuEvRoutePlanner.shared.refreshFromLiveState() }
+        } else {
+            recomputeEnergyAtArrival()
+        }
         self.source = .tesla
         let now = Date()
         lastDriveAt = now
@@ -538,21 +563,25 @@ final class EtubuVehicleTelemetry: ObservableObject {
         amps: Int?,
         volts: Int?,
         minutesToFull: Int?,
-        portOpen: Bool?
+        portOpen: Bool?,
+        homeLat: Double? = nil,
+        homeLng: Double? = nil,
+        workLat: Double? = nil,
+        workLng: Double? = nil
     ) {
         guard !EtubuDemoDrive.isActive else { return }
+        var gotLiveSample = false
         if let raw = soc {
             let soc = min(100, max(0, raw))
-            if let confirmed = confirmSoc(soc, charging: charging) {
-                socPercent = confirmed
-            }
+            // Apply immediately — confirmSoc debounce froze live % after first sample.
+            socPercent = soc
+            gotLiveSample = true
         }
         if let rangeKm, rangeKm > 0, rangeKm < 1200 {
-            if let confirmed = confirmRangeKm(rangeKm) {
-                self.rangeKm = confirmed
-            }
+            self.rangeKm = rangeKm
+            gotLiveSample = true
         }
-        self.chargeKw = chargeKw
+        if chargeKw != nil { self.chargeKw = chargeKw }
         isCharging = charging
         if let limitPercent, (50...100).contains(limitPercent) {
             chargeLimitPercent = limitPercent
@@ -561,82 +590,65 @@ final class EtubuVehicleTelemetry: ObservableObject {
         if let volts { chargerVolts = volts }
         if let minutesToFull { minutesToFullCharge = minutesToFull }
         if let portOpen { chargePortOpen = portOpen }
-        // Always stamp — even identical SoC proves extras poll is live.
-        persistLastChargeSnapshot()
-        lastExtrasAt = Date()
+        if let homeLat, let homeLng, abs(homeLat) > 0.01 || abs(homeLng) > 0.01 {
+            Self.storePin("home", lat: homeLat, lng: homeLng)
+        }
+        if let workLat, let workLng, abs(workLat) > 0.01 || abs(workLng) > 0.01 {
+            Self.storePin("work", lat: workLat, lng: workLng)
+        }
+        if gotLiveSample {
+            liveChargeConfirmed = true
+            persistLastChargeSnapshot()
+            lastExtrasAt = Date()
+        }
         lastUpdateAt = Date()
         chargeEpoch &+= 1
         recomputeEnergyAtArrival()
         objectWillChange.send()
-        publishWidgetSnapshot()
+        if gotLiveSample { publishWidgetSnapshot() }
     }
 
-    /// İlk SoC anında yayınla; küçük drift (±3) anında; büyük sıçrama → 2 ardışık aynı örnek.
-    private func confirmSoc(_ soc: Int, charging: Bool) -> Int? {
-        if charging { pendingSoc = nil; pendingSocHits = 0; return soc }
-        // Cold start / lock reset: ilk geçerli örnekte "—" kalmasın.
-        if socPercent == nil {
-            pendingSoc = nil
-            pendingSocHits = 0
-            return soc
-        }
-        if let cur = socPercent, abs(cur - soc) <= 3 {
-            pendingSoc = nil
-            pendingSocHits = 0
-            return soc
-        }
-        if pendingSoc == soc {
-            pendingSocHits += 1
+    private static let homeLatKey = "etubu.tesla.home.lat"
+    private static let homeLngKey = "etubu.tesla.home.lng"
+    private static let workLatKey = "etubu.tesla.work.lat"
+    private static let workLngKey = "etubu.tesla.work.lng"
+
+    private static func storePin(_ kind: String, lat: Double, lng: Double) {
+        let ud = UserDefaults.standard
+        if kind == "home" {
+            ud.set(lat, forKey: homeLatKey)
+            ud.set(lng, forKey: homeLngKey)
         } else {
-            pendingSoc = soc
-            pendingSocHits = 1
+            ud.set(lat, forKey: workLatKey)
+            ud.set(lng, forKey: workLngKey)
         }
-        if pendingSocHits >= 2 {
-            pendingSoc = nil
-            pendingSocHits = 0
-            return soc
-        }
-        return nil
     }
 
-    private func confirmRangeKm(_ range: Int) -> Int? {
-        if let cur = rangeKm, abs(cur - range) <= 15 {
-            pendingRangeKm = nil
-            pendingRangeHits = 0
-            return range
-        }
-        if pendingRangeKm == range {
-            pendingRangeHits += 1
-        } else {
-            pendingRangeKm = range
-            pendingRangeHits = 1
-        }
-        if rangeKm == nil || pendingRangeHits >= 2 {
-            pendingRangeKm = nil
-            pendingRangeHits = 0
-            return range
-        }
-        return nil
+    static func savedPin(for label: String) -> (lat: Double, lng: Double)? {
+        let fold = label.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let ud = UserDefaults.standard
+        let isHome = ["home", "ev", "casa", "maison", "zuhause", "家"].contains(fold)
+        let isWork = ["work", "iş", "is", "office", "travail", "arbeit", "仕事", "oficina"].contains(fold)
+        guard isHome || isWork else { return nil }
+        let latKey = isHome ? homeLatKey : workLatKey
+        let lngKey = isHome ? homeLngKey : workLngKey
+        let lat = ud.double(forKey: latKey)
+        let lng = ud.double(forKey: lngKey)
+        guard abs(lat) > 0.01 || abs(lng) > 0.01 else { return nil }
+        return (lat, lng)
     }
 
     func applyTeslaClimate(outsideC: Double?, insideC: Double?, climateOn: Bool?) {
-        var changed = false
-        if let outsideC, self.outsideC != outsideC {
-            self.outsideC = outsideC
-            changed = true
+        if let outsideC { self.outsideC = outsideC }
+        if let insideC { self.insideC = insideC }
+        if let climateOn { self.climateOn = climateOn }
+        if outsideC != nil || insideC != nil {
+            liveClimateConfirmed = true
+            lastExtrasAt = Date()
         }
-        if let insideC, self.insideC != insideC {
-            self.insideC = insideC
-            changed = true
-        }
-        if let climateOn, self.climateOn != climateOn {
-            self.climateOn = climateOn
-            changed = true
-        }
-        lastExtrasAt = Date()
         lastUpdateAt = Date()
         climateEpoch &+= 1
-        if changed { objectWillChange.send() }
+        objectWillChange.send()
     }
 
     func applyTeslaTPMS(fl: EtubuTireReading, fr: EtubuTireReading, rl: EtubuTireReading, rr: EtubuTireReading) {
@@ -705,11 +717,13 @@ final class EtubuVehicleTelemetry: ObservableObject {
     /// Phone GPS hızı — yalnızca Tesla/OBD oturumu yokken. BLE bağlıyken asla ezmez.
     func applyGpsSpeedBridge(kmh: Int) {
         if EtubuDemoDrive.isActive { return }
-        // Kesin kaynak: canlı / yeniden bağlanan Tesla → GPS hız yazmasın.
-        if source == .tesla,
-           connectionState == .connected
+        // Kesin kaynak: Tesla oturumu (connected / reconnect / connecting / paired live).
+        if source == .tesla { return }
+        if connectionState == .connected
             || connectionState == .reconnecting
-            || connectionState == .connecting {
+            || connectionState == .connecting
+            || connectionState == .pairing
+            || connectionState == .waitingForCard {
             return
         }
         if source == .obd {
