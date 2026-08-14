@@ -350,7 +350,36 @@ const I18n = (() => {
       premiumMonthlyShort: "Aylık $3",
       premiumLifetimeShort: "Ömür boyu $30",
       pickerSelect: "Seçin",
-      pickerEmpty: "Seçenek yok"
+      pickerEmpty: "Seçenek yok",
+      introSkip: "Atla",
+      introNext: "İleri",
+      introStart: "Sürüşe geç",
+      introBack: "Geri",
+      introReopen: "Nasıl kullanılır",
+      intro1Title: "GPS hızına senkron EV sesi",
+      intro1Body: "Araç hızlandıkça ve yavaşladıkça motor sesi anında değişir. Tesla tarayıcısında ve telefonda çalışır.",
+      intro2Title: "Nasıl kullanılır",
+      intro2Body: "Soldan ses ve temayı seçin, Başlat’a dokunun, konum iznini verin. Sürüşe çıkın — ses GPS hızını takip eder.",
+      intro3Title: "Yol uyarıları",
+      intro3Body: "OSM’den radar, hız limiti levhası ve kritik noktalar. Limit aşımında levha parlar; üst şerit uyarır.",
+      intro4Title: "Kadran ve panel",
+      intro4Body: "Kadrana dokunarak görünümü değiştirin. Soldaki ok paneli açar veya kapatır. Hazırsanız sürüşe geçin.",
+      consentTitle: "Çerezler ve gizlilik",
+      consentBody: "Zorunlu çerezler sitenin çalışması içindir. Analitik (Google) ve reklam (Yandex) yalnızca siz izin verirseniz kullanılır.",
+      consentPrivacy: "Gizlilik politikası",
+      consentReject: "Yalnızca zorunlu",
+      consentSettings: "Ayarlar",
+      consentAccept: "Tümünü kabul et",
+      consentSave: "Seçimi kaydet",
+      consentNec: "Zorunlu",
+      consentNecH: "Güvenlik, oturum ve bu izin kaydı. Kapatılamaz.",
+      consentPref: "Tercihler",
+      consentPrefH: "Dil, ses/tema, tanıtım turunun tekrar gösterilmemesi.",
+      consentAna: "Analitik",
+      consentAnaH: "Google Analytics — ziyaret ölçümü, IP kısmi maskeleme.",
+      consentMkt: "Reklam",
+      consentMktH: "Yandex RTB / Google reklamları.",
+      consentReopen: "Çerez ayarları"
     },
     en: {
       appTitle: "ETUBU — EV Driving Sounds | GPS-Synced Electric Car Sound",
@@ -696,7 +725,36 @@ const I18n = (() => {
       premiumMonthlyShort: "Monthly $3",
       premiumLifetimeShort: "Lifetime $30",
       pickerSelect: "Select",
-      pickerEmpty: "No options"
+      pickerEmpty: "No options",
+      introSkip: "Skip",
+      introNext: "Next",
+      introStart: "Start driving",
+      introBack: "Back",
+      introReopen: "How to use",
+      intro1Title: "GPS-synced EV driving sound",
+      intro1Body: "The motor tone follows acceleration and braking in real time — in the Tesla browser and on your phone.",
+      intro2Title: "How to use it",
+      intro2Body: "Pick a voice and theme on the left, tap Start, allow location. Drive — the sound tracks GPS speed.",
+      intro3Title: "Road alerts",
+      intro3Body: "OSM cameras, a Tesla-style speed-limit badge, and nearby hazards. Overspeed makes the badge glow.",
+      intro4Title: "Dial and panel",
+      intro4Body: "Tap the dial to change its look. The side arrow opens or hides the panel. Ready? Jump in.",
+      consentTitle: "Cookies and privacy",
+      consentBody: "Necessary cookies make the site work. Analytics (Google) and ads (Yandex) run only with your permission.",
+      consentPrivacy: "Privacy policy",
+      consentReject: "Necessary only",
+      consentSettings: "Settings",
+      consentAccept: "Accept all",
+      consentSave: "Save choices",
+      consentNec: "Necessary",
+      consentNecH: "Security, session and this consent record. Always on.",
+      consentPref: "Preferences",
+      consentPrefH: "Language, sound/theme, hiding the intro tour.",
+      consentAna: "Analytics",
+      consentAnaH: "Google Analytics — visit measurement with IP anonymization.",
+      consentMkt: "Advertising",
+      consentMktH: "Yandex RTB / Google ads.",
+      consentReopen: "Cookie settings"
     },
     de: {
       appTitle: "ETUBU — EV-Fahrgeräusche | GPS-synchroner Elektromotorsound",
@@ -1041,7 +1099,36 @@ const I18n = (() => {
       premiumMonthlyShort: "Monatlich $3",
       premiumLifetimeShort: "Lebenslang $30",
       pickerSelect: "Auswählen",
-      pickerEmpty: "Keine Optionen"
+      pickerEmpty: "Keine Optionen",
+      introSkip: "Überspringen",
+      introNext: "Weiter",
+      introStart: "Losfahren",
+      introBack: "Zurück",
+      introReopen: "So geht’s",
+      intro1Title: "GPS-synchroner EV-Sound",
+      intro1Body: "Der Motorston folgt Beschleunigung und Bremsen in Echtzeit — im Tesla-Browser und am Handy.",
+      intro2Title: "So nutzt du es",
+      intro2Body: "Links Stimme und Theme wählen, Start tippen, Standort erlauben. Fahren — der Sound folgt der GPS-Geschwindigkeit.",
+      intro3Title: "Straßenwarnungen",
+      intro3Body: "OSM-Blitzer, Tesla-ähnliches Tempolimit-Schild und Gefahrenpunkte. Bei Überschreitung leuchtet das Schild.",
+      intro4Title: "Tacho und Panel",
+      intro4Body: "Tacho antippen, um das Design zu wechseln. Der Pfeil öffnet oder schließt das Panel.",
+      consentTitle: "Cookies und Datenschutz",
+      consentBody: "Notwendige Cookies betreiben die Seite. Analyse (Google) und Werbung (Yandex) nur mit Ihrer Erlaubnis.",
+      consentPrivacy: "Datenschutz",
+      consentReject: "Nur notwendige",
+      consentSettings: "Einstellungen",
+      consentAccept: "Alle akzeptieren",
+      consentSave: "Auswahl speichern",
+      consentNec: "Notwendig",
+      consentNecH: "Sicherheit, Sitzung und dieser Einwilligungsdatensatz. Immer an.",
+      consentPref: "Einstellungen",
+      consentPrefH: "Sprache, Sound/Theme, Intro nicht erneut zeigen.",
+      consentAna: "Analyse",
+      consentAnaH: "Google Analytics — Besuchsmessung mit IP-Anonymisierung.",
+      consentMkt: "Werbung",
+      consentMktH: "Yandex RTB / Google-Anzeigen.",
+      consentReopen: "Cookie-Einstellungen"
     },
     fr: {
       appTitle: "ETUBU — Sons de conduite EV | Son moteur électrique synchronisé GPS",
@@ -1386,7 +1473,36 @@ const I18n = (() => {
       premiumMonthlyShort: "Mensuel $3",
       premiumLifetimeShort: "À vie $30",
       pickerSelect: "Choisir",
-      pickerEmpty: "Aucune option"
+      pickerEmpty: "Aucune option",
+      introSkip: "Passer",
+      introNext: "Suivant",
+      introStart: "Passer à la conduite",
+      introBack: "Retour",
+      introReopen: "Mode d’emploi",
+      intro1Title: "Son EV synchronisé au GPS",
+      intro1Body: "Le son moteur suit l’accélération et le freinage en temps réel — navigateur Tesla et téléphone.",
+      intro2Title: "Comment l’utiliser",
+      intro2Body: "Choisissez voix et thème à gauche, appuyez sur Démarrer, autorisez la position. Le son suit la vitesse GPS.",
+      intro3Title: "Alertes routières",
+      intro3Body: "Radars OSM, disque de limitation façon Tesla et points critiques. Un dépassement fait briller le disque.",
+      intro4Title: "Cadran et panneau",
+      intro4Body: "Touchez le cadran pour changer l’affichage. La flèche ouvre ou ferme le panneau.",
+      consentTitle: "Cookies et confidentialité",
+      consentBody: "Les cookies nécessaires font fonctionner le site. Analytics (Google) et pubs (Yandex) uniquement avec votre accord.",
+      consentPrivacy: "Politique de confidentialité",
+      consentReject: "Nécessaires uniquement",
+      consentSettings: "Paramètres",
+      consentAccept: "Tout accepter",
+      consentSave: "Enregistrer",
+      consentNec: "Nécessaires",
+      consentNecH: "Sécurité, session et cet enregistrement de consentement. Toujours actifs.",
+      consentPref: "Préférences",
+      consentPrefH: "Langue, son/thème, ne plus afficher l’intro.",
+      consentAna: "Mesure d’audience",
+      consentAnaH: "Google Analytics — mesure des visites avec IP anonymisée.",
+      consentMkt: "Publicité",
+      consentMktH: "Yandex RTB / publicités Google.",
+      consentReopen: "Paramètres des cookies"
     },
     es: {
       appTitle: "ETUBU — Sonidos de conducción EV | Sonido de motor eléctrico sincronizado con GPS",
@@ -1731,7 +1847,36 @@ const I18n = (() => {
       premiumMonthlyShort: "Mensual $3",
       premiumLifetimeShort: "De por vida $30",
       pickerSelect: "Seleccionar",
-      pickerEmpty: "Sin opciones"
+      pickerEmpty: "Sin opciones",
+      introSkip: "Saltar",
+      introNext: "Siguiente",
+      introStart: "Pasar a conducir",
+      introBack: "Atrás",
+      introReopen: "Cómo usarlo",
+      intro1Title: "Sonido EV sincronizado con GPS",
+      intro1Body: "El tono del motor sigue la aceleración y el freno en tiempo real — en el navegador Tesla y en el teléfono.",
+      intro2Title: "Cómo usarlo",
+      intro2Body: "Elige voz y tema a la izquierda, pulsa Iniciar y permite la ubicación. El sonido sigue la velocidad GPS.",
+      intro3Title: "Alertas de carretera",
+      intro3Body: "Radares OSM, disco de límite al estilo Tesla y puntos críticos. Si excedes, el disco brilla.",
+      intro4Title: "Esfera y panel",
+      intro4Body: "Toca la esfera para cambiar el aspecto. La flecha abre o cierra el panel.",
+      consentTitle: "Cookies y privacidad",
+      consentBody: "Las cookies necesarias hacen funcionar el sitio. Analítica (Google) y anuncios (Yandex) solo con su permiso.",
+      consentPrivacy: "Política de privacidad",
+      consentReject: "Solo necesarias",
+      consentSettings: "Ajustes",
+      consentAccept: "Aceptar todo",
+      consentSave: "Guardar",
+      consentNec: "Necesarias",
+      consentNecH: "Seguridad, sesión y este registro de consentimiento. Siempre activas.",
+      consentPref: "Preferencias",
+      consentPrefH: "Idioma, sonido/tema, no volver a mostrar la intro.",
+      consentAna: "Analítica",
+      consentAnaH: "Google Analytics — medición de visitas con IP anonimizada.",
+      consentMkt: "Publicidad",
+      consentMktH: "Yandex RTB / anuncios de Google.",
+      consentReopen: "Ajustes de cookies"
     },
     ja: {
       appTitle: "ETUBU — EVドライビングサウンド | GPS同期の電動モーター音",
@@ -2076,7 +2221,36 @@ const I18n = (() => {
       premiumMonthlyShort: "月額 $3",
       premiumLifetimeShort: "生涯 $30",
       pickerSelect: "選択",
-      pickerEmpty: "選択肢なし"
+      pickerEmpty: "選択肢なし",
+      introSkip: "スキップ",
+      introNext: "次へ",
+      introStart: "運転を始める",
+      introBack: "戻る",
+      introReopen: "使い方",
+      intro1Title: "GPS連動のEV走行音",
+      intro1Body: "加速・減速に合わせてモーター音がリアルタイムで変わります。Teslaブラウザとスマホで使えます。",
+      intro2Title: "使い方",
+      intro2Body: "左で音声とテーマを選び、開始をタップして位置情報を許可。走行すると音がGPS速度に追従します。",
+      intro3Title: "道路アラート",
+      intro3Body: "OSMのカメラ、Tesla風制限速度バッジ、危険地点。制限超過でバッジが光ります。",
+      intro4Title: "メーターとパネル",
+      intro4Body: "メーターをタップして見た目を切替。横の矢印でパネルを開閉できます。",
+      consentTitle: "Cookieとプライバシー",
+      consentBody: "必須Cookieはサイトの動作に必要です。分析（Google）と広告（Yandex）は許可した場合のみ使用します。",
+      consentPrivacy: "プライバシーポリシー",
+      consentReject: "必須のみ",
+      consentSettings: "設定",
+      consentAccept: "すべて許可",
+      consentSave: "選択を保存",
+      consentNec: "必須",
+      consentNecH: "セキュリティ、セッション、この同意記録。常にオン。",
+      consentPref: "設定",
+      consentPrefH: "言語、サウンド/テーマ、イントロの再表示抑制。",
+      consentAna: "アクセス解析",
+      consentAnaH: "Google Analytics — IP匿名化による訪問計測。",
+      consentMkt: "広告",
+      consentMktH: "Yandex RTB / Google広告。",
+      consentReopen: "Cookie設定"
     },
     ru: {
       appTitle: "ETUBU — Звуки вождения EV | GPS-синхронизированный звук электромотора",
@@ -2421,7 +2595,36 @@ const I18n = (() => {
       premiumMonthlyShort: "Ежемесячно $3",
       premiumLifetimeShort: "Навсегда $30",
       pickerSelect: "Выбрать",
-      pickerEmpty: "Нет вариантов"
+      pickerEmpty: "Нет вариантов",
+      introSkip: "Пропустить",
+      introNext: "Далее",
+      introStart: "К вождению",
+      introBack: "Назад",
+      introReopen: "Как пользоваться",
+      intro1Title: "EV-звук по GPS",
+      intro1Body: "Тон мотора следует за разгоном и торможением в реальном времени — в браузере Tesla и на телефоне.",
+      intro2Title: "Как пользоваться",
+      intro2Body: "Слева выберите голос и тему, нажмите Старт и разрешите геолокацию. Звук следует скорости GPS.",
+      intro3Title: "Дорожные предупреждения",
+      intro3Body: "Камеры OSM, значок лимита как у Tesla и опасные точки. При превышении значок светится.",
+      intro4Title: "Циферблат и панель",
+      intro4Body: "Нажмите на циферблат, чтобы сменить вид. Стрелка открывает или скрывает панель.",
+      consentTitle: "Файлы cookie и конфиденциальность",
+      consentBody: "Необходимые cookie обеспечивают работу сайта. Аналитика (Google) и реклама (Yandex) — только с вашего согласия.",
+      consentPrivacy: "Политика конфиденциальности",
+      consentReject: "Только необходимые",
+      consentSettings: "Настройки",
+      consentAccept: "Принять все",
+      consentSave: "Сохранить",
+      consentNec: "Необходимые",
+      consentNecH: "Безопасность, сессия и эта запись согласия. Всегда включены.",
+      consentPref: "Предпочтения",
+      consentPrefH: "Язык, звук/тема, не показывать интро снова.",
+      consentAna: "Аналитика",
+      consentAnaH: "Google Analytics — измерение посещений с анонимизацией IP.",
+      consentMkt: "Реклама",
+      consentMktH: "Yandex RTB / реклама Google.",
+      consentReopen: "Настройки cookie"
     }
   };
 
@@ -2447,8 +2650,11 @@ const I18n = (() => {
       if (durable && SUPPORTED.includes(durable)) return durable;
     } catch (_) {}
     try {
-      const saved = localStorage.getItem(STORAGE_LANG);
-      if (saved && SUPPORTED.includes(saved)) return saved;
+      const persist = typeof Consent === "undefined" || Consent.allows("preferences");
+      if (persist) {
+        const saved = localStorage.getItem(STORAGE_LANG);
+        if (saved && SUPPORTED.includes(saved)) return saved;
+      }
     } catch (_) {}
     const nav = (navigator.language || "tr").slice(0, 2).toLowerCase();
     if (SUPPORTED.includes(nav)) return nav;
@@ -2547,6 +2753,16 @@ const I18n = (() => {
     try {
       I18n._ensureVoices?.();
     } catch (_) {}
+    try {
+      if (typeof Consent !== "undefined" && !init._consentBound) {
+        init._consentBound = true;
+        Consent.onChange(() => {
+          if (!Consent.allows("preferences")) return;
+          const next = detect();
+          if (next && next !== lang) setLang(next);
+        });
+      }
+    } catch (_) {}
   }
 
   function fillLangSelect() {
@@ -2569,7 +2785,7 @@ const I18n = (() => {
     try {
       if (typeof CarBrowser !== "undefined" && CarBrowser.setPref) {
         CarBrowser.setPref("lang", code);
-      } else {
+      } else if (typeof Consent === "undefined" || Consent.allows("preferences")) {
         localStorage.setItem(STORAGE_LANG, code);
       }
     } catch (_) {}
@@ -2705,76 +2921,10 @@ const I18n = (() => {
     },
 
     /**
-     * Short drive-safe TTS. Debounced by key when provided.
-     * @param {string} text
-     * @param {{ key?: string, urgent?: boolean }} [opts]
+     * TTS removed — native cluster plays distinct warning beeps only.
      */
     speak(text, opts = {}) {
-      const msg = String(text || "").trim();
-      if (!msg) return false;
-      // Uyarı TTS yalnızca Türkçe UI’da (klip + speechSynthesis)
-      try {
-        if (!String(I18n.lang || "").toLowerCase().startsWith("tr")) return false;
-      } catch (_) {
-        return false;
-      }
-      const key = opts.key || msg;
-      const now = Date.now();
-      if (!I18n._speakState) I18n._speakState = { key: "", at: 0 };
-      const st = I18n._speakState;
-      const gap = opts.urgent ? 12000 : 26000;
-      if (st.key === key && now - st.at < gap) return false;
-      st.key = key;
-      st.at = now;
-
-      // Native cluster: Cap voice off — Swift EtubuWarnVoice owns phrases.
-      if (window.__ETUBU_NATIVE_CLUSTER__) {
-        return false;
-      }
-
-      // TR: ElevenLabs warn clips (WarnVoice) — TTS only as fallback.
-      try {
-        if (
-          window.WarnVoice &&
-          typeof window.WarnVoice.speak === "function" &&
-          window.WarnVoice.speak(msg, { ...opts, key })
-        ) {
-          return true;
-        }
-      } catch (_) {}
-
-      try {
-        const synth = window.speechSynthesis;
-        if (!synth || typeof SpeechSynthesisUtterance === "undefined") return false;
-        I18n._ensureVoices();
-        const locale = I18n.speechLocale();
-        const voice = I18n._pickMaleVoice(locale);
-
-        // Chrome: cancel + speak aynı tick'te sessiz kalabiliyor
-        try {
-          synth.cancel();
-        } catch (_) {}
-
-        const speakNow = () => {
-          try {
-            const u = new SpeechSynthesisUtterance(msg);
-            u.lang = locale;
-            if (voice) {
-              u.voice = voice;
-              if (voice.lang) u.lang = voice.lang;
-            }
-            // Erkek ton: tüm tarayıcılarda biraz daha düşük pitch
-            u.rate = opts.urgent ? 0.98 : 0.94;
-            u.pitch = 0.82;
-            u.volume = 1;
-            synth.speak(u);
-          } catch (_) {}
-        };
-        setTimeout(speakNow, 40);
-        return true;
-      } catch (_) {
-        return false;
-      }
+      return false;
     },
   };
 })();

@@ -30,11 +30,11 @@ struct EtubuPremiumSettingsSection: View {
                 Label {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(EtubuClusterL10n.t("premiumActive"))
-                            .font(.body.weight(.semibold))
+                            .font(EtubuClusterFonts.ui(16, weight: .semibold))
                         if premium.isSignedIn {
                             Text(premium.appleDisplayName ?? EtubuClusterL10n.t("premiumSignedIn"))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .font(EtubuClusterFonts.ui(12, weight: .medium))
+                                .foregroundStyle(ClusterTheme.stored.mutedText)
                         }
                     }
                 } icon: {
@@ -65,8 +65,8 @@ struct EtubuPremiumSettingsSection: View {
                     }
                 }
                 Text(String(format: EtubuClusterL10n.t("premiumPriceOnce"), premium.displayPrice))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .font(EtubuClusterFonts.ui(12, weight: .medium))
+                    .foregroundStyle(ClusterTheme.stored.mutedText)
             }
 
             if !premium.isSignedIn {
@@ -84,7 +84,7 @@ struct EtubuPremiumSettingsSection: View {
                     Image(systemName: "person.crop.circle.fill")
                         .foregroundStyle(.secondary)
                     Text(premium.appleDisplayName ?? EtubuClusterL10n.t("premiumSignedIn"))
-                        .font(.subheadline)
+                        .font(EtubuClusterFonts.ui(14, weight: .medium))
                     Spacer()
                 }
                 Button(role: .destructive) {
@@ -123,15 +123,15 @@ struct EtubuPremiumSettingsSection: View {
 
             if let err = premium.lastError, !err.isEmpty {
                 Text(err)
-                    .font(.caption2)
+                    .font(EtubuClusterFonts.ui(12, weight: .medium))
                     .foregroundStyle(.orange)
             }
         } header: {
-            Text(EtubuClusterL10n.t("premiumSection"))
+            EtubuSheetSectionTitle(title: EtubuClusterL10n.t("premiumSection"), theme: ClusterTheme.stored, motion: .premium)
         } footer: {
-            Text(EtubuClusterL10n.t("premiumFooter"))
-                .font(.caption2)
+            EtubuSheetHint(text: EtubuClusterL10n.t("premiumFooter"), theme: ClusterTheme.stored)
         }
+        .etubuSheetSection(ClusterTheme.stored)
     }
 }
 
@@ -139,6 +139,7 @@ struct EtubuPremiumSettingsSection: View {
 struct EtubuPremiumPaywallView: View {
     @ObservedObject private var premium = EtubuPremiumManager.shared
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.clusterTheme) private var theme
     var accent: Color = .orange
     var highlight: String? = nil
 
@@ -153,10 +154,11 @@ struct EtubuPremiumPaywallView: View {
                             .frame(width: 40, height: 40)
                         VStack(alignment: .leading, spacing: 4) {
                             Text(EtubuClusterL10n.t("premiumTitle"))
-                                .font(.title2.weight(.bold))
+                                .font(EtubuClusterFonts.ui(22, weight: .bold))
+                                .foregroundStyle(theme.primaryText)
                             Text(String(format: EtubuClusterL10n.t("premiumPriceOnce"), premium.displayPrice))
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.secondary)
+                                .font(EtubuClusterFonts.ui(14, weight: .semibold))
+                                .foregroundStyle(theme.mutedText)
                                 .accessibilityIdentifier("etubu.premium.price")
                                 .accessibilityLabel(premium.displayPrice)
                         }
@@ -165,26 +167,22 @@ struct EtubuPremiumPaywallView: View {
 
                     if let highlight, !highlight.isEmpty {
                         Text(highlight)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .font(EtubuClusterFonts.ui(14, weight: .medium))
+                            .foregroundStyle(theme.secondaryText)
                             .accessibilityIdentifier("etubu.premium.highlight")
                     }
 
                     VStack(alignment: .leading, spacing: 10) {
                         Text(EtubuClusterL10n.t("premiumFreeNote"))
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
+                            .font(EtubuClusterFonts.ui(12, weight: .semibold))
+                            .foregroundStyle(theme.mutedText)
                             .accessibilityIdentifier("etubu.premium.free.note")
                         featureRow("paintpalette.fill", EtubuClusterL10n.t("premiumFeatThemes"), id: "etubu.premium.feat.themes")
                         featureRow("map.fill", EtubuClusterL10n.t("premiumFeatMap"), id: "etubu.premium.feat.map")
                         featureRow("point.topleft.down.to.point.bottomright.curvepath.fill", EtubuClusterL10n.t("premiumFeatRoute"), id: "etubu.premium.feat.route")
                         featureRow("exclamationmark.triangle.fill", EtubuClusterL10n.t("premiumFeatWarn"), id: "etubu.premium.feat.warn")
                     }
-                    .padding(14)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(Color.primary.opacity(0.06))
-                    )
+                    .etubuSheetCard(theme)
 
                     if !premium.isSignedIn {
                         Button {
@@ -194,6 +192,7 @@ struct EtubuPremiumPaywallView: View {
                                 premium.signingIn ? EtubuClusterL10n.t("premiumSigningIn") : EtubuClusterL10n.t("premiumSignInApple"),
                                 systemImage: "apple.logo"
                             )
+                            .font(EtubuClusterFonts.ui(16, weight: .semibold))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
                         }
@@ -205,8 +204,8 @@ struct EtubuPremiumPaywallView: View {
                             premium.appleDisplayName ?? EtubuClusterL10n.t("premiumSignedIn"),
                             systemImage: "checkmark.circle.fill"
                         )
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .font(EtubuClusterFonts.ui(14, weight: .medium))
+                        .foregroundStyle(theme.mutedText)
                     }
 
                     Button {
@@ -218,18 +217,19 @@ struct EtubuPremiumPaywallView: View {
                         Group {
                             if premium.purchasing {
                                 ProgressView()
+                                    .tint(.black)
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 14)
                             } else {
                                 Text(String(format: EtubuClusterL10n.t("premiumBuy"), premium.displayPrice))
-                                    .font(.headline)
+                                    .font(EtubuClusterFonts.ui(16, weight: .bold))
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 14)
                             }
                         }
+                        .foregroundStyle(.black)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(accent)
+                    .background(theme.accent, in: Capsule())
                     .disabled(premium.purchasing || premium.restoring)
                     .accessibilityIdentifier("etubu.premium.buy")
                     .accessibilityLabel(EtubuClusterL10n.t("premiumBuyA11y"))
@@ -242,6 +242,7 @@ struct EtubuPremiumPaywallView: View {
                         }
                     } label: {
                         Label(EtubuClusterL10n.t("premiumRedeemCode"), systemImage: "ticket.fill")
+                            .font(EtubuClusterFonts.ui(15, weight: .semibold))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
                     }
@@ -256,28 +257,36 @@ struct EtubuPremiumPaywallView: View {
                         }
                     } label: {
                         Text(premium.restoring ? EtubuClusterL10n.t("premiumRestoring") : EtubuClusterL10n.t("premiumRestore"))
+                            .font(EtubuClusterFonts.ui(15, weight: .medium))
                             .frame(maxWidth: .infinity)
                     }
                     .disabled(premium.restoring || premium.purchasing)
                     .accessibilityIdentifier("etubu.premium.restore")
 
                     Text(EtubuClusterL10n.t("premiumLegal"))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .font(EtubuClusterFonts.ui(11, weight: .medium))
+                        .foregroundStyle(theme.mutedText)
 
                     if let err = premium.lastError, !err.isEmpty {
                         Text(err)
-                            .font(.caption)
+                            .font(EtubuClusterFonts.ui(12, weight: .medium))
                             .foregroundStyle(.orange)
                     }
                 }
                 .padding(20)
             }
+            .background { EtubuSheetBackdrop(theme: theme) }
             .navigationTitle(EtubuClusterL10n.t("premiumSection"))
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(theme.canvas.opacity(0.94), for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .preferredColorScheme(.dark)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(EtubuClusterL10n.close) { dismiss() }
+                        .font(EtubuClusterFonts.ui(16, weight: .semibold))
+                        .foregroundStyle(theme.accent)
                 }
             }
             .task {
@@ -286,15 +295,17 @@ struct EtubuPremiumPaywallView: View {
                 }
             }
         }
+        .tint(theme.accent)
     }
 
     private func featureRow(_ symbol: String, _ text: String, id: String) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: symbol)
-                .foregroundStyle(accent)
+                .foregroundStyle(accent == .orange ? theme.accent : accent)
                 .frame(width: 22)
             Text(text)
-                .font(.subheadline)
+                .font(EtubuClusterFonts.ui(14, weight: .medium))
+                .foregroundStyle(theme.primaryText)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .accessibilityElement(children: .combine)

@@ -3,7 +3,7 @@ import CoreLocation
 import Combine
 
 /// Live OSM Overpass hazards around the vehicle (150 m / 60 s refresh).
-/// EGM/official stay primary — this feed is led or supplement via `EtubuHazardMerge`.
+/// OSM is the primary road-warning feed (EGM retired).
 @MainActor
 final class EtubuOsmHazardsMonitor: ObservableObject {
     static let shared = EtubuOsmHazardsMonitor()
@@ -26,10 +26,19 @@ final class EtubuOsmHazardsMonitor: ObservableObject {
 
     private init() {}
 
-    /// Called from DriveWarnings while moving / premium.
+    /// Called from DriveWarnings while nav active (parked OK — fetch still runs).
     func tick(lat: Double?, lng: Double?, kmh: Int) {
         guard let lat, let lng, lat != 0, lng != 0 else { return }
-        guard kmh >= EtubuOsmSpeedLimit.movingKmhThreshold || EtubuDemoDrive.isActive else { return }
+        // Fetch regardless of speed so route-start has OSM mixed in immediately.
+        refreshIfNeeded(lat: lat, lng: lng)
+        _ = kmh
+    }
+
+    /// Rota planı sonrası paralel tetik — stale zorla.
+    func prefetch(lat: Double, lng: Double) {
+        guard lat != 0, lng != 0 else { return }
+        fetchCenter = nil
+        fetchedAt = nil
         refreshIfNeeded(lat: lat, lng: lng)
     }
 
@@ -105,7 +114,16 @@ final class EtubuOsmHazardsMonitor: ObservableObject {
           node["traffic_calming"="bump"](around:\(r),\(lat),\(lng));
           node["traffic_calming"="hump"](around:\(r),\(lat),\(lng));
           node["traffic_calming"="table"](around:\(r),\(lat),\(lng));
-        );out body;
+          node["amenity"="charging_station"](around:\(r),\(lat),\(lng));
+          node["highway"="traffic_signals"]["crossing"="traffic_signals"](around:\(r),\(lat),\(lng));
+          node["hazard"](around:\(r),\(lat),\(lng));
+          node["mountain_pass"="yes"](around:\(r),\(lat),\(lng));
+          node["natural"="saddle"](around:\(r),\(lat),\(lng));
+          way["tunnel"="yes"](around:\(r),\(lat),\(lng));
+          way["highway"="motorway"]["tunnel"="yes"](around:\(r),\(lat),\(lng));
+          way["hazard"](around:\(r),\(lat),\(lng));
+          way["mountain_pass"="yes"](around:\(r),\(lat),\(lng));
+        );out body center;
         """
         for urlStr in endpoints {
             guard let url = URL(string: urlStr) else { continue }
@@ -132,8 +150,11 @@ final class EtubuOsmHazardsMonitor: ObservableObject {
         else { return [] }
         var out: [EtubuRouteHazard] = []
         for el in elements {
+            let center = el["center"] as? [String: Any]
             let lat = (el["lat"] as? NSNumber)?.doubleValue ?? (el["lat"] as? Double)
+                ?? (center?["lat"] as? NSNumber)?.doubleValue ?? (center?["lat"] as? Double)
             let lon = (el["lon"] as? NSNumber)?.doubleValue ?? (el["lon"] as? Double)
+                ?? (center?["lon"] as? NSNumber)?.doubleValue ?? (center?["lon"] as? Double)
             guard let lat, let lon else { continue }
             let tags = el["tags"] as? [String: String] ?? [:]
             guard let kind = classify(tags) else { continue }
@@ -144,6 +165,7 @@ final class EtubuOsmHazardsMonitor: ObservableObject {
                 return "\(lat)-\(lon)"
             }()
             let lengthKm: Double? = kind == "corridor" ? 8 : nil
+            let kw: Int? = kind == "charge" ? Int(tags["capacity"] ?? "") : nil
             out.append(EtubuRouteHazard(
                 id: "osmhz-\(oid)",
                 kind: kind,
@@ -151,13 +173,16 @@ final class EtubuOsmHazardsMonitor: ObservableObject {
                 lat: lat,
                 lng: lon,
                 maxspeed: maxspeed,
+                kw: kw,
                 lengthKm: lengthKm
             ))
         }
         return EtubuHazardMerge.dedupePreferOfficial(out)
     }
 
-    private static func classify(_ tags: [String: String]) -> String? {
+    /// Shared OSM tag → hazard kind (live 900 m + along-route Overpass).
+    nonisolated static func classify(_ tags: [String: String]) -> String? {
+        if tags["amenity"] == "charging_station" { return "charge" }
         if tags["highway"] == "speed_camera"
             || tags["enforcement"] == "maxspeed"
             || tags["camera:type"] == "speed" {
@@ -172,6 +197,26 @@ final class EtubuOsmHazardsMonitor: ObservableObject {
             || tags["railway"] == "crossing"
             || tags["crossing:barrier"] != nil {
             return "railway"
+        }
+        if tags["tunnel"] == "yes" || tags["highway"] == "tunnel" {
+            return "tunnel"
+        }
+        let hazard = (tags["hazard"] ?? "").lowercased()
+        if ["curve", "curves", "winding_road", "bend"].contains(hazard) {
+            return "winding"
+        }
+        if ["flood", "ice", "rock_fall", "falling_rocks", "landslide", "avalanche", "slippery"].contains(hazard) {
+            return "road_condition"
+        }
+        if hazard == "animal_crossing" || tags["hazard"] == "animal" {
+            return "animal"
+        }
+        if tags["mountain_pass"] == "yes" || tags["natural"] == "saddle" {
+            return "climb"
+        }
+        if let inc = tags["incline"], inc.contains("%"),
+           let n = Double(inc.replacingOccurrences(of: "%", with: "")), abs(n) >= 8 {
+            return "climb"
         }
         if tags["highway"] == "traffic_signals" || tags["traffic_signals"] != nil {
             return "traffic_light"

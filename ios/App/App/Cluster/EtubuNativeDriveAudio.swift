@@ -11,12 +11,15 @@ final class EtubuNativeDriveAudio {
     private var bodyPlayer: AVAudioPlayer?
     private var humPlayer: AVAudioPlayer?
     private var regenPlayer: AVAudioPlayer?
+    /// Keep fading players alive until stop — iOS 27 `finishedPlaying:` crash otherwise.
+    private var retiringPlayers: [AVAudioPlayer] = []
     private var running = false
     private var muted = false
     private var currentVoice = "calm-ev"
     private var currentPack = "calm-ev"
     private var lastKmh: Double = 0
     private var lastPower: Double = 0
+    private var lastAccel: Double = 0
     private var character = VoiceCharacter.evSoft
 
     /// Continuous engine RPM 0…1 (flywheel) — never snaps.
@@ -43,7 +46,7 @@ final class EtubuNativeDriveAudio {
             let pack = Self.resolvePack(key)
             if self.running, self.currentVoice == key, self.currentPack == pack {
                 if !self.muted {
-                    self.applyParams(kmh: self.lastKmh, powerKw: self.lastPower)
+                    self.applyParams(kmh: self.lastKmh, powerKw: self.lastPower, accelKmhS: self.lastAccel)
                 }
                 return
             }
@@ -77,7 +80,7 @@ final class EtubuNativeDriveAudio {
                 self.bodyPlayer?.play()
                 self.humPlayer?.play()
                 self.regenPlayer?.play()
-                self.applyParams(kmh: max(self.lastKmh, 18), powerKw: self.lastPower)
+                self.applyParams(kmh: max(self.lastKmh, 18), powerKw: self.lastPower, accelKmhS: self.lastAccel)
                 if let oldBody { self.fadeOutAndStop(oldBody) }
                 if let oldHum { self.fadeOutAndStop(oldHum) }
                 if let oldRegen { self.fadeOutAndStop(oldRegen) }
@@ -118,19 +121,43 @@ final class EtubuNativeDriveAudio {
                     self.smoothHumVol = 0.03
                     self.smoothRegenVol = 0
                 }
-                self.applyParams(kmh: self.lastKmh, powerKw: self.lastPower)
+                self.applyParams(kmh: self.lastKmh, powerKw: self.lastPower, accelKmhS: self.lastAccel)
             }
         }
         if Thread.isMainThread { work() } else { DispatchQueue.main.async(execute: work) }
     }
 
-    func setSpeed(kmh: Int, powerKw: Int?) {
+    func setSpeed(kmh: Int, powerKw: Int?, accelKmhS: Double? = nil) {
+        setSpeed(kmh: Double(max(0, kmh)), powerKw: powerKw.map { Double($0) }, accelKmhS: accelKmhS)
+    }
+
+    func setSpeed(kmh: Double, powerKw: Double?, accelKmhS: Double? = nil) {
         let work = { [weak self] in
             guard let self else { return }
-            self.lastKmh = Double(max(0, kmh))
-            if let powerKw { self.lastPower = Double(powerKw) }
+            self.lastKmh = max(0, kmh)
+            if let powerKw { self.lastPower = powerKw }
+            if let accelKmhS, accelKmhS.isFinite { self.lastAccel = accelKmhS }
+            else {
+                let dt = 0.12
+                let dv = self.lastKmh - self.prevKmh
+                if abs(dv) >= 0.12 {
+                    self.lastAccel = dv / dt
+                }
+            }
             guard self.running, !self.muted else { return }
-            self.applyParams(kmh: self.lastKmh, powerKw: self.lastPower)
+            self.applyParams(kmh: self.lastKmh, powerKw: self.lastPower, accelKmhS: self.lastAccel)
+        }
+        if Thread.isMainThread { work() } else { DispatchQueue.main.async(execute: work) }
+    }
+
+    func resumeIfNeeded() {
+        let work = { [weak self] in
+            guard let self else { return }
+            guard self.running, !self.muted else { return }
+            if self.bodyPlayer?.isPlaying != true { self.bodyPlayer?.play() }
+            if self.humPlayer?.isPlaying != true { self.humPlayer?.play() }
+            if self.regenPlayer?.isPlaying != true { self.regenPlayer?.play() }
+            self.applyParams(kmh: self.lastKmh, powerKw: self.lastPower, accelKmhS: self.lastAccel)
         }
         if Thread.isMainThread { work() } else { DispatchQueue.main.async(execute: work) }
     }
@@ -143,6 +170,7 @@ final class EtubuNativeDriveAudio {
             self.muted = false
             self.lastKmh = 0
             self.lastPower = 0
+            self.lastAccel = 0
             self.engineRpm = 0.12
             self.smoothThrottle = 0
             self.smoothRegen = 0
@@ -183,23 +211,34 @@ final class EtubuNativeDriveAudio {
     // MARK: - Internals
 
     private func fadeOutAndStop(_ player: AVAudioPlayer) {
+        retiringPlayers.append(player)
         let steps = 8
         let startVol = player.volume
         for i in 1...steps {
-            DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.03) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.03) { [weak self] in
                 let t = Float(i) / Float(steps)
                 player.volume = max(0, startVol * (1 - t))
                 if i == steps {
+                    player.delegate = nil
                     player.stop()
+                    self?.retiringPlayers.removeAll { $0 === player }
                 }
             }
         }
     }
 
     private func stopPlayers() {
+        bodyPlayer?.delegate = nil
+        humPlayer?.delegate = nil
+        regenPlayer?.delegate = nil
         bodyPlayer?.stop()
         humPlayer?.stop()
         regenPlayer?.stop()
+        retiringPlayers.forEach {
+            $0.delegate = nil
+            $0.stop()
+        }
+        retiringPlayers.removeAll()
         bodyPlayer = nil
         humPlayer = nil
         regenPlayer = nil
@@ -227,6 +266,7 @@ final class EtubuNativeDriveAudio {
             let p = try AVAudioPlayer(contentsOf: url)
             p.numberOfLoops = -1
             p.enableRate = true
+            p.delegate = nil
             p.prepareToPlay()
             p.volume = volume
             p.rate = 1.0
@@ -250,27 +290,42 @@ final class EtubuNativeDriveAudio {
         return nil
     }
 
-    /// Power-primary: throttle/regen from powerKw dominate; kmh secondary pitch/ceiling.
-    private func applyParams(kmh: Double, powerKw: Double) {
+    /// GPS dv/dt birincil gaz; powerKw pedal varsa blend.
+    private func applyParams(kmh: Double, powerKw: Double, accelKmhS: Double = 0) {
         let c = character
         let feel = max(0, kmh)
         prevKmh = feel
         let speedNorm = min(1.0, feel / c.speedRefKmh)
+        lastAccel = accelKmhS
 
-        // RevHeadz: throttle = clamp(power/220), regen = clamp(-power/80)
-        var targetThrottle = 0.0
-        var targetRegen = 0.0
-        if powerKw > 0 {
-            targetThrottle = max(0, min(1, powerKw / 220.0))
-        } else if powerKw < 0 {
-            targetRegen = max(0, min(1, -powerKw / 80.0))
+        func throttleFromAccel(_ a: Double) -> Double {
+            let dead = 0.12
+            if a <= dead { return 0 }
+            return max(0, min(1, pow((a - dead) / 4.4, 0.82)))
+        }
+        func regenFromAccel(_ a: Double) -> Double {
+            let dead = 0.16
+            if a >= -dead { return 0 }
+            return max(0, min(1, (-a - dead) / 5.1))
+        }
+
+        var targetThrottle = throttleFromAccel(accelKmhS)
+        var targetRegen = regenFromAccel(accelKmhS)
+        if powerKw > 8 {
+            targetThrottle = max(powerKw / 220.0, targetThrottle * 0.72)
+        } else if powerKw > 1 {
+            targetThrottle = max(targetThrottle, min(1, powerKw / 220.0))
+        } else if powerKw < -8 {
+            targetRegen = max(-powerKw / 80.0, targetRegen * 0.65)
+        } else if powerKw < -1 {
+            targetRegen = max(targetRegen, min(1, -powerKw / 80.0))
         }
 
         // Soft flywheel: accel fast, lift/coast slow
         let thrRise = targetThrottle >= smoothThrottle - 0.01
-        smoothThrottle += (targetThrottle - smoothThrottle) * (thrRise ? 0.55 : 0.14)
+        smoothThrottle += (targetThrottle - smoothThrottle) * (thrRise ? 0.62 : 0.16)
         let regRise = targetRegen >= smoothRegen - 0.01
-        smoothRegen += (targetRegen - smoothRegen) * (regRise ? 0.45 : 0.18)
+        smoothRegen += (targetRegen - smoothRegen) * (regRise ? 0.5 : 0.2)
 
         let throttle = smoothThrottle
         let regen = smoothRegen
@@ -326,9 +381,23 @@ final class EtubuNativeDriveAudio {
         smoothBodyVol += (targetBody - smoothBodyVol) * volLerp
         smoothHumVol += (targetHum - smoothHumVol) * volLerp
         smoothRegenVol += (targetRegenVol - smoothRegenVol) * volLerp
-        bodyPlayer?.volume = max(0, smoothBodyVol)
-        humPlayer?.volume = max(0, smoothHumVol)
-        regenPlayer?.volume = max(0, smoothRegenVol)
+        let mixGain = Self.cabinMixGain()
+        bodyPlayer?.volume = max(0, smoothBodyVol * mixGain)
+        humPlayer?.volume = max(0, smoothHumVol * mixGain)
+        regenPlayer?.volume = max(0, smoothRegenVol * mixGain)
+    }
+
+    /// Blend/under sit under ducked Music; solo is full. Slider = cabin level.
+    private static func cabinMixGain() -> Float {
+        let cabin = Float(max(0.2, min(1.0, UserDefaults.standard.object(forKey: "etubu.cluster.alertVolume") as? Double ?? 0.85)))
+        switch AppDelegate.storedMixMode {
+        case "solo":
+            return 1
+        case "under":
+            return max(0.28, cabin * 0.55)
+        default:
+            return max(0.5, cabin * 0.92)
+        }
     }
 
     /// Per-pack feel: soft / sport / boost (theme → pack).

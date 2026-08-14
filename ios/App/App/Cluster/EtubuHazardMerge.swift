@@ -9,7 +9,7 @@ enum EtubuHazardMerge {
     enum OsmMode {
         /// Outside Turkey or official empty/failed — OSM drives these categories.
         case led
-        /// Inside Turkey with good EGM — OSM only fills gaps (never replaces nearby EGM radar/corridor).
+        /// Inside Turkey with bundled/OSM corridor cache — OSM still leads; cache only fills gaps.
         case supplement
     }
 
@@ -17,15 +17,20 @@ enum EtubuHazardMerge {
     static func thresholds(for kind: String) -> (warn: Double, urgent: Double) {
         switch kind {
         case "radar", "corridor", "control":
-            return (350, 120)
+            // Waze/Coyote-style: one approach cue ~500 m, urgent only when close.
+            return (520, 140)
         case "railway":
-            return (250, 80)
+            return (380, 90)
+        case "tunnel", "climb":
+            return (450, 100)
+        case "winding", "road_condition", "animal":
+            return (320, 85)
         case "traffic_light":
-            return (100, 35)
+            return (90, 32)
         case "stop", "give_way":
-            return (80, 25)
+            return (70, 22)
         case "crossing", "bump":
-            return (60, 20)
+            return (55, 18)
         case "charge":
             return (5_000, 400)
         case "weather":

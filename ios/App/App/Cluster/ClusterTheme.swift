@@ -13,6 +13,15 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
         EtubuClusterL10n.t("themeName.\(rawValue)")
     }
 
+    /// Ayarlar ızgarası — tek şiirsel ad (Duman, Işık Hüzmesi…). Paylaşılan efektte benzersiz kalır.
+    var pickerTitle: String {
+        switch self {
+        case .tesla: return EtubuCutoutFX.duman.title
+        case .midnight, .plaidBoost: return title
+        default: return EtubuCutoutFX.forTheme(self).title
+        }
+    }
+
     /// Scene hue degrees from ETUBU web themes.
     var hue: Double {
         switch self {
@@ -379,13 +388,15 @@ struct ClusterThemeBackdrop: View {
     let theme: ClusterTheme
     var landscape: Bool = false
     var wallpaper: EtubuWallpaperStyle = EtubuWallpaperStyle.stored
-    @ObservedObject private var telemetry = EtubuVehicleTelemetry.shared
+    /// Sheets pass `false` so settings List is not invalidated by 10 Hz telemetry.
+    var live: Bool = true
 
     /// 0…1 — Model S Plaid launch heat (power + speed toward 100).
     private var plaidIntensity: CGFloat {
-        guard theme == .plaidBoost else { return 0 }
-        let kmh = CGFloat(max(0, telemetry.kmh))
-        let power = CGFloat(max(0, telemetry.powerKw ?? 0))
+        guard live, theme == .plaidBoost else { return 0 }
+        let t = EtubuVehicleTelemetry.shared
+        let kmh = CGFloat(max(0, t.kmh))
+        let power = CGFloat(max(0, t.powerKw ?? 0))
         let speedHeat = min(1, kmh / 100)
         let powerHeat = min(1, power / 220)
         // Parked: stay dark. Moving / torque: yellow→red wash.
@@ -403,7 +414,7 @@ struct ClusterThemeBackdrop: View {
 
             if theme == .plaidBoost {
                 plaidBoostWash
-            } else if wallpaper != .minimal {
+            } else {
                 RadialGradient(
                     colors: [theme.accent.opacity(0.32), .clear],
                     center: landscape ? .trailing : .topTrailing,

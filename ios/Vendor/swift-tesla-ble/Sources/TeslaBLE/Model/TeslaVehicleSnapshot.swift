@@ -12,6 +12,8 @@ public struct TeslaVehicleSnapshot: Sendable, Equatable {
     public var climate: ClimateState?
     /// Gear, speed, power, odometer, and active route state. Nil if the vehicle did not report this section.
     public var drive: DriveState?
+    /// Vehicle GPS and heading. Nil if the vehicle did not report this section.
+    public var location: LocationState?
     /// Doors, windows, trunks, sunroof, sentry/valet state. Nil if the vehicle did not report this section.
     public var closures: ClosuresState?
     /// Per-wheel tire pressure readings and recommended cold pressures. Nil if the vehicle did not report this section.
@@ -33,6 +35,7 @@ public struct TeslaVehicleSnapshot: Sendable, Equatable {
         charge: ChargeState? = nil,
         climate: ClimateState? = nil,
         drive: DriveState? = nil,
+        location: LocationState? = nil,
         closures: ClosuresState? = nil,
         tirePressure: TirePressureState? = nil,
         media: MediaState? = nil,
@@ -45,6 +48,7 @@ public struct TeslaVehicleSnapshot: Sendable, Equatable {
         self.charge = charge
         self.climate = climate
         self.drive = drive
+        self.location = location
         self.closures = closures
         self.tirePressure = tirePressure
         self.media = media

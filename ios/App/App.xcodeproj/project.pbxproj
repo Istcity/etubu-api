@@ -8,6 +8,11 @@
 
 /* Begin PBXBuildFile section */
 		B2C3D4E5F60718293A4B5C6D /* EtubuAppExit.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5C /* EtubuAppExit.swift */; };
+		A4B5C6D7E8F9012345678901 /* EtubuStealthSpeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B5C6D7E8F9012345678902 /* EtubuStealthSpeedView.swift */; };
+		A2REMPIN000000000000001 /* EtubuRemotePinnedBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2REMPINREF00000000001 /* EtubuRemotePinnedBar.swift */; };
+		A2TRCORRIDOR00000000001 /* EtubuTrCorridorStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2TRCORRIDORREF00000001 /* EtubuTrCorridorStore.swift */; };
+		A2WEATHERMON00000000001 /* EtubuWeatherMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2WEATHERMONREF00000001 /* EtubuWeatherMonitor.swift */; };
+		A2SHEETCHROME00000000001 /* EtubuSheetChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2SHEETCHROMEREF00000001 /* EtubuSheetChrome.swift */; };
 		A77FC1B2277D4CD98E8C4CC7 /* EtubuWarnVoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C2E36FD196C4AD9BAA20D2F /* EtubuWarnVoice.swift */; };
 		D8E4A91F2C7B4E0A9F31C6D2 /* EtubuNativeDriveAudio.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9F5B02A3D8C4F1B0A42D7E3 /* EtubuNativeDriveAudio.swift */; };
 		D4BCDAD7890A45CEAB9D3E08 /* EtubuClusterHotspots.swift in Sources */ = {isa = PBXBuildFile; fileRef = B67E1884622C423EA48A68EA /* EtubuClusterHotspots.swift */; };
@@ -128,6 +133,7 @@ A1STATUSWIDGETBUILD001 /* EtubuStatusWidget.swift in Sources */ = {isa = PBXBuil
 
 /* Begin PBXFileReference section */
 		A1B2C3D4E5F60718293A4B5C /* EtubuAppExit.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuAppExit.swift; sourceTree = "<group>"; };
+		A4B5C6D7E8F9012345678902 /* EtubuStealthSpeedView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuStealthSpeedView.swift; sourceTree = "<group>"; };
 		B67E1884622C423EA48A68EA /* EtubuClusterHotspots.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuClusterHotspots.swift; sourceTree = "<group>"; };
 		FC7496DCE28D2B084DE2D7BB /* EtubuBrandMark.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuBrandMark.swift; sourceTree = "<group>"; };
 		AFD2F4DDF4A94910B67BE762 /* EtubuAppSummary.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuAppSummary.swift; sourceTree = "<group>"; };
@@ -198,6 +204,10 @@ A1STATUSWIDGETBUILD001 /* EtubuStatusWidget.swift in Sources */ = {isa = PBXBuil
 		A2TRIPHISTREF000000001 /* EtubuTripHistoryStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuTripHistoryStore.swift; sourceTree = "<group>"; };
 		A2TRIPANALREF000000001 /* EtubuTripAnalyticsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuTripAnalyticsView.swift; sourceTree = "<group>"; };
 		A2REMCMDREF00000000001 /* EtubuRemoteCommandCards.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuRemoteCommandCards.swift; sourceTree = "<group>"; };
+		A2REMPINREF00000000001 /* EtubuRemotePinnedBar.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuRemotePinnedBar.swift; sourceTree = "<group>"; };
+		A2TRCORRIDORREF00000001 /* EtubuTrCorridorStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuTrCorridorStore.swift; sourceTree = "<group>"; };
+		A2WEATHERMONREF00000001 /* EtubuWeatherMonitor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuWeatherMonitor.swift; sourceTree = "<group>"; };
+		A2SHEETCHROMEREF00000001 /* EtubuSheetChrome.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuSheetChrome.swift; sourceTree = "<group>"; };
 		A2THEMESTOREREF0000001 /* EtubuThemeStoreView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuThemeStoreView.swift; sourceTree = "<group>"; };
 		A2CARPLAYREF0000000001 /* EtubuCarPlaySceneDelegate.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuCarPlaySceneDelegate.swift; sourceTree = "<group>"; };
 		A2EVPLANREF00000000001 /* EtubuEvRoutePlanner.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuEvRoutePlanner.swift; sourceTree = "<group>"; };
@@ -284,6 +294,10 @@ A1STATUSWIDGETFILEREF01 /* EtubuStatusWidget.swift */ = {isa = PBXFileReference;
 				A2TRIPHISTREF000000001 /* EtubuTripHistoryStore.swift */,
 				A2TRIPANALREF000000001 /* EtubuTripAnalyticsView.swift */,
 				A2REMCMDREF00000000001 /* EtubuRemoteCommandCards.swift */,
+				A2REMPINREF00000000001 /* EtubuRemotePinnedBar.swift */,
+				A2TRCORRIDORREF00000001 /* EtubuTrCorridorStore.swift */,
+				A2WEATHERMONREF00000001 /* EtubuWeatherMonitor.swift */,
+				A2SHEETCHROMEREF00000001 /* EtubuSheetChrome.swift */,
 				A2THEMESTOREREF0000001 /* EtubuThemeStoreView.swift */,
 				A2CARPLAYREF0000000001 /* EtubuCarPlaySceneDelegate.swift */,
 				A2EVPLANREF00000000001 /* EtubuEvRoutePlanner.swift */,
@@ -293,6 +307,7 @@ A1STATUSWIDGETFILEREF01 /* EtubuStatusWidget.swift */ = {isa = PBXFileReference;
 				FE46C929135374CA2FCB40FF /* EtubuClusterAudioBridge.swift */,
 				FF992E9F8FF9FD1410C7C698 /* EtubuClusterComponents.swift */,
 				A1B2C3D4E5F60718293A4B5C /* EtubuAppExit.swift */,
+				A4B5C6D7E8F9012345678902 /* EtubuStealthSpeedView.swift */,
 				626F3BFA180A5A546CC8690F /* EtubuClusterFonts.swift */,
 				F3C0A0A5E70E7F945B3BE33A /* EtubuClusterL10n.swift */,
 				2CD1FEDB9D02A1C787A41D4D /* EtubuClusterPresenter.swift */,
@@ -621,6 +636,10 @@ A1STATUSWIDGETFILEREF01 /* EtubuStatusWidget.swift */ = {isa = PBXFileReference;
 				A2TRIPHIST000000000001 /* EtubuTripHistoryStore.swift in Sources */,
 				A2TRIPANAL000000000001 /* EtubuTripAnalyticsView.swift in Sources */,
 				A2REMCMD00000000000001 /* EtubuRemoteCommandCards.swift in Sources */,
+				A2REMPIN000000000000001 /* EtubuRemotePinnedBar.swift in Sources */,
+				A2TRCORRIDOR00000000001 /* EtubuTrCorridorStore.swift in Sources */,
+				A2WEATHERMON00000000001 /* EtubuWeatherMonitor.swift in Sources */,
+				A2SHEETCHROME00000000001 /* EtubuSheetChrome.swift in Sources */,
 				A2THEMESTORE0000000001 /* EtubuThemeStoreView.swift in Sources */,
 				A2CARPLAY0000000000001 /* EtubuCarPlaySceneDelegate.swift in Sources */,
 				A2EVPLAN00000000000001 /* EtubuEvRoutePlanner.swift in Sources */,
@@ -632,6 +651,7 @@ A1STATUSWIDGETFILEREF01 /* EtubuStatusWidget.swift */ = {isa = PBXFileReference;
 				C52403B05251C8A6F439B2DD /* EtubuClusterAudioBridge.swift in Sources */,
 				F7B9E498C41B1DAD786CC501 /* EtubuClusterComponents.swift in Sources */,
 				B2C3D4E5F60718293A4B5C6D /* EtubuAppExit.swift in Sources */,
+				A4B5C6D7E8F9012345678901 /* EtubuStealthSpeedView.swift in Sources */,
 				685B9805251CFB3BBFD309C0 /* EtubuClusterFonts.swift in Sources */,
 				0A503F7D2005DA0F00D3C937 /* EtubuClusterL10n.swift in Sources */,
 				0C5CBD55AAE06F7BC2B1A3DC /* EtubuClusterPresenter.swift in Sources */,

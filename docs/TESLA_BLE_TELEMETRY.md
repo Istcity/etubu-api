@@ -7,15 +7,26 @@ Etubu uses a **vendored** `swift-tesla-ble` (`ios/Vendor/swift-tesla-ble`) Infot
 | Loop | Rate (moving) | Query | Fields |
 |------|---------------|-------|--------|
 | Drive | ~10–12 Hz (`85 ms` sleep) | `fetchDrive()` / `.driveOnly` | speed, gear, power, odo, active route (+ coords / energy@arrival) |
-| Extras | ~0.7–1.4 Hz | `.categories([.charge,.climate,.tirePressure,…])` | SoC, range, temps, TPMS, closures, media |
+| Extras | **1 Hz** | `.categories([.charge,.climate,.tirePressure,…])` | SoC, range, temps, TPMS, closures, media |
+| VCSEC | **1 Hz** | `InformationRequest.GET_STATUS` (`VehicleQuery.bodyControllerState`) | lock, user presence, sleep — handshake unchanged |
+
+Handshake / NFC pair / lock-unlock commands are untouched. After session is up, VCSEC GET_STATUS runs on the existing signed counter path.
+
+Speed: `speedFloat` (mph) with integer `speed` fallback → × 1.60934. Dial still steps **±1 km/h @ 20 Hz**.
+
+TPMS: bar/kPa/psi normalize; warning if **< 2.5 bar**.
+
+Free-drive alerts: only TPMS < 2.5 bar or SoC < 5%. Route active → full hazard/corridor set; overlays auto-dismiss when passed.
+
+OLED stealth: pitch-black speed-only HUD; tap wakes 10 s; analog/digital in Settings. Maestro launch args skip stealth.
 
 Extras failures **never** cancel the drive loop.
 
 **Boot:** tire + charge/climate fire as **parallel** requests with up to **3 retries** (wake between attempts).
 
-**Drive:** charge + climate + tires on **every** extras tick. Closures/media stay lower cadence.
+**Drive:** charge + climate + tires + **location** on **every** extras tick. Closures/media/software/schedule stay lower cadence.
 
-Infotainment asleep → empty charge/climate/TPMS: `wakeVehicle` on connect and after **~8 missing extras ticks** (also capped ~18 s).
+Infotainment asleep → empty charge/climate/TPMS: `wakeVehicle` on connect and after **~4 missing extras ticks** (also capped ~12 s). Background healer re-bootstraps extras every ~12 s as if newly connected.
 
 ## Field map (protobuf → UI)
 
@@ -40,7 +51,7 @@ Infotainment asleep → empty charge/climate/TPMS: `wakeVehicle` on connect and 
 
 ## Auto-reconnect
 
-After one-time VIN pair (`pairedConfirmed` + Keychain key): bootstrap on launch, **foreground**, and **BT poweredOn**. Disconnect while paired schedules reconnect (up to 8 attempts, then 30 s cooldown).
+After one-time VIN pair (`pairedConfirmed` + Keychain key): bootstrap on launch, **foreground**, and **BT poweredOn**. Disconnect while paired **keeps retrying** (exponential backoff, cap 12 s) until the session is healthy or the user stops. Attempt counter resets on a successful connect.
 
 ## Exit
 
@@ -48,15 +59,16 @@ Settings → **Çıkış / Exit** (`etubu.app.exit`): end Live Activity, disconn
 
 ## Corridor average (native + Cap)
 
-Display blend (not blank on entry):
+Display:
 
-- Entry: show **vehicle speed** immediately
-- Progress `p = traveled/length`: `histW = 0.5 + 0.4·p` (50%→90% historical), rest instant
-- **YAVAŞLA** uses `corridorTrueAvg` = distance/time only (≥35 m & ~4.3 s), not the blend alone
+- Entry: show **vehicle speed** immediately (anlık)
+- After ≥50 m and ~5 s: show **true** distance/time average (what the camera uses)
+- Chip also shows instant km/h, limit, and remaining distance
+- **YAVAŞLA** when `trueAvg > limit + 2`; clears when `trueAvg ≤ limit` (hysteresis)
 
 ## Audio duck (alerts over car BT)
 
 `AppDelegate.activateAlertDuckSession()` → `.playback` + `.duckOthers` + `.allowBluetoothA2DP`  
 `deactivateAlertDuckSession()` → `setActive(false, .notifyOthersOnDeactivation)` then restore drive mix.
 
-All warn TTS clips + beeps go through this path so YouTube Music / other A2DP apps duck briefly.
+All warn beeps go through this path so YouTube Music / other A2DP apps duck briefly. TTS is disabled.

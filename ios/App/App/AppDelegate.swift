@@ -13,6 +13,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         configureAudioSession(quality: true)
+        Self.installAudioRouteObservers()
         // Paint every known window immediately — Cap shell is near-black by default.
         let canvas = EtubuRuntimeProfile.canvasUIColor
         if let window {
@@ -51,85 +52,179 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         return true
     }
 
+    /// Alert duck must not be overwritten by Live Activity / mix-mode reasserts.
+    private static var alertDuckActive = false
+    private static var audioObserversInstalled = false
+
+    static var storedMixMode: String {
+        (UserDefaults.standard.string(forKey: "etubu.cluster.mixMode") ?? "blend").lowercased()
+    }
+
+    /// Car Bluetooth / CarPlay / AirPlay — A2DP will not mix a second stream unless we duck.
+    static func isCarMediaRoute(_ session: AVAudioSession = .sharedInstance()) -> Bool {
+        session.currentRoute.outputs.contains { port in
+            switch port.portType {
+            case .bluetoothA2DP, .bluetoothHFP, .carAudio, .airPlay:
+                return true
+            default:
+                return false
+            }
+        }
+    }
+
     private func configureAudioSession(quality: Bool = false) {
+        _ = quality
         if Self.driveAudioActive {
             Self.activateDriveAudioSession()
             return
         }
-        let session = AVAudioSession.sharedInstance()
-        do {
-            try session.setCategory(
-                .ambient,
-                mode: .default,
-                options: [.mixWithOthers, .allowBluetoothA2DP, .allowAirPlay]
-            )
-            if quality {
-                try session.setPreferredSampleRate(48_000)
-                try session.setPreferredIOBufferDuration(0.01)
-            }
-            try session.setActive(true)
-        } catch {
-            print("ETUBU audio session bootstrap:", error)
-        }
+        Self.activateSilentSafeSession()
     }
 
+    /// EV / cabin mix: Music/YouTube stays on the same Bluetooth route; we duck slightly so
+    /// A2DP actually carries Etubu (mix-only leaves us on the phone speaker).
     static func activateDriveAudioSession() {
+        if alertDuckActive { return }
         driveAudioActive = true
-        let session = AVAudioSession.sharedInstance()
-        do {
-            // Mix EV hum with car BT media (YouTube/Music) without interrupting A2DP route.
-            try session.setCategory(
-                .playback,
+        let mix = storedMixMode
+        if mix == "solo" {
+            applyPlayback(
                 mode: .default,
-                options: [.mixWithOthers, .allowBluetoothA2DP, .allowAirPlay]
+                options: [.allowBluetoothA2DP, .allowAirPlay],
+                quality: true
             )
-            try session.setPreferredSampleRate(48_000)
-            try session.setPreferredIOBufferDuration(0.01)
-            try session.setActive(true, options: [])
-        } catch {
-            print("ETUBU audio session activate:", error)
+        } else {
+            applyPlayback(
+                mode: .default,
+                options: [.mixWithOthers, .duckOthers, .allowBluetoothA2DP, .allowAirPlay],
+                quality: true
+            )
         }
+        EtubuNativeDriveAudio.shared.resumeIfNeeded()
     }
 
-    /// Warn TTS / beeps over car Bluetooth while Music/YouTube plays — duck others, keep A2DP.
+    /// Warn TTS / beeps over car Bluetooth while Music/YouTube plays.
+    /// `voicePrompt` follows the now-playing route (A2DP / CarPlay). Do not deactivate after.
     static func activateAlertDuckSession() {
         driveAudioActive = true
-        let session = AVAudioSession.sharedInstance()
-        do {
-            try session.setCategory(
-                .playback,
-                mode: .default,
-                options: [.duckOthers, .allowBluetoothA2DP, .allowAirPlay]
+        alertDuckActive = true
+        let overMusic = UserDefaults.standard.object(forKey: "etubu.cluster.alertOverMusic") as? Bool ?? true
+        if overMusic {
+            applyPlayback(
+                mode: .voicePrompt,
+                options: [.duckOthers, .mixWithOthers, .allowBluetoothA2DP, .allowAirPlay],
+                quality: false
             )
-            try session.setActive(true, options: [])
-        } catch {
-            // Fallback: mix without duck if category rejected.
-            do {
-                try session.setCategory(
-                    .playback,
-                    mode: .default,
-                    options: [.mixWithOthers, .allowBluetoothA2DP, .allowAirPlay]
-                )
-                try session.setActive(true, options: [])
-            } catch {
-                print("ETUBU alert duck session:", error)
-            }
+        } else {
+            applyPlayback(
+                mode: .voicePrompt,
+                options: [.mixWithOthers, .allowBluetoothA2DP, .allowAirPlay],
+                quality: false
+            )
         }
     }
 
-    /// After warn clips finish — notify others + restore mix-with-media so Music unducks.
+    /// Restore EV mix without yielding the Bluetooth route (`setActive(false)` drops A2DP).
     static func deactivateAlertDuckSession() {
-        let session = AVAudioSession.sharedInstance()
-        do {
-            try session.setActive(false, options: .notifyOthersOnDeactivation)
-        } catch {
-            // Still restore drive mix below.
-        }
+        alertDuckActive = false
         guard driveAudioActive else {
             activateSilentSafeSession()
             return
         }
         activateDriveAudioSession()
+    }
+
+    @discardableResult
+    private static func applyPlayback(
+        mode: AVAudioSession.Mode,
+        options: AVAudioSession.CategoryOptions,
+        quality: Bool
+    ) -> Bool {
+        let session = AVAudioSession.sharedInstance()
+        let attempts: [AVAudioSession.CategoryOptions] = [
+            options,
+            options.union([.mixWithOthers, .duckOthers]),
+            [.mixWithOthers, .duckOthers, .allowBluetoothA2DP],
+            [.duckOthers, .allowBluetoothA2DP, .allowAirPlay],
+            [.mixWithOthers, .allowBluetoothA2DP, .allowAirPlay],
+        ]
+        var lastError: Error?
+        for opts in attempts {
+            do {
+                try session.setCategory(.playback, mode: mode, options: opts)
+                if quality {
+                    try session.setPreferredSampleRate(48_000)
+                    try session.setPreferredIOBufferDuration(0.01)
+                }
+                try session.setActive(true, options: [])
+                return true
+            } catch {
+                lastError = error
+            }
+        }
+        if let lastError {
+            print("ETUBU audio session:", lastError)
+        }
+        return false
+    }
+
+    private static func installAudioRouteObservers() {
+        guard !audioObserversInstalled else { return }
+        audioObserversInstalled = true
+        let nc = NotificationCenter.default
+        nc.addObserver(
+            forName: AVAudioSession.routeChangeNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            reassertAfterRouteOrInterruption()
+        }
+        nc.addObserver(
+            forName: AVAudioSession.interruptionNotification,
+            object: nil,
+            queue: .main
+        ) { note in
+            handleAudioInterruption(note)
+        }
+        nc.addObserver(
+            forName: AVAudioSession.silenceSecondaryAudioHintNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            // Music wants secondary apps silent — rejoin with duck instead of going quiet.
+            reassertAfterRouteOrInterruption()
+        }
+    }
+
+    private static func handleAudioInterruption(_ note: Notification) {
+        guard let info = note.userInfo,
+              let raw = info[AVAudioSessionInterruptionTypeKey] as? UInt,
+              let type = AVAudioSession.InterruptionType(rawValue: raw) else { return }
+        switch type {
+        case .began:
+            // Music/YouTube took A2DP. Rejoin on the same route after a beat.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                reassertAfterRouteOrInterruption()
+            }
+        case .ended:
+            reassertAfterRouteOrInterruption()
+        @unknown default:
+            break
+        }
+    }
+
+    private static var lastReassertAt = Date.distantPast
+
+    private static func reassertAfterRouteOrInterruption() {
+        guard driveAudioActive else { return }
+        let now = Date()
+        if now.timeIntervalSince(lastReassertAt) < 0.15 { return }
+        lastReassertAt = now
+        if alertDuckActive {
+            activateAlertDuckSession()
+        } else {
+            activateDriveAudioSession()
+        }
     }
 
     /// Legacy aliases — prefer activateAlertDuckSession / deactivateAlertDuckSession.

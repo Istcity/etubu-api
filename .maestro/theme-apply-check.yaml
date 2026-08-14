@@ -13,12 +13,9 @@ appId: com.etubu.app
 - tapOn:
     id: "etubu.settings.open"
 - extendedWaitUntil:
-    visible: "Uygulama hakkında"
+    visible:
+      id: "etubu.settings.done"
     timeout: 10000
-- scrollUntilVisible:
-    element: "Tema mağazası"
-    direction: DOWN
-    timeout: 30000
 - scrollUntilVisible:
     element:
       id: "etubu.theme.tesla"

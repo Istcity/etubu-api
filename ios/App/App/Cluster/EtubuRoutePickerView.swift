@@ -5,18 +5,18 @@ import UIKit
 /// Yazım sırasında alan + öneriler klavye altında kalmaz.
 struct EtubuRoutePickerView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.clusterTheme) private var envTheme
     @ObservedObject private var telemetry = EtubuVehicleTelemetry.shared
     @ObservedObject private var premium = EtubuPremiumManager.shared
     @ObservedObject private var warnings = EtubuDriveWarnings.shared
 
-    private let fromFixed = "Konumum"
-    private var theme: ClusterTheme { ClusterTheme.stored }
+    private var fromFixed: String { EtubuClusterL10n.t("fromHere") }
+    private var theme: ClusterTheme { envTheme }
+    private var appLocale: Locale { EtubuAppLanguage.current.locale }
 
     @State private var toText = ""
     @State private var suggestions: [EtubuRoutePlace] = []
     @State private var isSearching = false
-    @State private var indexReady = false
-    @State private var indexLoading = true
     @State private var isPlanning = false
     @State private var statusMessage = ""
     @State private var routeStatus = EtubuRouteStatus(active: false, fromLabel: "", toLabel: "", statusText: "", briefText: "")
@@ -25,20 +25,14 @@ struct EtubuRoutePickerView: View {
     @State private var toResolved = false
     @State private var selectedToPlace: EtubuRoutePlace? = nil
     @State private var suppressFieldChange = false
-    @State private var sheetDetent: PresentationDetent = .large
+    @State private var sheetDetent: PresentationDetent = .fraction(0.46)
     @State private var showPremiumPaywall = false
     @FocusState private var toFocused: Bool
 
     var body: some View {
         NavigationStack {
             ZStack {
-                theme.canvas.ignoresSafeArea()
-                LinearGradient(
-                    colors: theme.canvasGradient,
-                    startPoint: .topLeading,
-                    endPoint: .bottom
-                )
-                .ignoresSafeArea()
+                EtubuSheetBackdrop(theme: theme)
 
                 VStack(spacing: 0) {
                     // Üst: rota özeti / öneriler — TextField buraya taşınmaz
@@ -46,25 +40,24 @@ struct EtubuRoutePickerView: View {
                         if toFocused {
                             if !statusMessage.isEmpty {
                                 Text(statusMessage)
-                                    .font(.caption2)
+                                    .font(EtubuClusterFonts.ui(12, weight: .medium))
                                     .foregroundStyle(theme.mutedText)
                                     .lineLimit(2)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.horizontal, 20)
-                                    .padding(.top, 8)
+                                    .padding(.horizontal, 14)
+                                    .padding(.top, 4)
                             }
                             if routeStatus.active || !toText.isEmpty {
                                 clearRow
-                                    .padding(.horizontal, 20)
-                                    .padding(.top, 4)
-                                    .padding(.bottom, 4)
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 2)
                             }
                             if isSearching && suggestions.isEmpty && toText.count >= 2 {
                                 HStack(spacing: 8) {
                                     ProgressView().tint(theme.accent).scaleEffect(0.65)
                                     Text(EtubuClusterL10n.t("searching"))
-                                        .font(.caption2)
-                                        .foregroundStyle(theme.accent.opacity(0.7))
+                        .font(EtubuClusterFonts.ui(12, weight: .medium))
+                        .foregroundStyle(theme.accent.opacity(0.7))
                                     Spacer(minLength: 0)
                                 }
                                 .padding(.horizontal, 20)
@@ -79,37 +72,28 @@ struct EtubuRoutePickerView: View {
                         } else {
                             if !statusMessage.isEmpty {
                                 Text(statusMessage)
-                                    .font(.caption)
+                                    .font(EtubuClusterFonts.ui(12, weight: .medium))
                                     .foregroundStyle(theme.mutedText)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.horizontal, 24)
-                                    .padding(.top, 8)
-                                    .padding(.bottom, 4)
-                            }
-                            if indexLoading {
-                                HStack(spacing: 8) {
-                                    ProgressView().tint(theme.accent).scaleEffect(0.8)
-                                    Text(EtubuClusterL10n.t("trDirectoryPreparing"))
-                                        .font(.caption)
-                                        .foregroundStyle(theme.accent.opacity(0.85))
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 24)
-                                .padding(.bottom, 6)
+                                    .padding(.horizontal, 14)
+                                    .padding(.top, 4)
+                                    .padding(.bottom, 2)
                             }
                             ScrollView {
-                                VStack(alignment: .leading, spacing: 16) {
+                                VStack(alignment: .leading, spacing: 10) {
                                     if routeStatus.active || !routeStatus.briefText.isEmpty {
                                         activeRouteCard
                                     }
-                                    clearRow
+                                    if routeStatus.active || !toText.isEmpty {
+                                        clearRow
+                                    }
                                     if !suggestions.isEmpty {
                                         suggestionsList
-                                            .frame(maxHeight: 260, alignment: .top)
+                                            .frame(maxHeight: 180, alignment: .top)
                                     }
                                 }
-                                .padding(.horizontal, 20)
-                                .padding(.bottom, 16)
+                                .padding(.horizontal, 14)
+                                .padding(.bottom, 10)
                             }
                             .scrollDismissesKeyboard(.interactively)
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -120,11 +104,10 @@ struct EtubuRoutePickerView: View {
                     // Alt: TextField kimliği SABİT — odak/klavye layout’u yeniden yaratmaz
                     VStack(spacing: 8) {
                         destinationField(landscape: false, kbOpen: toFocused)
-                        planAndDoneButton
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
-                    .padding(.bottom, 10)
+                    .padding(.horizontal, 12)
+                    .padding(.top, 6)
+                    .padding(.bottom, 8)
                     .background(theme.canvas.opacity(toFocused ? 0.98 : 0))
                 }
             }
@@ -136,6 +119,7 @@ struct EtubuRoutePickerView: View {
                         toFocused = false
                         dismiss()
                     }
+                    .font(EtubuClusterFonts.ui(16, weight: .semibold))
                     .foregroundStyle(theme.accent)
                 }
                 ToolbarItemGroup(placement: .keyboard) {
@@ -144,15 +128,19 @@ struct EtubuRoutePickerView: View {
                         .fontWeight(.semibold)
                 }
             }
-            .toolbarBackground(.hidden, for: .navigationBar)
+            .toolbarBackground(theme.canvas.opacity(0.94), for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
             .preferredColorScheme(.dark)
-            .environment(\.locale, Locale(identifier: "tr_TR"))
+            .environment(\.locale, appLocale)
         }
-        .presentationDetents([.large])
+        .presentationDetents([.fraction(0.46), .medium, .large], selection: $sheetDetent)
         .presentationDragIndicator(.visible)
+        .presentationContentInteraction(.scrolls)
         .accessibilityIdentifier("etubu.route.picker")
         .sheet(isPresented: $showPremiumPaywall) {
             EtubuPremiumPaywallView(accent: theme.accent, highlight: EtubuClusterL10n.t("premiumLockedRoute"))
+                .environment(\.clusterTheme, theme)
                 .presentationDetents([.large, .medium])
         }
         .onAppear {
@@ -161,60 +149,54 @@ struct EtubuRoutePickerView: View {
             EtubuMapLocationHelper.shared.startIfNeeded()
             EtubuRouteBridge.pushNativeLocationToWeb()
             statusMessage = ""
-            sheetDetent = .large
-            EtubuRouteBridge.ensureIndex { ready in
-                indexLoading = false
-                indexReady = ready
-                if !ready {
-                    statusMessage = "Liste gecikti — yine de arayabilirsiniz"
-                }
-                EtubuRouteBridge.status { st in
-                    routeStatus = st
-                    if st.active, !st.toLabel.isEmpty {
-                        toText = st.toLabel
-                        toResolved = true
-                    }
-                }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                    toFocused = true
-                }
-                if toText.count >= 2 {
-                    refreshSuggestions(for: toText)
+            sheetDetent = .fraction(0.46)
+            EtubuRouteBridge.status { st in
+                routeStatus = st
+                if st.active, !st.toLabel.isEmpty {
+                    toText = st.toLabel
+                    toResolved = true
                 }
             }
+            EtubuRouteBridge.ensureIndex { _ in }
+        }
+        .onChange(of: toFocused) { _, on in
+            if on { sheetDetent = .large }
+        }
+        .onChange(of: routeStatus.active) { _, on in
+            if on { sheetDetent = .medium }
         }
     }
 
-    /// Rota kur: özet aynı ekranda kalsın. Aktif rotada Tamam kapatır.
-    private var planAndDoneButton: some View {
-        Button {
+    /// Alanın sağında küçük kur / onay — tam genişlik kapsül yok.
+    private var compactPlanButton: some View {
+        let armed = canPlanRoute || routeStatus.active
+        return Button {
             if canPlanRoute {
                 planRoute(andDismiss: false)
             } else if routeStatus.active {
                 dismiss()
             }
         } label: {
-            HStack(spacing: 8) {
+            ZStack {
+                Circle()
+                    .fill(armed ? theme.accent : theme.surface)
+                Circle()
+                    .strokeBorder(armed ? Color.clear : theme.stroke, lineWidth: 1)
                 if isPlanning {
-                    ProgressView().tint(.black).scaleEffect(0.85)
+                    ProgressView().tint(armed ? theme.canvas : theme.accent).scaleEffect(0.72)
                 } else {
-                    Image(systemName: routeStatus.active && !canPlanRoute
-                          ? "checkmark"
-                          : "point.topleft.down.to.point.bottomright.curvepath")
-                        .font(.body.weight(.semibold))
+                    Image(systemName: canPlanRoute
+                          ? "arrow.up"
+                          : (routeStatus.active ? "checkmark" : "point.topleft.down.to.point.bottomright.curvepath"))
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(armed ? theme.canvas : theme.mutedText)
                 }
-                Text(planDoneLabel)
-                    .fontWeight(.bold)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .foregroundStyle(.black)
-            .background(
-                (canPlanRoute || routeStatus.active ? theme.accent : theme.accent.opacity(0.35)),
-                in: Capsule()
-            )
+            .frame(width: 32, height: 32)
         }
+        .buttonStyle(.plain)
         .disabled((!canPlanRoute && !routeStatus.active) || isPlanning)
+        .opacity(armed || isPlanning ? 1 : 0.55)
         .accessibilityIdentifier("etubu.route.plan")
         .accessibilityLabel(planDoneLabel)
     }
@@ -247,87 +229,92 @@ struct EtubuRoutePickerView: View {
             toFocused = true
         } label: {
             Text(EtubuClusterL10n.clear)
-                .fontWeight(.semibold)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .foregroundStyle(theme.secondaryText)
-                .background(Color.white.opacity(0.06), in: Capsule())
+                .font(EtubuClusterFonts.ui(13, weight: .semibold))
+                .foregroundStyle(theme.mutedText)
         }
+        .buttonStyle(.plain)
     }
 
     /// Çerçevesiz alan — yatayda yazılan metin her zaman okunaklı.
     private func destinationField(landscape: Bool, kbOpen: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                Text(fromFixed.uppercased(with: Locale(identifier: "tr_TR")))
-                    .font(.system(size: 9, weight: .heavy))
-                    .tracking(0.8)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 5) {
+                Text(fromFixed.uppercased(with: appLocale))
+                    .font(EtubuClusterFonts.ui(9, weight: .heavy))
+                    .tracking(0.4)
                     .foregroundStyle(theme.mutedText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
                 Image(systemName: "arrow.right")
-                    .font(.system(size: 8, weight: .bold))
+                    .font(.system(size: 7, weight: .bold))
                     .foregroundStyle(theme.accent.opacity(0.55))
-                Text(EtubuClusterL10n.to.uppercased())
-                    .font(.system(size: 9, weight: .heavy))
-                    .tracking(0.8)
+                Text(EtubuClusterL10n.to.uppercased(with: appLocale))
+                    .font(EtubuClusterFonts.ui(9, weight: .heavy))
+                    .tracking(0.4)
                     .foregroundStyle(theme.secondaryText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
                 Spacer(minLength: 0)
-                if toResolved {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(theme.accent.opacity(0.8))
-                }
             }
 
-            HStack(alignment: .center, spacing: 10) {
-                Circle()
-                    .fill(theme.accent)
-                    .frame(width: 5, height: 5)
-                    .shadow(color: theme.glow, radius: toFocused ? 4 : 0)
+            HStack(alignment: .center, spacing: 8) {
+                HStack(alignment: .center, spacing: 8) {
+                    Circle()
+                        .fill(theme.accent)
+                        .frame(width: 5, height: 5)
+                        .shadow(color: theme.glow, radius: toFocused ? 4 : 0)
 
-                TextField(
-                    "",
-                    text: $toText,
-                    prompt: Text(EtubuClusterL10n.t("cityDistrict")).foregroundStyle(theme.mutedText)
-                )
-                .textInputAutocapitalization(.words)
-                .autocorrectionDisabled(true)
-                .keyboardType(.default)
-                .textContentType(.none)
-                .submitLabel(.go)
-                .font(.system(size: (kbOpen && landscape) ? 22 : (kbOpen ? 20 : 17), weight: .semibold))
-                .foregroundStyle(Color.white)
-                .tint(theme.accent)
-                .focused($toFocused)
-                .accessibilityLabel(EtubuClusterL10n.t("cityDistrict"))
-                .accessibilityIdentifier("etubu.route.to")
-                        .onSubmit {
-                    toFocused = false
-                    if canPlanRoute { planRoute(andDismiss: false) }
-                    else { commitDestination() }
-                }
-
-                if !toText.isEmpty {
-                    Button {
-                        toText = ""
-                        toResolved = false
-                        selectedToPlace = nil
-                        suggestions = []
-                        destinationNeedsDistrict = false
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(theme.mutedText)
-                            .padding(6)
+                    TextField(
+                        "",
+                        text: $toText,
+                        prompt: Text(EtubuClusterL10n.t("cityDistrict")).foregroundStyle(theme.mutedText)
+                    )
+                    .textInputAutocapitalization(.words)
+                    .autocorrectionDisabled(true)
+                    .keyboardType(.default)
+                    .textContentType(.none)
+                    .submitLabel(.go)
+                    .font(EtubuClusterFonts.ui((kbOpen && landscape) ? 18 : (kbOpen ? 16 : 15), weight: .semibold))
+                    .foregroundStyle(Color.white)
+                    .tint(theme.accent)
+                    .focused($toFocused)
+                    .accessibilityLabel(EtubuClusterL10n.t("cityDistrict"))
+                    .accessibilityIdentifier("etubu.route.to")
+                    .onSubmit {
+                        toFocused = false
+                        if canPlanRoute { planRoute(andDismiss: false) }
+                        else { commitDestination() }
                     }
-                    .buttonStyle(.plain)
+
+                    if !toText.isEmpty {
+                        Button {
+                            toText = ""
+                            toResolved = false
+                            selectedToPlace = nil
+                            suggestions = []
+                            destinationNeedsDistrict = false
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(theme.mutedText)
+                                .padding(4)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
+                .padding(.horizontal, 10)
+                .padding(.vertical, kbOpen ? 8 : 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(theme.surface.opacity(kbOpen ? 1 : 0.88))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(toFocused ? theme.accent.opacity(0.7) : theme.stroke, lineWidth: toFocused ? 1.4 : 1)
+                )
+
+                compactPlanButton
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, kbOpen ? 12 : 8)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.white.opacity(kbOpen ? 0.14 : 0.08))
-            )
             .onChange(of: toText) { _, newValue in
                 if suppressFieldChange { return }
                 let nfc = newValue.precomposedStringWithCanonicalMapping
@@ -341,24 +328,8 @@ struct EtubuRoutePickerView: View {
                 scheduleSearch(nfc)
                 refreshDistrictRequirement(for: nfc)
             }
-
-            if kbOpen, !toText.isEmpty {
-                Text(toText)
-                    .font(.system(size: landscape ? 18 : 15, weight: .semibold))
-                    .foregroundStyle(theme.accent)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.7)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 4)
-                    .accessibilityHidden(true)
-            }
-
-            Rectangle()
-                .fill(toFocused ? theme.accent.opacity(0.75) : theme.stroke)
-                .frame(height: toFocused ? 1.2 : 0.6)
-                .animation(.easeOut(duration: 0.18), value: toFocused)
         }
-        .environment(\.locale, Locale(identifier: "tr_TR"))
+        .environment(\.locale, appLocale)
     }
 
     private var suggestionsList: some View {
@@ -374,17 +345,17 @@ struct EtubuRoutePickerView: View {
                                 .frame(width: 4, height: 4)
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(place.label)
-                                    .font(.subheadline.weight(.medium))
+                                    .font(EtubuClusterFonts.ui(15, weight: .medium))
                                     .foregroundStyle(theme.primaryText)
                                     .multilineTextAlignment(.leading)
                                 if !place.cityName.isEmpty || !place.districtName.isEmpty {
                                     Text([
-                                        place.cityName.isEmpty ? nil : place.cityName.uppercased(with: Locale(identifier: "tr_TR")),
+                                        place.cityName.isEmpty ? nil : place.cityName.uppercased(with: appLocale),
                                         place.districtName.isEmpty ? nil : place.districtName
                                     ]
                                     .compactMap { $0 }
                                     .joined(separator: " · "))
-                                        .font(.caption2.weight(.semibold))
+                                        .font(EtubuClusterFonts.ui(11, weight: .semibold))
                                         .foregroundStyle(theme.mutedText)
                                         .lineLimit(1)
                                         .minimumScaleFactor(0.75)
@@ -399,33 +370,40 @@ struct EtubuRoutePickerView: View {
                     .accessibilityIdentifier(idx == 0 ? "etubu.route.suggestion.first" : "etubu.route.suggestion.\(idx)")
                     if place.id != suggestions.last?.id {
                         Rectangle()
-                            .fill(Color.white.opacity(0.05))
+                            .fill(theme.stroke.opacity(0.35))
                             .frame(height: 0.5)
                             .padding(.leading, 14)
                     }
                 }
             }
         }
+        .etubuSheetCard(theme)
     }
 
 
     private var activeRouteCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Circle().fill(routeStatus.navOnly ? theme.accent : Color.green).frame(width: 6, height: 6)
                 Text(routeStatus.navOnly ? EtubuClusterL10n.t("navRoute") : EtubuClusterL10n.t("activeRoute"))
-                    .font(.caption.weight(.bold))
+                    .font(EtubuClusterFonts.ui(11, weight: .bold))
                     .foregroundStyle(routeStatus.navOnly ? theme.accent : Color.green)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
                 Spacer()
                 if displayHazardCount > 0 {
                     Text(String(format: EtubuClusterL10n.t("hazardPointsFmt"), displayHazardCount))
-                        .font(.caption2.weight(.semibold))
+                        .font(EtubuClusterFonts.ui(10, weight: .semibold))
                         .foregroundStyle(theme.mutedText)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                 }
             }
             Text("\(fromFixed) → \(routeStatus.toLabel.isEmpty ? toText : routeStatus.toLabel)")
-                .font(.subheadline.weight(.semibold))
+                .font(EtubuClusterFonts.ui(14, weight: .semibold))
                 .foregroundStyle(theme.primaryText)
+                .lineLimit(2)
+                .minimumScaleFactor(0.75)
                 .accessibilityIdentifier("etubu.route.summary")
                 .accessibilityAddTraits(.isStaticText)
             Button {
@@ -443,75 +421,46 @@ struct EtubuRoutePickerView: View {
                         : EtubuClusterL10n.t("openAppleMaps"),
                     systemImage: "map"
                 )
-                    .font(.caption.weight(.semibold))
+                    .font(EtubuClusterFonts.ui(13, weight: .semibold))
             }
             .buttonStyle(.plain)
             .foregroundStyle(theme.accent)
             .accessibilityIdentifier("etubu.route.openMaps")
             if routeStatus.navOnly {
                 Text(EtubuClusterL10n.t("overseasRouteNote"))
-                    .font(.caption)
+                    .font(EtubuClusterFonts.ui(12, weight: .medium))
                     .foregroundStyle(theme.accent.opacity(0.75))
-            } else {
-                Text(EtubuClusterL10n.t("shortSummary"))
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(theme.mutedText)
-                EtubuRouteBriefChipsView(brief: displayBrief, compact: false)
-                    .accessibilityIdentifier("etubu.route.brief")
+            }
+            Text(EtubuClusterL10n.t("shortSummary"))
+                .font(EtubuClusterFonts.ui(11, weight: .heavy))
+                .foregroundStyle(theme.mutedText)
+            EtubuRouteBriefChipsView(brief: displayBrief, compact: false)
+                .accessibilityIdentifier("etubu.route.brief")
 
-                // Detaylı liste — şarj / radar / koridor / hava + konum
-                if !displayHazards.isEmpty {
-                    Text(EtubuClusterL10n.t("criticalPoints"))
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(.white.opacity(0.45))
-                        .padding(.top, 4)
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(Array(displayHazards.enumerated()), id: \.element.id) { idx, h in
-                            HStack(alignment: .top, spacing: 10) {
-                                Image(systemName: EtubuHazardChrome.icon(h.kind))
-                                    .font(.system(size: 12, weight: .bold))
-                                    .foregroundStyle(EtubuHazardChrome.tint(h.kind, urgent: false, theme: .aurora))
-                                    .frame(width: 18)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(h.kindTitle)
-                                        .font(.caption.weight(.bold))
-                                        .foregroundStyle(.white.opacity(0.9))
-                                    Text(detailLine(for: h, index: idx + 1))
-                                        .font(.caption2)
-                                        .foregroundStyle(.white.opacity(0.55))
-                                        .fixedSize(horizontal: false, vertical: true)
-                                }
-                                Spacer(minLength: 0)
-                            }
-                            .padding(.vertical, 8)
-                            if idx < displayHazards.count - 1 {
-                                Divider().overlay(Color.white.opacity(0.06))
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 10)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Color.white.opacity(0.04))
-                    )
-                }
+            if !displayOsmHazards.isEmpty {
+                Text(EtubuClusterL10n.t("criticalPoints"))
+                    .font(EtubuClusterFonts.ui(11, weight: .heavy))
+                    .foregroundStyle(theme.mutedText)
+                    .padding(.top, 4)
+                hazardDetailList(displayOsmHazards)
+            }
+            if !displayWeatherHazards.isEmpty {
+                Text(EtubuClusterL10n.t("routeWeatherEvents"))
+                    .font(EtubuClusterFonts.ui(11, weight: .heavy))
+                    .foregroundStyle(theme.mutedText)
+                    .padding(.top, 4)
+                hazardDetailList(displayWeatherHazards)
             }
             if !displayBrief.hasAny, !routeStatus.briefText.isEmpty, !routeStatus.navOnly {
                 Text(routeStatus.briefText)
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.5))
+                    .font(EtubuClusterFonts.ui(12, weight: .medium))
+                    .foregroundStyle(theme.mutedText)
                     .lineLimit(4)
             }
         }
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .etubuSheetCard(theme)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("etubu.route.active")
-        .overlay(alignment: .top) {
-            Rectangle()
-                .fill((routeStatus.navOnly ? theme.accent : Color.green).opacity(0.35))
-                .frame(height: 0.5)
-        }
     }
 
     /// Cap status boşken native plan brief’ini kullan.
@@ -526,6 +475,47 @@ struct EtubuRoutePickerView: View {
         return warnings.hazards
     }
 
+    private var displayOsmHazards: [EtubuRouteHazard] {
+        Array(displayHazards.filter { $0.kind != "weather" }.prefix(40))
+    }
+
+    private var displayWeatherHazards: [EtubuRouteHazard] {
+        Array(displayHazards.filter { $0.kind == "weather" }.prefix(8))
+    }
+
+    @ViewBuilder
+    private func hazardDetailList(_ items: [EtubuRouteHazard]) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(items.enumerated()), id: \.element.id) { idx, h in
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: EtubuHazardChrome.icon(h.kind))
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(EtubuHazardChrome.tint(h.kind, urgent: false, theme: .aurora))
+                        .frame(width: 18)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(h.kindTitle)
+                            .font(EtubuClusterFonts.ui(13, weight: .bold))
+                            .foregroundStyle(theme.primaryText)
+                        Text(detailLine(for: h, index: idx + 1))
+                            .font(EtubuClusterFonts.ui(12, weight: .medium))
+                            .foregroundStyle(theme.mutedText)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.vertical, 8)
+                if idx < items.count - 1 {
+                    Divider().overlay(Color.white.opacity(0.06))
+                }
+            }
+        }
+        .padding(.horizontal, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.white.opacity(0.04))
+        )
+    }
+
     private var displayHazardCount: Int {
         max(routeStatus.hazardCount, displayHazards.count)
     }
@@ -533,20 +523,18 @@ struct EtubuRoutePickerView: View {
     private func detailLine(for h: EtubuRouteHazard, index: Int) -> String {
         var parts: [String] = []
         if let along = h.alongKm, along > 0 {
-            parts.append(String(format: "rota km %.1f", along))
-        } else if let idx = h.routeIdx {
-            parts.append("nokta #\(idx)")
+            parts.append(String(format: EtubuClusterL10n.t("hazardAlongFmt"), along))
         } else {
-            parts.append("sıra \(index)")
+            parts.append(String(format: EtubuClusterL10n.t("hazardOrderFmt"), index))
         }
         if !h.label.isEmpty {
             parts.append(h.label)
         }
         if let lim = h.maxspeed, lim > 0 {
-            parts.append("lim \(lim) km/h")
+            parts.append(String(format: EtubuClusterL10n.t("hazardLimitFmt"), lim))
         }
         if let kw = h.kw, kw > 0 {
-            parts.append("\(kw) kW")
+            parts.append(String(format: EtubuClusterL10n.t("hazardKwFmt"), kw))
         }
         if !h.distanceLabel.isEmpty {
             parts.append(h.distanceLabel)
@@ -622,7 +610,7 @@ struct EtubuRoutePickerView: View {
         // Anında “aranıyor” göster — kullanıcı yazarken boş ekran görmesin
         isSearching = true
         searchTask = Task {
-            try? await Task.sleep(nanoseconds: 80_000_000)
+            try? await Task.sleep(nanoseconds: 250_000_000)
             guard !Task.isCancelled else { return }
             await MainActor.run { refreshSuggestions(for: query) }
         }
@@ -652,12 +640,12 @@ struct EtubuRoutePickerView: View {
                 isSearching = false
             }
             if places.isEmpty {
-                if !indexReady {
-                    statusMessage = "Liste yükleniyor — birkaç saniye…"
-                } else if statusMessage.isEmpty || statusMessage.contains("yükleniyor") {
-                    statusMessage = "Sonuç yok — şehir veya yer adı yazın"
+                if statusMessage.isEmpty || statusMessage.contains("yükleniyor") {
+                    statusMessage = EtubuClusterL10n.t("osmSearchEmpty")
                 }
-            } else if statusMessage.contains("Sonuç yok") || statusMessage.contains("yükleniyor") {
+            } else if statusMessage.contains("Sonuç yok")
+                        || statusMessage.contains("yükleniyor")
+                        || statusMessage == EtubuClusterL10n.t("osmSearchEmpty") {
                 statusMessage = ""
             }
         }
@@ -685,7 +673,7 @@ struct EtubuRoutePickerView: View {
             statusMessage = msg
         }
 
-        // İlçe şartı yok — seçili yer veya resolve (TR index → OSM).
+        // OSM Photon / Nominatim — seçili yer veya resolve.
         let planFromSelected: () -> Void = {
             if let sel = selectedToPlace, sel.lat != nil, sel.lng != nil {
                 toText = sel.label
@@ -818,20 +806,7 @@ struct EtubuRoutePickerView: View {
         } else if warnings.brief.hasAny {
             routeStatus.brief = warnings.brief
         } else if !st.hazardDetails.isEmpty {
-            var s = EtubuRouteBriefSummary()
-            for h in st.hazardDetails {
-                switch h.kind {
-                case "corridor": s.corridorCount += 1
-                case "charge":
-                    s.chargeCount += 1
-                    if !h.label.isEmpty, s.chargeNames.count < 4 { s.chargeNames.append(h.label) }
-                case "weather":
-                    s.weatherCount += 1
-                    if !h.label.isEmpty, s.weatherLabels.count < 4 { s.weatherLabels.append(h.label) }
-                case "control": s.controlCount += 1
-                default: s.radarCount += 1
-                }
-            }
+            let s = EtubuRouteBriefSummary.from(hazards: st.hazardDetails)
             if s.hasAny {
                 routeStatus.brief = s
                 EtubuDriveWarnings.shared.brief = s

@@ -136,6 +136,13 @@ enum EtubuTrafikAPI {
     static func searchPlaces(query: String, limit: Int = 40) -> [EtubuRoutePlace] {
         let q = fold(query)
         guard q.count >= 2, let items = loadCachedItems(ignoreTTL: true), !items.isEmpty else { return [] }
+        // Ev / İş kısa adları şehir aramasına düşmesin (iş → Isparta).
+        let blocked: Set<String> = [
+            "home", "ev", "casa", "maison", "zuhause",
+            "work", "is", "office", "travail", "arbeit", "oficina",
+            "my home", "my work", "evim", "isim",
+        ]
+        if blocked.contains(q) { return [] }
         let tokens = q.split(separator: " ").map(String.init).filter { !$0.isEmpty }
         let maxN = max(limit, 8)
 
@@ -383,79 +390,18 @@ enum EtubuTrafikAPI {
         return out
     }
 
-    /// Parse EGM SpeedTunnels / Radars from createRoute `data` + optional TR highway seeds near polyline.
+    /// EGM retired — always empty. TR corridors come from `EtubuTrCorridorStore`.
     static func parseOfficialHazards(
         data: [String: Any],
         coords: [(lat: Double, lng: Double)],
-        includeSeeds: Bool = true
+        includeSeeds: Bool = false
     ) -> [EtubuRouteHazard] {
-        var list: [EtubuRouteHazard] = []
-        if let radars = data["Radars"] as? [[String: Any]] {
-            for r in radars {
-                if let act = r["activity"] as? Int, act != 3 { continue }
-                if let act = r["activity"] as? NSNumber, act.intValue != 3 { continue }
-                let lat = (r["y"] as? NSNumber)?.doubleValue ?? (r["y"] as? Double)
-                    ?? (r["lat"] as? NSNumber)?.doubleValue ?? (r["lat"] as? Double)
-                let lng = (r["x"] as? NSNumber)?.doubleValue ?? (r["x"] as? Double)
-                    ?? (r["lng"] as? NSNumber)?.doubleValue ?? (r["lng"] as? Double)
-                guard let lat, let lng else { continue }
-                let near = nearestRouteIndex(coords: coords, lat: lat, lng: lng)
-                if near.dM > 2500 { continue }
-                list.append(EtubuRouteHazard(
-                    id: "radar-\(jsonString(r["id"]).isEmpty ? "\(lat)-\(lng)" : jsonString(r["id"]))",
-                    kind: "radar",
-                    label: jsonString(r["name"]).isEmpty ? EtubuClusterL10n.t("warnKindRadar") : jsonString(r["name"]),
-                    lat: lat,
-                    lng: lng,
-                    maxspeed: (r["speedLimit"] as? NSNumber)?.intValue ?? (r["speedLimit"] as? Int),
-                    routeIdx: near.idx,
-                    alongKm: alongKm(coords: coords, upTo: near.idx)
-                ))
-            }
-        }
-        if let tunnels = data["SpeedTunnels"] as? [[String: Any]] {
-            for tun in tunnels {
-                if let act = tun["activity"] as? Int, act != 3 { continue }
-                if let act = tun["activity"] as? NSNumber, act.intValue != 3 { continue }
-                let lat = (tun["startLatY"] as? NSNumber)?.doubleValue ?? (tun["startLatY"] as? Double)
-                let lng = (tun["startLonX"] as? NSNumber)?.doubleValue ?? (tun["startLonX"] as? Double)
-                guard let lat, let lng else { continue }
-                let near = nearestRouteIndex(coords: coords, lat: lat, lng: lng)
-                if near.dM > 3500 { continue }
-                list.append(EtubuRouteHazard(
-                    id: "corridor-\(jsonString(tun["id"]).isEmpty ? "\(lat)-\(lng)" : jsonString(tun["id"]))",
-                    kind: "corridor",
-                    label: jsonString(tun["name"]).isEmpty ? EtubuClusterL10n.t("warnKindCorridor") : jsonString(tun["name"]),
-                    lat: lat,
-                    lng: lng,
-                    maxspeed: (tun["speedLimit"] as? NSNumber)?.intValue ?? (tun["speedLimit"] as? Int),
-                    routeIdx: near.idx,
-                    alongKm: alongKm(coords: coords, upTo: near.idx)
-                ))
-            }
-        }
-        // RadarYol-style TR highway seeds (API often returns RadarCount without Radars[])
-        if includeSeeds {
-            for seed in trHighwaySeeds {
-                let near = nearestRouteIndex(coords: coords, lat: seed.lat, lng: seed.lng)
-                let maxD = seed.kind == "corridor" ? 3500.0 : 2800.0
-                if near.dM > maxD { continue }
-                list.append(EtubuRouteHazard(
-                    id: seed.id,
-                    kind: seed.kind,
-                    label: seed.label,
-                    lat: seed.lat,
-                    lng: seed.lng,
-                    maxspeed: seed.maxspeed,
-                    routeIdx: near.idx,
-                    alongKm: alongKm(coords: coords, upTo: near.idx)
-                ))
-            }
-        }
-        return dedupeHazards(list)
+        _ = data
+        _ = includeSeeds
+        return EtubuTrCorridorStore.alongRoute(coords: coords)
     }
 
-    /// OSM Overpass speed cameras / section enforcement along polyline (international + TR supplement).
+    /// OSM Overpass along polyline: cameras/corridors + tunnel/railway/hazard/pass (not dense lights).
     static func fetchOsmCamerasAlong(
         coords: [(lat: Double, lng: Double)],
         everyKm: Double = 45,
@@ -473,7 +419,7 @@ enum EtubuTrafikAPI {
         await withTaskGroup(of: [EtubuRouteHazard].self) { group in
             for s in samples {
                 group.addTask {
-                    await Self.fetchOverpassCameras(
+                    await Self.fetchOverpassAlongRoute(
                         lat: s.lat, lng: s.lng,
                         endpoints: endpoints,
                         radiusM: radiusM
@@ -487,7 +433,7 @@ enum EtubuTrafikAPI {
         var out: [EtubuRouteHazard] = []
         for h in merged {
             let near = nearestRouteIndex(coords: coords, lat: h.lat, lng: h.lng)
-            let maxD = h.kind == "corridor" ? 3500.0 : 2800.0
+            let maxD = pinDistanceM(for: h.kind)
             guard near.dM <= maxD else { continue }
             var pinned = h
             pinned.routeIdx = near.idx
@@ -497,18 +443,36 @@ enum EtubuTrafikAPI {
         return dedupeHazards(out)
     }
 
-    private static func fetchOverpassCameras(
+    private static func pinDistanceM(for kind: String) -> Double {
+        switch kind {
+        case "corridor": return 3500
+        case "radar": return 2800
+        case "tunnel": return 900
+        default: return 500
+        }
+    }
+
+    private static func fetchOverpassAlongRoute(
         lat: Double, lng: Double,
         endpoints: [String],
         radiusM: Double
     ) async -> [EtubuRouteHazard] {
+        let r = Int(radiusM)
         let q = """
-        [out:json][timeout:15];(
-          node["highway"="speed_camera"](around:\(Int(radiusM)),\(lat),\(lng));
-          node["enforcement"="maxspeed"](around:\(Int(radiusM)),\(lat),\(lng));
-          node["enforcement"="average_speed"](around:\(Int(radiusM)),\(lat),\(lng));
-          node["camera:type"="section"](around:\(Int(radiusM)),\(lat),\(lng));
-        );out body;
+        [out:json][timeout:18];(
+          node["highway"="speed_camera"](around:\(r),\(lat),\(lng));
+          node["enforcement"="maxspeed"](around:\(r),\(lat),\(lng));
+          node["enforcement"="average_speed"](around:\(r),\(lat),\(lng));
+          node["camera:type"="section"](around:\(r),\(lat),\(lng));
+          node["railway"="level_crossing"](around:\(r),\(lat),\(lng));
+          node["railway"="crossing"](around:\(r),\(lat),\(lng));
+          node["hazard"](around:\(r),\(lat),\(lng));
+          node["mountain_pass"="yes"](around:\(r),\(lat),\(lng));
+          node["natural"="saddle"](around:\(r),\(lat),\(lng));
+          way["tunnel"="yes"](around:\(r),\(lat),\(lng));
+          way["hazard"](around:\(r),\(lat),\(lng));
+          way["mountain_pass"="yes"](around:\(r),\(lat),\(lng));
+        );out body center;
         """
         for urlStr in endpoints {
             guard let url = URL(string: urlStr) else { continue }
@@ -516,11 +480,11 @@ enum EtubuTrafikAPI {
             req.httpMethod = "POST"
             req.setValue("application/x-www-form-urlencoded;charset=UTF-8", forHTTPHeaderField: "Content-Type")
             req.httpBody = "data=\(q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? q)".data(using: .utf8)
-            req.timeoutInterval = 16
+            req.timeoutInterval = 20
             do {
                 let (data, resp) = try await URLSession.shared.data(for: req)
                 guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { continue }
-                return parseOverpassCameras(data)
+                return parseOverpassAlongRoute(data)
             } catch {
                 continue
             }
@@ -528,59 +492,53 @@ enum EtubuTrafikAPI {
         return []
     }
 
-    private static func parseOverpassCameras(_ data: Data) -> [EtubuRouteHazard] {
+    /// Dense urban tags stay on the live 900 m monitor, not the route brief.
+    private static let skipAlongRouteKinds: Set<String> = [
+        "traffic_light", "crossing", "bump", "charge", "stop", "give_way",
+    ]
+
+    private static func parseOverpassAlongRoute(_ data: Data) -> [EtubuRouteHazard] {
         guard
             let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
             let elements = json["elements"] as? [[String: Any]]
         else { return [] }
         var out: [EtubuRouteHazard] = []
         for el in elements {
+            let center = el["center"] as? [String: Any]
             let lat = (el["lat"] as? NSNumber)?.doubleValue ?? (el["lat"] as? Double)
+                ?? (center?["lat"] as? NSNumber)?.doubleValue ?? (center?["lat"] as? Double)
             let lon = (el["lon"] as? NSNumber)?.doubleValue ?? (el["lon"] as? Double)
+                ?? (center?["lon"] as? NSNumber)?.doubleValue ?? (center?["lon"] as? Double)
             guard let lat, let lon else { continue }
-            let tags = el["tags"] as? [String: String] ?? [:]
-            let isCorridor = tags["enforcement"] == "average_speed"
-                || tags["camera:type"] == "section"
-                || tags["traffic_sign"] == "average_speed"
+            let rawTags = el["tags"] as? [String: Any] ?? [:]
+            let tags: [String: String] = Dictionary(uniqueKeysWithValues: rawTags.compactMap { k, v in
+                if let s = v as? String { return (k, s) }
+                if let n = v as? NSNumber { return (k, n.stringValue) }
+                return nil
+            })
+            guard let kind = EtubuOsmHazardsMonitor.classify(tags) else { continue }
+            guard !skipAlongRouteKinds.contains(kind) else { continue }
             let maxspeed = Int(tags["maxspeed"] ?? "")
             let idNum = (el["id"] as? NSNumber)?.intValue ?? (el["id"] as? Int) ?? Int(lat * 1e5)
+            let lengthKm: Double? = kind == "corridor" ? 8 : nil
             out.append(EtubuRouteHazard(
                 id: "osm-\(idNum)",
-                kind: isCorridor ? "corridor" : "radar",
-                label: isCorridor
-                    ? EtubuClusterL10n.t("warnKindCorridor")
-                    : EtubuClusterL10n.t("warnKindRadar"),
+                kind: kind,
+                label: tags["name"] ?? tags["ref"] ?? EtubuRouteHazard.kindTitle(for: kind),
                 lat: lat,
                 lng: lon,
                 maxspeed: maxspeed,
-                lengthKm: isCorridor ? 8 : nil
+                lengthKm: lengthKm
             ))
         }
         return out
     }
 
-    private static let trHighwaySeeds: [(id: String, kind: String, lat: Double, lng: Double, maxspeed: Int, label: String)] = [
-        ("tem-gebze", "radar", 40.802, 29.438, 120, "Gebze TEM"),
-        ("tem-izmit", "radar", 40.765, 29.94, 120, "İzmit TEM"),
-        ("kor-sakarya", "corridor", 40.74, 30.35, 120, "Sakarya koridor"),
-        ("kor-ankara-bati", "corridor", 39.95, 32.45, 120, "Ankara batı koridor"),
-        ("o5-kemalpasa", "radar", 38.45, 27.45, 130, "Kemalpaşa O-5"),
-        ("kor-o5-balikesir", "corridor", 39.55, 27.95, 130, "Balıkesir O-5 koridor"),
-        ("kor-o5-manisa", "corridor", 38.72, 27.35, 130, "Manisa O-5 koridor"),
-        ("kor-konya", "corridor", 38.0, 32.55, 110, "Konya koridor"),
-        ("fixed-aksaray", "radar", 38.37, 34.03, 110, "Aksaray"),
-        ("fixed-hadimkoy", "radar", 41.14, 28.6, 120, "Hadımköy"),
-        ("kor-catalca", "corridor", 41.15, 28.35, 120, "Çatalca koridor"),
-        ("fixed-silivri", "radar", 41.08, 28.25, 120, "Silivri"),
-        ("fixed-aydin", "radar", 37.84, 27.84, 120, "Aydın O-31"),
-        ("kor-antalya", "corridor", 37.05, 30.65, 110, "Antalya koridor"),
-    ]
-
     private static func dedupeHazards(_ list: [EtubuRouteHazard]) -> [EtubuRouteHazard] {
         EtubuHazardMerge.dedupePreferOfficial(list)
     }
 
-    /// Merge OSM cameras onto official EGM/seed list without cutting official points.
+    /// Merge OSM cameras onto corridor cache without cutting OSM points.
     static func mergeOfficialWithOsm(
         official: [EtubuRouteHazard],
         osm: [EtubuRouteHazard],
@@ -671,6 +629,8 @@ enum EtubuTrafikAPI {
         if let s = any { return String(describing: s) }
         return ""
     }
+
+    static func foldQuery(_ s: String) -> String { fold(s) }
 
     private static func fold(_ s: String) -> String {
         var t = s.decomposedStringWithCanonicalMapping

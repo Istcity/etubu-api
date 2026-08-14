@@ -4,6 +4,7 @@ import SwiftUI
 struct EtubuTripAnalyticsView: View {
     @ObservedObject var store: EtubuTripHistoryStore
     var accent: Color = .cyan
+    @Environment(\.clusterTheme) private var theme
 
     private var summary: EtubuTripHistoryStore.AnalyticsSummary { store.analytics }
     private var series: [(id: String, label: String, whPerKm: Double)] { store.whPerKmSeries }
@@ -16,15 +17,15 @@ struct EtubuTripAnalyticsView: View {
                         .font(.system(size: 8))
                         .foregroundStyle(.green)
                     Text(String(format: EtubuClusterL10n.t("tripActiveFmt"), active.distanceKm, active.maxKmh))
-                        .font(.caption.weight(.semibold))
+                        .font(EtubuClusterFonts.ui(12, weight: .semibold))
                     Spacer()
                 }
             }
 
             if summary.tripCount == 0 {
                 Text(EtubuClusterL10n.t("tripEmptyHint"))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .font(EtubuClusterFonts.ui(12, weight: .medium))
+                    .foregroundStyle(theme.mutedText)
             } else {
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                     statCard(
@@ -47,13 +48,15 @@ struct EtubuTripAnalyticsView: View {
 
                 if summary.totalEnergyKwh > 0.05 {
                     Text(String(format: EtubuClusterL10n.t("tripStatEnergyFmt"), summary.totalEnergyKwh, summary.tripCount))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .font(EtubuClusterFonts.ui(11, weight: .medium))
+                        .foregroundStyle(theme.mutedText)
                 }
 
                 if !series.isEmpty {
                     Text(EtubuClusterL10n.t("tripWhChart"))
-                        .font(.caption.weight(.semibold))
+                        .font(EtubuClusterFonts.ui(11, weight: .heavy))
+                        .foregroundStyle(theme.mutedText)
+                        .textCase(.uppercase)
                     whChart
                 }
             }
@@ -68,10 +71,10 @@ struct EtubuTripAnalyticsView: View {
     private func statCard(_ title: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+                .font(EtubuClusterFonts.ui(11, weight: .medium))
+                .foregroundStyle(theme.mutedText)
             Text(value)
-                .font(.title3.monospacedDigit().weight(.bold))
+                .font(EtubuClusterFonts.gauge(20))
                 .foregroundStyle(accent)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
@@ -80,7 +83,11 @@ struct EtubuTripAnalyticsView: View {
         .padding(10)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.primary.opacity(0.06))
+                .fill(theme.surface.opacity(0.7))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(theme.stroke.opacity(0.7), lineWidth: 1)
         )
     }
 
@@ -92,8 +99,8 @@ struct EtubuTripAnalyticsView: View {
                     let h = max(4, CGFloat(item.whPerKm / maxWh) * 56)
                     VStack(spacing: 3) {
                         Text(String(format: "%.0f", item.whPerKm))
-                            .font(.system(size: 8, weight: .semibold, design: .rounded).monospacedDigit())
-                            .foregroundStyle(.secondary)
+                            .font(EtubuClusterFonts.gauge(9))
+                            .foregroundStyle(theme.mutedText)
                             .lineLimit(1)
                             .minimumScaleFactor(0.5)
                         RoundedRectangle(cornerRadius: 3, style: .continuous)
@@ -108,8 +115,8 @@ struct EtubuTripAnalyticsView: View {
             HStack(spacing: 4) {
                 ForEach(series, id: \.id) { item in
                     Text(item.label)
-                        .font(.system(size: 8))
-                        .foregroundStyle(.secondary)
+                        .font(EtubuClusterFonts.ui(9, weight: .medium))
+                        .foregroundStyle(theme.mutedText)
                         .lineLimit(1)
                         .minimumScaleFactor(0.6)
                         .frame(maxWidth: .infinity)
@@ -119,7 +126,11 @@ struct EtubuTripAnalyticsView: View {
         .padding(10)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.primary.opacity(0.04))
+                .fill(theme.surface.opacity(0.55))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(theme.stroke.opacity(0.6), lineWidth: 1)
         )
         .accessibilityLabel(EtubuClusterL10n.t("tripWhChart"))
     }
@@ -127,7 +138,7 @@ struct EtubuTripAnalyticsView: View {
     private func tripRow(_ trip: EtubuTripRecord) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(trip.routeTo.isEmpty ? EtubuClusterL10n.t("trip") : trip.routeTo)
-                .font(.subheadline.weight(.semibold))
+                .font(EtubuClusterFonts.ui(15, weight: .semibold))
                 .lineLimit(1)
             HStack(spacing: 8) {
                 Text(String(format: "%.1f km", trip.distanceKm))
@@ -138,8 +149,8 @@ struct EtubuTripAnalyticsView: View {
                     Text(String(format: "%.0f Wh/km", wh))
                 }
             }
-            .font(.caption2)
-            .foregroundStyle(.secondary)
+            .font(EtubuClusterFonts.ui(11, weight: .medium))
+            .foregroundStyle(theme.mutedText)
         }
     }
 }

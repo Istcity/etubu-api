@@ -436,94 +436,31 @@ enum EtubuRouteBridge {
         }
     }
 
-    /// Autocomplete — TR içinde native index; yurt dışında Nominatim (uluslararası).
+    /// Autocomplete — OSM Photon (dünya) + Nominatim yedek. Ev/İş pin önce.
     static func search(query: String, forFrom: Bool, completion: @escaping ([EtubuRoutePlace]) -> Void) {
-        let overseas = !EtubuRegion.lastKnownInTurkey
-        if overseas {
-            Self.nominatimSearch(query: query, completion: completion)
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let pinPlace = EtubuVehicleTelemetry.placeFromSavedPin(label: trimmed) {
+            DispatchQueue.main.async { completion([pinPlace]) }
             return
         }
-
-        let native = EtubuTrafikAPI.searchPlaces(query: query, limit: 48)
-        if !native.isEmpty {
-            DispatchQueue.main.async { completion(native) }
+        if EtubuVehicleTelemetry.isHomeWorkAlias(trimmed) {
+            DispatchQueue.main.async { completion([]) }
             return
         }
-
-        let qJSON = jsStringLiteral(query)
-        let forFromJS = forFrom ? "true" : "false"
-        EtubuClusterAudioBridge.evalJSReturning("""
-        (async function(){
-          try {
-            var qRaw = \(qJSON);
-            if (window.RouteGuard && window.RouteGuard.suggest) {
-              var hits = await window.RouteGuard.suggest(qRaw, \(forFromJS));
-              return JSON.stringify((hits || []).slice(0, 48));
+        Task {
+            var places = await osmPhotonSearch(trimmed)
+            if places.isEmpty {
+                places = await osmNominatimSearch(trimmed, limit: 12)
             }
-            \(placeHelpersJS)
-            var qf = __etubuFold(qRaw);
-            var out = [];
-            var mine = __etubuMyLocation();
-            if (\(forFromJS)) {
-              var wantMine = !qf || qf.length < 2 ||
-                'konumum'.indexOf(qf) === 0 || qf.indexOf('konum') >= 0 ||
-                'mylocation'.indexOf(qf.replace(/\\s/g,'')) === 0;
-              var hits = qf.length >= 2 ? __etubuSearchPlaces(qRaw, 40) : [];
-              hits = hits.filter(function(p){ return !p.isMyLocation; });
-              if (wantMine && mine) out.push(__etubuMapPlace(mine));
-              hits.forEach(function(p){ out.push(__etubuMapPlace(p)); });
-              return JSON.stringify(out.slice(0, 48));
-            }
-            if (qf.length < 2) return '[]';
-            __etubuSearchPlaces(qRaw, 40).forEach(function(p){ out.push(__etubuMapPlace(p)); });
-            return JSON.stringify(out.slice(0, 48));
-          } catch (e) {
-            return '[]';
-          }
-        })();
-        """) { raw in
-            DispatchQueue.main.async {
-                let places = Self.parsePlaces(raw)
-                if !places.isEmpty {
-                    completion(places)
-                    return
-                }
-                // TR index boş / yurt dışı sorgu → Nominatim
-                Self.nominatimSearch(query: query, completion: completion)
-            }
+            await MainActor.run { completion(places) }
         }
+        _ = forFrom
     }
 
     private static func nominatimSearch(query: String, completion: @escaping ([EtubuRoutePlace]) -> Void) {
-        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard q.count >= 2 else {
-            completion([])
-            return
-        }
-        let qJSON = jsStringLiteral(q)
-        EtubuClusterAudioBridge.evalJSReturning("""
-        (async function(){
-          try {
-            var t = \(qJSON);
-            var url = 'https://nominatim.openstreetmap.org/search?format=json&limit=12&q=' + encodeURIComponent(t);
-            var res = await fetch(url, { headers: { 'Accept-Language': (window.__etubuLang || 'en'), 'User-Agent': 'Etubu/1.0 (com.etubu.app)' } });
-            if (!res.ok) return '[]';
-            var arr = await res.json();
-            return JSON.stringify((arr || []).map(function(hit){
-              return {
-                id: 'nom-' + hit.place_id,
-                label: hit.display_name || t,
-                city: '',
-                district: '',
-                lat: Number(hit.lat),
-                lng: Number(hit.lon),
-                isMyLocation: false
-              };
-            }));
-          } catch(e) { return '[]'; }
-        })();
-        """) { raw in
-            DispatchQueue.main.async { completion(Self.parsePlaces(raw)) }
+        Task {
+            let places = await osmNominatimSearch(query, limit: 12)
+            await MainActor.run { completion(places) }
         }
     }
 
@@ -571,64 +508,23 @@ enum EtubuRouteBridge {
         return metros.contains(tokens[0])
     }
 
-    /// Resolve typed text like web (Çorum→Merkez, Alaca→Çorum/Alaca). Falls back to Nominatim worldwide.
+    /// OSM geocode (Photon → Nominatim). Ev/İş pin-first.
     static func resolve(text: String, completion: @escaping (EtubuRoutePlace?) -> Void) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !EtubuRegion.lastKnownInTurkey {
-            Task {
-                let p = await nominatimResolveNative(trimmed)
-                await MainActor.run { completion(p) }
-            }
+        if let pinPlace = EtubuVehicleTelemetry.placeFromSavedPin(label: trimmed) {
+            DispatchQueue.main.async { completion(pinPlace) }
             return
         }
-        if let native = resolveNative(trimmed) {
-            DispatchQueue.main.async { completion(native) }
+        if EtubuVehicleTelemetry.isHomeWorkAlias(trimmed) {
+            DispatchQueue.main.async { completion(nil) }
             return
         }
-
-        let tJSON = jsStringLiteral(text)
-        EtubuClusterAudioBridge.evalJSReturning("""
-        (async function(){
-          try {
-            var t = \(tJSON);
-            if (window.RouteGuard && window.RouteGuard.resolve) {
-              var p = await window.RouteGuard.resolve(t);
-              if (p) return JSON.stringify(p);
+        Task {
+            var p = (await osmPhotonSearch(trimmed)).first
+            if p == nil {
+                p = await nominatimResolveNative(trimmed)
             }
-            \(placeHelpersJS)
-            var local = __etubuMapPlace(__etubuResolvePlace(t));
-            if (local) return JSON.stringify(local);
-            // Global geocode — OpenStreetMap Nominatim
-            var url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(t);
-            var res = await fetch(url, { headers: { 'Accept-Language': (window.__etubuLang || 'en'), 'User-Agent': 'Etubu/1.0 (com.etubu.app)' } });
-            if (!res.ok) return 'null';
-            var arr = await res.json();
-            if (!arr || !arr.length) return 'null';
-            var hit = arr[0];
-            return JSON.stringify({
-              id: 'nom-' + hit.place_id,
-              label: hit.display_name || t,
-              city: hit.address && (hit.address.city || hit.address.town || hit.address.village) || '',
-              district: hit.address && hit.address.suburb || '',
-              lat: Number(hit.lat),
-              lng: Number(hit.lon),
-              isMyLocation: false
-            });
-          } catch(e) { return 'null'; }
-        })();
-        """) { raw in
-            DispatchQueue.main.async {
-                if raw == nil || raw == "null" {
-                    completion(nil)
-                    return
-                }
-                let body = raw!.trimmingCharacters(in: .whitespacesAndNewlines)
-                if body.hasPrefix("{") {
-                    completion(parsePlaces("[\(body)]").first)
-                } else {
-                    completion(parsePlaces(body).first)
-                }
-            }
+            await MainActor.run { completion(p) }
         }
     }
 
@@ -711,7 +607,7 @@ enum EtubuRouteBridge {
         }
 
         // Aynı hedef — kalan mesafe güncelle + arka planda hazard yenile (radar bayatlamasın).
-        let key = dest.lowercased()
+        let key = EtubuVehicleTelemetry.aliasFold(dest)
         if t.routeActive, routeFromVehicleNav, key == lastVehicleNavDestKey {
             enrichActiveRouteFromNativeIfNeeded()
             Task { @MainActor in
@@ -798,13 +694,7 @@ enum EtubuRouteBridge {
 
     /// Tesla "Home"/"Work"/localized favorites — must not Nominatim to random cities.
     private static func isAmbiguousVehicleDest(_ dest: String) -> Bool {
-        let fold = dest.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let ambiguous: Set<String> = [
-            "home", "work", "ev", "iş", "is", "office",
-            "casa", "maison", "zuhause", "arbeit", "travail",
-            "oficina", "家", "仕事", "my home", "my work",
-        ]
-        return ambiguous.contains(fold)
+        EtubuVehicleTelemetry.isHomeWorkAlias(dest)
     }
 
     /// If Cap RouteGuard left hazards empty (Radars[] often blank), fill from native enrichers.
@@ -844,13 +734,8 @@ enum EtubuRouteBridge {
 
             var merged = existing
             let inTR = latLng.contains { EtubuRegion.inTurkeyBounds(lat: $0.lat, lng: $0.lng) }
-            // Always append TR seed hazards on Turkey routes when enriching.
-            if inTR {
-                merged.append(contentsOf: EtubuTrafikAPI.parseOfficialHazards(
-                    data: [:], coords: latLng, includeSeeds: true
-                ))
-            }
-            // OSM cameras: led outside TR / empty EGM; supplement inside TR (no cut of official).
+            merged.append(contentsOf: EtubuTrCorridorStore.alongRoute(coords: latLng))
+            // OSM along-route: radar/corridor + tunnel/railway/hazard (weather separate).
             async let osmTask = EtubuTrafikAPI.fetchOsmCamerasAlong(coords: latLng)
             async let chargeTask: [EtubuRouteHazard] = hasCharge
                 ? []
@@ -872,15 +757,7 @@ enum EtubuRouteBridge {
             merged.sort { ($0.routeIdx ?? 0) < ($1.routeIdx ?? 0) }
             guard merged.count > existing.count || !merged.isEmpty else { return }
 
-            let brief = EtubuRouteBriefSummary(
-                radarCount: merged.filter { $0.kind == "radar" }.count,
-                controlCount: merged.filter { $0.kind == "control" }.count,
-                corridorCount: merged.filter { $0.kind == "corridor" }.count,
-                chargeCount: merged.filter { $0.kind == "charge" }.count,
-                weatherCount: merged.filter { $0.kind == "weather" }.count,
-                chargeNames: merged.filter { $0.kind == "charge" }.prefix(4).map(\.label),
-                weatherLabels: merged.filter { $0.kind == "weather" }.prefix(4).map(\.label)
-            )
+            let brief = EtubuRouteBriefSummary.from(hazards: merged)
             await MainActor.run {
                 let w = EtubuDriveWarnings.shared
                 w.hazards = merged
@@ -927,12 +804,19 @@ enum EtubuRouteBridge {
         Task {
             var toPlace: EtubuRoutePlace? = {
                 if let p = hintPlace, p.lat != nil, p.lng != nil { return p }
-                if let p = resolveNative(to) { return p }
-                let hits = EtubuTrafikAPI.searchPlaces(query: to, limit: 8)
-                return hits.first
+                return nil
             }()
             if toPlace?.lat == nil || toPlace?.lng == nil {
-                toPlace = await nominatimResolveNative(to) ?? toPlace
+                let photon = await osmPhotonSearch(to)
+                if let p = photon.first, p.lat != nil, p.lng != nil {
+                    toPlace = p
+                }
+            }
+            if toPlace?.lat == nil || toPlace?.lng == nil {
+                toPlace = await nominatimResolveNative(to)
+            }
+            if toPlace?.lat == nil || toPlace?.lng == nil {
+                toPlace = resolveNative(to) ?? EtubuTrafikAPI.searchPlaces(query: to, limit: 8).first
             }
             guard let toPlace, let toLat = toPlace.lat, let toLng = toPlace.lng else {
                 await MainActor.run {
@@ -1062,27 +946,10 @@ enum EtubuRouteBridge {
 
             var hazards: [EtubuRouteHazard] = []
             if domestic {
-                if let data = routeData {
-                    hazards = EtubuTrafikAPI.parseOfficialHazards(
-                        data: data, coords: latLngCoords, includeSeeds: true
-                    )
-                } else {
-                    hazards = EtubuTrafikAPI.parseOfficialHazards(
-                        data: [:], coords: latLngCoords, includeSeeds: true
-                    )
-                }
+                hazards = EtubuTrCorridorStore.alongRoute(coords: latLngCoords)
             } else {
                 hazards = []
             }
-
-            // OSM: led outside TR / empty EGM; supplement in TR (official wins on conflict).
-            async let osmEarly = EtubuTrafikAPI.fetchOsmCamerasAlong(coords: latLngCoords)
-            let osmFirst = await osmEarly
-            hazards = EtubuTrafikAPI.mergeOfficialWithOsm(
-                official: hazards,
-                osm: osmFirst,
-                inTurkey: domestic
-            )
 
             let remainKm: Double = {
                 guard latLngCoords.count >= 2 else { return 0 }
@@ -1096,16 +963,8 @@ enum EtubuRouteBridge {
                 return sum
             }()
 
-            // Hızlı UI: önce rota + radar/koridor; şarj/hava arka planda.
-            let quickBrief = EtubuRouteBriefSummary(
-                radarCount: hazards.filter { $0.kind == "radar" }.count,
-                controlCount: (routeData?["ControlPointCount"] as? NSNumber)?.intValue
-                    ?? (routeData?["ControlPointCount"] as? Int)
-                    ?? hazards.filter { $0.kind == "control" }.count,
-                corridorCount: hazards.filter { $0.kind == "corridor" }.count,
-                chargeCount: 0,
-                weatherCount: 0
-            )
+            // Hızlı UI: OSM koridor + rota geometrisi hemen; OSM/şarj/hava paralel.
+            let quickBrief = EtubuRouteBriefSummary.from(hazards: hazards)
 
             await MainActor.run {
                 let t = EtubuVehicleTelemetry.shared
@@ -1127,6 +986,9 @@ enum EtubuRouteBridge {
                     CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng)
                 }
                 w.startPolling()
+                // Canlı OSM radar + yerel kritik noktalar — hemen paralel tetikle (parkta da).
+                EtubuLiveRadarMonitor.shared.prefetch(lat: fLat, lng: fLng)
+                EtubuOsmHazardsMonitor.shared.prefetch(lat: fLat, lng: fLng)
 
                 injectNativeRouteIntoCap(
                     fromLabel: fromResolvedLabel,
@@ -1155,29 +1017,25 @@ enum EtubuRouteBridge {
                 completion?(true, msg)
             }
 
-            // Şarj + hava — UI’yi bekletmeden zenginleştir (OSM already merged above).
-            async let charges = EtubuTrafikAPI.fetchChargersAlong(coords: latLngCoords)
-            async let weather = EtubuTrafikAPI.fetchWeatherAlong(coords: latLngCoords)
-            let (chargeHaz, wxHaz) = await (charges, weather)
-            guard !chargeHaz.isEmpty || !wxHaz.isEmpty else { return }
+            // Karma: OSM + şarj + hava aynı anda; resmi üzerine merge (çakışmada resmi kazanır).
+            async let osmTask = EtubuTrafikAPI.fetchOsmCamerasAlong(coords: latLngCoords)
+            async let chargeTask = EtubuTrafikAPI.fetchChargersAlong(coords: latLngCoords)
+            async let weatherTask = EtubuTrafikAPI.fetchWeatherAlong(coords: latLngCoords)
+            let (osmCams, chargeHaz, wxHaz) = await (osmTask, chargeTask, weatherTask)
 
             await MainActor.run {
                 let w = EtubuDriveWarnings.shared
-                var merged = w.hazards
+                let official = w.hazards.filter { !EtubuHazardMerge.isOsmSource($0) }
+                var merged = EtubuTrafikAPI.mergeOfficialWithOsm(
+                    official: official,
+                    osm: osmCams,
+                    inTurkey: domestic
+                )
                 merged.append(contentsOf: chargeHaz)
                 merged.append(contentsOf: wxHaz)
-                var seen = Set<String>()
-                merged = merged.filter { seen.insert($0.id).inserted }
+                merged = EtubuHazardMerge.dedupePreferOfficial(merged)
                 merged.sort { ($0.routeIdx ?? 0) < ($1.routeIdx ?? 0) }
-                let brief = EtubuRouteBriefSummary(
-                    radarCount: merged.filter { $0.kind == "radar" }.count,
-                    controlCount: merged.filter { $0.kind == "control" }.count,
-                    corridorCount: merged.filter { $0.kind == "corridor" }.count,
-                    chargeCount: merged.filter { $0.kind == "charge" }.count,
-                    weatherCount: merged.filter { $0.kind == "weather" }.count,
-                    chargeNames: merged.filter { $0.kind == "charge" }.prefix(4).map(\.label),
-                    weatherLabels: merged.filter { $0.kind == "weather" }.prefix(4).map(\.label)
-                )
+                let brief = EtubuRouteBriefSummary.from(hazards: merged)
                 w.hazards = merged
                 w.remainingHazards = merged
                 w.brief = brief
@@ -1194,17 +1052,91 @@ enum EtubuRouteBridge {
         }
     }
 
-    /// Nominatim (OSM) — Cap WebView’e ihtiyaç duymadan destinasyon çözümü.
-    private static func nominatimResolveNative(_ query: String) async -> EtubuRoutePlace? {
+    /// Photon (OSM) — yazarken dünya adresleri.
+    private static func osmPhotonSearch(_ query: String) async -> [EtubuRoutePlace] {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard q.count >= 2 else { return nil }
+        guard q.count >= 2 else { return [] }
+        var comps = URLComponents(string: "https://photon.komoot.io/api/")
+        var items = [
+            URLQueryItem(name: "q", value: q),
+            URLQueryItem(name: "limit", value: "12"),
+            URLQueryItem(name: "lang", value: EtubuAppLanguage.current.rawValue),
+        ]
+        let t = EtubuVehicleTelemetry.shared
+        if let lat = t.latitude, let lon = t.longitude, lat != 0, lon != 0 {
+            items.append(URLQueryItem(name: "lat", value: String(lat)))
+            items.append(URLQueryItem(name: "lon", value: String(lon)))
+        }
+        comps?.queryItems = items
+        guard let url = comps?.url else { return [] }
+        var req = URLRequest(url: url)
+        req.setValue("Etubu/1.0 (com.etubu.app)", forHTTPHeaderField: "User-Agent")
+        req.timeoutInterval = 10
+        do {
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode),
+                  let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let features = json["features"] as? [[String: Any]]
+            else { return [] }
+            var seen = Set<String>()
+            return features.compactMap { feat -> EtubuRoutePlace? in
+                let geom = feat["geometry"] as? [String: Any]
+                let coordsAny = geom?["coordinates"] as? [Any]
+                guard let coordsAny, coordsAny.count >= 2 else { return nil }
+                let lon = (coordsAny[0] as? NSNumber)?.doubleValue ?? (coordsAny[0] as? Double)
+                let lat = (coordsAny[1] as? NSNumber)?.doubleValue ?? (coordsAny[1] as? Double)
+                guard let lon, let lat else { return nil }
+                let props = feat["properties"] as? [String: Any] ?? [:]
+                let name = (props["name"] as? String) ?? ""
+                let street = (props["street"] as? String) ?? ""
+                let house = (props["housenumber"] as? String) ?? ""
+                let city = (props["city"] as? String)
+                    ?? (props["town"] as? String)
+                    ?? (props["village"] as? String)
+                    ?? (props["locality"] as? String)
+                    ?? (props["state"] as? String)
+                    ?? ""
+                let country = (props["country"] as? String) ?? ""
+                let district = (props["district"] as? String)
+                    ?? (props["suburb"] as? String)
+                    ?? (props["county"] as? String)
+                    ?? ""
+                let label: String = {
+                    if !name.isEmpty { return name }
+                    if !street.isEmpty {
+                        return house.isEmpty ? street : "\(street) \(house)"
+                    }
+                    return q
+                }()
+                let extra = [district, country].filter { !$0.isEmpty }.joined(separator: " · ")
+                let key = String(format: "%.4f,%.4f,%@", lat, lon, label)
+                guard seen.insert(key).inserted else { return nil }
+                return EtubuRoutePlace(
+                    label: label,
+                    cityName: city,
+                    districtName: extra,
+                    isMyLocation: false,
+                    lat: lat,
+                    lng: lon,
+                    districtId: ""
+                )
+            }
+        } catch {
+            return []
+        }
+    }
+
+    private static func osmNominatimSearch(_ query: String, limit: Int) async -> [EtubuRoutePlace] {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard q.count >= 2 else { return [] }
         var comps = URLComponents(string: "https://nominatim.openstreetmap.org/search")
         comps?.queryItems = [
-            URLQueryItem(name: "format", value: "json"),
-            URLQueryItem(name: "limit", value: "1"),
+            URLQueryItem(name: "format", value: "jsonv2"),
+            URLQueryItem(name: "addressdetails", value: "1"),
+            URLQueryItem(name: "limit", value: "\(max(1, min(limit, 15)))"),
             URLQueryItem(name: "q", value: q),
         ]
-        guard let url = comps?.url else { return nil }
+        guard let url = comps?.url else { return [] }
         var req = URLRequest(url: url)
         req.setValue("Etubu/1.0 (com.etubu.app)", forHTTPHeaderField: "User-Agent")
         req.setValue(EtubuAppLanguage.current.rawValue, forHTTPHeaderField: "Accept-Language")
@@ -1212,27 +1144,48 @@ enum EtubuRouteBridge {
         do {
             let (data, resp) = try await URLSession.shared.data(for: req)
             guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode),
-                  let arr = try JSONSerialization.jsonObject(with: data) as? [[String: Any]],
-                  let hit = arr.first
-            else { return nil }
-            let lat = (hit["lat"] as? NSNumber)?.doubleValue
-                ?? Double(hit["lat"] as? String ?? "")
-            let lon = (hit["lon"] as? NSNumber)?.doubleValue
-                ?? Double(hit["lon"] as? String ?? "")
-            guard let lat, let lon else { return nil }
-            let label = (hit["display_name"] as? String) ?? q
-            return EtubuRoutePlace(
-                label: label,
-                cityName: "",
-                districtName: "",
-                isMyLocation: false,
-                lat: lat,
-                lng: lon,
-                districtId: ""
-            )
+                  let arr = try JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+            else { return [] }
+            return arr.compactMap { hit in placeFromNominatim(hit, fallback: q) }
         } catch {
-            return nil
+            return []
         }
+    }
+
+    private static func placeFromNominatim(_ hit: [String: Any], fallback: String) -> EtubuRoutePlace? {
+        let lat = (hit["lat"] as? NSNumber)?.doubleValue ?? Double(hit["lat"] as? String ?? "")
+        let lon = (hit["lon"] as? NSNumber)?.doubleValue ?? Double(hit["lon"] as? String ?? "")
+        guard let lat, let lon else { return nil }
+        let addr = hit["address"] as? [String: Any] ?? [:]
+        let name = (hit["name"] as? String) ?? ""
+        let display = (hit["display_name"] as? String) ?? fallback
+        let label: String = {
+            if !name.isEmpty { return name }
+            let parts = display.split(separator: ",").prefix(2).map { $0.trimmingCharacters(in: .whitespaces) }
+            return parts.isEmpty ? fallback : parts.joined(separator: ", ")
+        }()
+        let city = (addr["city"] as? String)
+            ?? (addr["town"] as? String)
+            ?? (addr["village"] as? String)
+            ?? (addr["municipality"] as? String)
+            ?? ""
+        let country = (addr["country"] as? String) ?? ""
+        let suburb = (addr["suburb"] as? String) ?? (addr["county"] as? String) ?? ""
+        let extra = [suburb, country].filter { !$0.isEmpty }.joined(separator: " · ")
+        return EtubuRoutePlace(
+            label: label,
+            cityName: city,
+            districtName: extra,
+            isMyLocation: false,
+            lat: lat,
+            lng: lon,
+            districtId: ""
+        )
+    }
+
+    /// Nominatim (OSM) — Cap WebView’e ihtiyaç duymadan destinasyon çözümü.
+    private static func nominatimResolveNative(_ query: String) async -> EtubuRoutePlace? {
+        (await osmNominatimSearch(query, limit: 1)).first
     }
 
     private static func fetchOsrmCoordinates(
@@ -1312,7 +1265,8 @@ enum EtubuRouteBridge {
               corridor: \(brief.corridorCount),
               charge: \(brief.chargeCount),
               weather: \(brief.weatherCount),
-              control: \(brief.controlCount)
+              control: \(brief.controlCount),
+              osmCritical: \(brief.osmCriticalCount)
             };
             var from = document.getElementById('routeFromInput');
             var to = document.getElementById('routeToInput');
@@ -1339,7 +1293,8 @@ enum EtubuRouteBridge {
                   corridor: \(brief.corridorCount),
                   charge: \(brief.chargeCount),
                   weather: \(brief.weatherCount),
-                  control: \(brief.controlCount)
+                  control: \(brief.controlCount),
+                  osmCritical: \(brief.osmCriticalCount)
                 }
               });
             }
@@ -1551,7 +1506,7 @@ enum EtubuRouteBridge {
               if (saved.fromLabel) from = saved.fromLabel;
               if (saved.toLabel) to = saved.toLabel;
             } catch (e) {}
-            var brief = { radar: 0, control: 0, corridor: 0, charge: 0, weather: 0, chargeNames: [], weatherLabels: [] };
+            var brief = { radar: 0, control: 0, corridor: 0, charge: 0, weather: 0, osmCritical: 0, chargeNames: [], weatherLabels: [] };
             // Native plan fallback — Cap RouteGuard may be absent but coords/meta were injected.
             try {
               var meta = window.__etubuLastPlanMeta || {};
@@ -1566,6 +1521,7 @@ enum EtubuRouteBridge {
               if (meta.charge) brief.charge = +meta.charge || 0;
               if (meta.weather) brief.weather = +meta.weather || 0;
               if (meta.control) brief.control = +meta.control || 0;
+              if (meta.osmCritical) brief.osmCritical = +meta.osmCritical || 0;
             } catch (eN) {}
             var cardsEl = document.querySelectorAll('.route-brief-cards > div');
             if (cardsEl && cardsEl.length >= 5) {
@@ -1604,13 +1560,15 @@ enum EtubuRouteBridge {
               }
               return Math.round(sum / 100) / 10;
             }
-            if ((!brief.radar && !brief.corridor && !brief.charge && !brief.weather) && hazards.length) {
+            if ((!brief.radar && !brief.corridor && !brief.charge && !brief.weather && !brief.osmCritical) && hazards.length) {
+              var crit = {railway:1,tunnel:1,winding:1,climb:1,road_condition:1,animal:1,stop:1,give_way:1};
               hazards.forEach(function(h){
                 if (h.kind === 'corridor') brief.corridor++;
                 else if (h.kind === 'charge') { brief.charge++; if (h.label && brief.chargeNames.length < 4) brief.chargeNames.push(h.label); }
                 else if (h.kind === 'weather') { brief.weather++; if (h.label && brief.weatherLabels.length < 4) brief.weatherLabels.push(h.label); }
                 else if (h.kind === 'control') brief.control++;
-                else brief.radar++;
+                else if (crit[h.kind]) brief.osmCritical++;
+                else if (h.kind === 'radar') brief.radar++;
               });
             }
             var details = hazards.slice().sort(function(a,b){
@@ -1698,7 +1656,8 @@ enum EtubuRouteBridge {
                 chargeCount: count("charge"),
                 weatherCount: count("weather"),
                 chargeNames: (counts["chargeNames"] as? [String]) ?? [],
-                weatherLabels: (counts["weatherLabels"] as? [String]) ?? []
+                weatherLabels: (counts["weatherLabels"] as? [String]) ?? [],
+                osmCriticalCount: count("osmCritical")
             )
             let hazardCount: Int = {
                 if let i = json["hazardCount"] as? Int { return i }
@@ -1737,23 +1696,14 @@ enum EtubuRouteBridge {
                 var briefOut = summary
                 var detailsOut = details
                 var hazardOut = hazardCount
-                if !briefOut.hasAny, w.brief.hasAny {
-                    briefOut = w.brief
-                }
                 if detailsOut.isEmpty, !w.hazards.isEmpty {
                     detailsOut = w.hazards
                     hazardOut = w.hazards.count
                 }
-                if !briefOut.hasAny, !detailsOut.isEmpty {
-                    briefOut = EtubuRouteBriefSummary(
-                        radarCount: detailsOut.filter { $0.kind == "radar" }.count,
-                        controlCount: detailsOut.filter { $0.kind == "control" }.count,
-                        corridorCount: detailsOut.filter { $0.kind == "corridor" }.count,
-                        chargeCount: detailsOut.filter { $0.kind == "charge" }.count,
-                        weatherCount: detailsOut.filter { $0.kind == "weather" }.count,
-                        chargeNames: detailsOut.filter { $0.kind == "charge" }.prefix(4).map(\.label),
-                        weatherLabels: detailsOut.filter { $0.kind == "weather" }.prefix(4).map(\.label)
-                    )
+                if !detailsOut.isEmpty {
+                    briefOut = EtubuRouteBriefSummary.from(hazards: detailsOut)
+                } else if w.brief.hasAny {
+                    briefOut = w.brief
                 }
                 completion(EtubuRouteStatus(
                     active: active,

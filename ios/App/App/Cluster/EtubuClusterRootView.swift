@@ -19,9 +19,11 @@ struct EtubuClusterRootView: View {
     @State private var vinDraft: String = ""
     @State private var showVINEditor = false
     @State private var showSettings = false
+    @State private var showExitConfirm = false
     @State private var showPremiumPaywall = false
     @State private var premiumPaywallHint: String? = nil
-    @State private var mixMode: String = "blend"
+    @AppStorage("etubu.cluster.mixMode") private var mixMode = "blend"
+    @AppStorage("etubu.cluster.alertOverMusic") private var alertOverMusic = true
     @State private var soundOn = false
     @State private var selectedVoice: String = EtubuClusterAudioBridge.storedVoice
     @State private var showEvSoundTip = false
@@ -55,8 +57,16 @@ struct EtubuClusterRootView: View {
     @AppStorage("etubu.cluster.notchAuraEnabled") private var notchAuraEnabled = true
     @AppStorage("etubu.cluster.mapEnabled") private var mapEnabled = true
     @AppStorage(EtubuMapLocationHelper.locationEnabledKey) private var locationEnabled = true
-    @AppStorage("etubu.cluster.alertOverMusic") private var alertOverMusic = true
     @AppStorage("etubu.cluster.alertVolume") private var alertVolume: Double = 0.85
+    @AppStorage("etubu.cluster.stealthMode") private var stealthMode = true
+    @AppStorage("etubu.cluster.stealthAnalog") private var stealthAnalog = false
+    /// Güç tasarrufu: yalnız hız + regen; diğer paneller ve extras poll durur.
+    @AppStorage("etubu.cluster.powerSave") private var powerSaveMode = false
+    /// Üst chrome butonları açık mı; kapalıysa tek genişlet butonu (+ uzaktan kumanda).
+    @AppStorage("etubu.cluster.chromeExpanded") private var chromeExpanded = true
+    @AppStorage(EtubuRemotePinStore.enabledKey) private var remotePinUnderWarn = false
+    @State private var stealthWakeUntil = Date.distantPast
+    @State private var stealthTick = Date()
     @AppStorage("etubu.demo.running") private var demoRunningUD = false
     @AppStorage("etubu.demo.kmh") private var demoKmhUD = 0
     /// MapKit thrash önleme — kamera yalnızca anlamlı konum/rota değişiminde güncellenir.
@@ -69,14 +79,34 @@ struct EtubuClusterRootView: View {
     @State private var lastMapCenter: CLLocationCoordinate2D?
     @State private var lastMapRouteCount: Int = 0
     @State private var lastMapHeading: Double = 0
+    /// Cached outside AttributeGraph — reading `UIWindow.safeAreaInsets` inside
+    /// `GeometryReader` re-enters layout (status-bar / safe-area query) and can
+    /// stack-overflow on iOS 26/27 (see docs/crash-Etubu-2026-08-11.md).
+    @State private var cachedWinInsets = EdgeInsets()
     @AppStorage("etubu.demo.gear") private var demoGearUD = "P"
     @AppStorage("etubu.demo.power") private var demoPowerUD = 0
 
     private let clock = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
+    private let stealthClock = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     private var criticalAlertsOn: Bool { appLanguage.criticalAlertsEnabled }
     private var mapBackdropEnabled: Bool { premium.isPremium && mapEnabled }
     private var shouldShowPairGuide: Bool { tesla.pairStep != .none }
+
+    /// OLED speed-only cover. Maestro / legal / sheets stay on the full dashboard.
+    private var stealthCovering: Bool {
+        let _ = stealthTick
+        guard stealthMode, !EtubuMaestroLaunch.isActive else { return false }
+        if showLegal || showSim || showSettings || showExitConfirm || showVINEditor
+            || showRoutePicker || showRemoteCommands || showPremiumPaywall || shouldShowPairGuide {
+            return false
+        }
+        return Date() >= stealthWakeUntil
+    }
+
+    private func noteClusterInteraction() {
+        stealthWakeUntil = Date().addingTimeInterval(10)
+    }
 
     private func openPremium(hintKey: String? = nil) {
         premiumPaywallHint = hintKey.map { EtubuClusterL10n.t($0) }
@@ -108,7 +138,8 @@ struct EtubuClusterRootView: View {
             return raw < 5 ? 0 : raw
         }
         let g = telemetry.gear.uppercased()
-        if g.hasPrefix("P") || g.hasPrefix("N") { return 0 }
+        // P/N yalnız gerçekten dururken 0; hareketliyken dialGear ile aynı (D).
+        if (g.hasPrefix("P") || g.hasPrefix("N")), telemetry.kmh < 3 { return 0 }
         // Tesla araç hızı birincil — creep’i gizleme (<5 floor kaldırıldı).
         return max(0, telemetry.kmh)
     }
@@ -154,8 +185,9 @@ struct EtubuClusterRootView: View {
         GeometryReader { geo in
             let _ = l10nTick
             let landscape = geo.size.width > geo.size.height
-            // Hosting overlay often zeros SwiftUI safeAreaInsets — use window insets.
-            let win = Self.windowSafeInsets()
+            // Hosting overlay often zeros SwiftUI safeAreaInsets — use cached window insets
+            // (never call UIWindow.safeAreaInsets synchronously here; see cachedWinInsets).
+            let win = cachedWinInsets
             let insets = EdgeInsets(
                 top: max(geo.safeAreaInsets.top, win.top),
                 leading: max(geo.safeAreaInsets.leading, win.leading),
@@ -189,7 +221,12 @@ struct EtubuClusterRootView: View {
                 // Map / heavy chrome only after legal + sim gates — avoids black MapKit tiles
                 // and location-prompt stacking over an empty dark shell.
                 if !showLegal && !showSim {
-                    backgroundLayer(landscape: landscape, mapWashHeight: layout.mapWashHeight)
+                    // Güç tasarrufunda harita yok — yalnız tema zemini + kadran.
+                    if powerSaveMode {
+                        ClusterThemeBackdrop(theme: theme, landscape: landscape, wallpaper: wallpaper)
+                    } else {
+                        backgroundLayer(landscape: landscape, mapWashHeight: layout.mapWashHeight)
+                    }
                 } else {
                     ClusterThemeBackdrop(theme: theme, landscape: landscape, wallpaper: wallpaper)
                 }
@@ -225,9 +262,9 @@ struct EtubuClusterRootView: View {
                 // Demo stop chip lives in top chrome (portrait/landscape) — Map overlay
                 // accessibility often hides a free-floating ZStack button.
 
-                // Menzil < 100 km → çevrede kırmızı pulse
-                if let range = telemetry.rangeKm, range > 0, range < 100 {
-                    lowRangePulseOverlay
+                // SoC < %10 → çevrede ince kırmızı pulse
+                if let soc = telemetry.displaySocPercent, soc < 10 {
+                    lowSocPulseOverlay
                         .allowsHitTesting(false)
                         .zIndex(4)
                 }
@@ -316,6 +353,16 @@ struct EtubuClusterRootView: View {
                         .zIndex(30)
                 }
 
+                if stealthCovering && !showLegal && !showSim {
+                    EtubuStealthSpeedView(kmh: dialKmh, analog: stealthAnalog) {
+                        withAnimation(.easeOut(duration: 0.28)) {
+                            noteClusterInteraction()
+                        }
+                    }
+                    .transition(.opacity)
+                    .zIndex(40)
+                }
+
                 if showLegal {
                     EtubuLegalAcceptanceView(theme: theme) {
                         // Sim henüz bitmediyse core’u sim bitince başlat.
@@ -326,14 +373,21 @@ struct EtubuClusterRootView: View {
 
                 if !showLegal && showSim {
                     EtubuClusterSimView(theme: theme) {
-                        simDone = true
-                        simDoneStored = true
+                        withAnimation(.easeInOut(duration: 0.45)) {
+                            simDone = true
+                            simDoneStored = true
+                        }
                         startCoreIfNeeded()
                     }
+                    .transition(.asymmetric(
+                        insertion: .opacity,
+                        removal: .opacity.combined(with: .move(edge: .leading))
+                    ))
                     .zIndex(45)
                 }
             }
             .coordinateSpace(name: "etubuCluster")
+            .animation(.easeInOut(duration: 0.45), value: showSim)
             .onPreferenceChange(EtubuHotspotFramesKey.self) { next in
                 guard next != hotspotFrames else { return }
                 hotspotFrames = next
@@ -345,15 +399,73 @@ struct EtubuClusterRootView: View {
             .tint(theme.accent)
             .onAppear {
                 layout.applyFontScale()
+                // Defer past the current AttributeGraph transaction.
+                DispatchQueue.main.async { refreshCachedWinInsets() }
             }
             .onChange(of: layout.fontScale) { _, _ in
                 layout.applyFontScale()
             }
             .onChange(of: landscape) { _, _ in
                 layout.applyFontScale()
+                DispatchQueue.main.async { refreshCachedWinInsets() }
             }
+            .onReceive(NotificationCenter.default.publisher(for: .etubuClusterGeometryDidChange)) { _ in
+                DispatchQueue.main.async { refreshCachedWinInsets() }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
+                DispatchQueue.main.async { refreshCachedWinInsets() }
+            }
+            .onReceive(stealthClock) { stealthTick = $0 }
+            .simultaneousGesture(TapGesture().onEnded { noteClusterInteraction() })
             .sheet(isPresented: $showSettings) {
-                settingsSheet
+                SettingsHost(
+                    snap: SettingsHost.Snap(
+                        lang: appLanguage,
+                        l10nTick: l10nTick,
+                        theme: theme,
+                        wallpaper: wallpaper,
+                        demoRunning: demo.isRunning,
+                        conn: telemetry.connectionQualityLabel,
+                        src: telemetry.speedSourceLabel,
+                        needsCharge: telemetry.needsChargeStop,
+                        chargeN: telemetry.suggestedChargeCount,
+                        soundOn: soundOn,
+                        voice: selectedVoice,
+                        mix: mixMode,
+                        stealth: stealthMode,
+                        stealthA: stealthAnalog,
+                        map: mapEnabled,
+                        loc: locationEnabled,
+                        premium: premium.isPremium,
+                        soc: evPlan.targetArrivalSoc,
+                        remoteLim: remoteChargeLimit,
+                        alertVol: alertVolume,
+                        alertOver: alertOverMusic,
+                        notch: notchAuraEnabled
+                    ),
+                    theme: $theme,
+                    wallpaper: $wallpaper,
+                    appLanguage: $appLanguage,
+                    showSettings: $showSettings,
+                    showExitConfirm: $showExitConfirm,
+                    showVINEditor: $showVINEditor,
+                    showObdMenu: $showObdMenu,
+                    showPremiumPaywall: $showPremiumPaywall,
+                    showRoutePicker: $showRoutePicker,
+                    premiumPaywallHint: $premiumPaywallHint,
+                    soundOn: $soundOn,
+                    selectedVoice: $selectedVoice,
+                    mixMode: $mixMode,
+                    alertOverMusic: $alertOverMusic,
+                    alertVolume: $alertVolume,
+                    stealthMode: $stealthMode,
+                    stealthAnalog: $stealthAnalog,
+                    mapEnabled: $mapEnabled,
+                    locationEnabled: $locationEnabled,
+                    notchAuraEnabled: $notchAuraEnabled,
+                    remoteChargeLimit: $remoteChargeLimit
+                )
+                .equatable()
                     .tint(theme.accent)
                     .environment(\.clusterTheme, theme)
                     .id(appLanguage)
@@ -362,37 +474,47 @@ struct EtubuClusterRootView: View {
             }
             .sheet(isPresented: $showPremiumPaywall) {
                 EtubuPremiumPaywallView(accent: theme.accent, highlight: premiumPaywallHint)
+                    .environment(\.clusterTheme, theme)
                     .tint(theme.accent)
+                    .preferredColorScheme(.dark)
                     .presentationDetents([.large, .medium])
                     .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showRoutePicker) {
                 EtubuRoutePickerView()
+                    .environment(\.clusterTheme, theme)
+                    .preferredColorScheme(.dark)
             }
             .sheet(isPresented: $showRemoteCommands) {
                 NavigationStack {
                     List {
-                        Section(EtubuClusterL10n.t("remoteCmdSection")) {
+                        Section {
                             EtubuRemoteCommandCards(tesla: tesla)
                             VStack(alignment: .leading, spacing: 6) {
                                 HStack {
                                     Text(EtubuClusterL10n.t("cmdChargeLimit"))
                                     Spacer()
                                     Text("\(Int(remoteChargeLimit))%")
-                                        .monospacedDigit()
+                                        .font(EtubuClusterFonts.gauge(16))
                                 }
                                 Slider(value: $remoteChargeLimit, in: 50...100, step: 5)
                                 Button(EtubuClusterL10n.t("cmdApplyLimit")) {
                                     Task { await tesla.setChargeLimit(Int(remoteChargeLimit)) }
                                 }
                             }
+                        } header: {
+                            EtubuSheetSectionTitle(title: EtubuClusterL10n.t("remoteCmdSection"), theme: theme, motion: .remote)
                         }
+                        .etubuSheetSection(theme)
                     }
+                    .etubuSheetList(theme)
+                    .environment(\.locale, appLanguage.locale)
                     .navigationTitle(EtubuClusterL10n.t("remoteCmdSection"))
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
                             Button(EtubuClusterL10n.done) { showRemoteCommands = false }
+                                .foregroundStyle(theme.accent)
                         }
                     }
                 }
@@ -417,6 +539,14 @@ struct EtubuClusterRootView: View {
                 Button(EtubuClusterL10n.t("obdDisconnect"), role: .destructive) { EtubuObdBleManager.shared.disconnect() }
                 Button(EtubuClusterL10n.t("cancel"), role: .cancel) {}
             }
+            .alert(EtubuClusterL10n.t("exitConfirmTitle"), isPresented: $showExitConfirm) {
+                Button(EtubuClusterL10n.t("cancel"), role: .cancel) {}
+                Button(EtubuClusterL10n.t("exitConfirmQuit"), role: .destructive) {
+                    EtubuAppExit.quitFully()
+                }
+            } message: {
+                Text(EtubuClusterL10n.t("exitConfirmBody"))
+            }
         }
         .ignoresSafeArea(.container)
         .preferredColorScheme(.dark)
@@ -438,6 +568,7 @@ struct EtubuClusterRootView: View {
             if !showSim && !showLegal {
                 startCoreIfNeeded()
             }
+            EtubuTeslaBleSession.shared.setPowerSave(powerSaveMode)
         }
         .onChange(of: premium.isPremium) { _, on in
             EtubuClusterAudioBridge.setPremium(on)
@@ -467,8 +598,10 @@ struct EtubuClusterRootView: View {
             syncSoundUIFromPreference()
         }
         .onReceive(NotificationCenter.default.publisher(for: .etubuSimFinished)) { _ in
-            simDone = true
-            simDoneStored = true
+            withAnimation(.easeInOut(duration: 0.45)) {
+                simDone = true
+                simDoneStored = true
+            }
             if !showLegal { startCoreIfNeeded() }
         }
         .onReceive(NotificationCenter.default.publisher(for: .etubuLegalAccepted)) { _ in
@@ -557,6 +690,7 @@ struct EtubuClusterRootView: View {
         }
         tesla.bootstrapIfPossible(reason: .autoLaunch)
         warnings.startPolling()
+        EtubuTrCorridorStore.refreshIfNeeded()
         EtubuRouteBridge.primeWarningAudio()
         EtubuClusterAudioBridge.armPowerRegenHook()
         UIApplication.shared.isIdleTimerDisabled = true
@@ -642,6 +776,12 @@ struct EtubuClusterRootView: View {
             UserDefaults.standard.set("P", forKey: "etubu.demo.gear")
             UserDefaults.standard.set(0, forKey: "etubu.demo.power")
         }
+        // Maestro: pin bar under road warning
+        let launchArgs = ProcessInfo.processInfo.arguments
+        if launchArgs.contains("etubuForceRemotePin") || launchArgs.contains("-etubuForceRemotePin") {
+            UserDefaults.standard.set(true, forKey: EtubuRemotePinStore.enabledKey)
+            remotePinUnderWarn = true
+        }
     }
 
     private static var didStartCore = false
@@ -652,19 +792,18 @@ struct EtubuClusterRootView: View {
         EtubuClusterFonts.setContentScale(next)
     }
 
-    /// Menzil kritik (<100 km) — ekran kenarında yumuşak kırmızı pulse
-    private var lowRangePulseOverlay: some View {
+    /// SoC < %10 — ekran kenarında ince kırmızı pulse
+    private var lowSocPulseOverlay: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 12.0, paused: false)) { timeline in
             let t = timeline.date.timeIntervalSinceReferenceDate
-            let pulse = 0.35 + 0.35 * abs(sin(t * 2.2))
+            let pulse = 0.40 + 0.45 * abs(sin(t * 2.4))
             RoundedRectangle(cornerRadius: 0, style: .continuous)
                 .strokeBorder(
                     Color.red.opacity(pulse),
-                    lineWidth: 5 + CGFloat(pulse) * 6
+                    lineWidth: 1.5 + CGFloat(pulse) * 1.2
                 )
-                .blur(radius: 8)
                 .ignoresSafeArea()
-                .opacity(0.85)
+                .opacity(0.95)
         }
     }
 
@@ -847,6 +986,18 @@ struct EtubuClusterRootView: View {
                 .layoutPriority(3)
                 .fixedSize(horizontal: false, vertical: true)
 
+            if powerSaveMode {
+                VStack(spacing: 10) {
+                    speedDialWithThemeGesture(
+                        compact: true,
+                        diameter: dialMax,
+                        chromeDiameter: dialBase
+                    )
+                    EtubuPowerRegenBarView(powerKw: telemetry.powerKw, compact: true, theme: theme)
+                        .padding(.horizontal, 24)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+            } else {
             HStack(alignment: .center, spacing: layout.isCompactWidth ? 2 : 4) {
                 leftCardStack
                     .frame(width: sideW)
@@ -909,6 +1060,7 @@ struct EtubuClusterRootView: View {
                 .padding(.horizontal, 4)
                 .layoutPriority(2)
                 .fixedSize(horizontal: false, vertical: true)
+            } // !powerSaveMode
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .padding(.leading, layout.leadPad)
@@ -925,6 +1077,12 @@ struct EtubuClusterRootView: View {
                 .padding(.trailing, flushTrailing ? 0 : 3)
                 .padding(.vertical, 3)
         }
+    }
+
+    private func refreshCachedWinInsets() {
+        let next = Self.windowSafeInsets()
+        guard next != cachedWinInsets else { return }
+        cachedWinInsets = next
     }
 
     private static func windowSafeInsets() -> EdgeInsets {
@@ -944,10 +1102,12 @@ struct EtubuClusterRootView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(leftCardPage.title)
                 .font(EtubuClusterFonts.ui(10, weight: .heavy))
-                .tracking(0.8)
+                .tracking(0.4)
                 .foregroundStyle(theme.mutedText)
                 .lineLimit(1)
-                .minimumScaleFactor(0.7)
+                .minimumScaleFactor(0.55)
+                .allowsTightening(true)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
             Group {
                 switch leftCardPage {
@@ -1008,7 +1168,9 @@ struct EtubuClusterRootView: View {
             .font(EtubuClusterFonts.ui(14, weight: .semibold))
             .foregroundStyle(theme.primaryText.opacity(0.9))
             .lineLimit(1)
-            .minimumScaleFactor(0.7)
+            .minimumScaleFactor(0.55)
+            .allowsTightening(true)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// Jul 29 twin panels — equal size, shared chrome, never overlap.
@@ -1020,20 +1182,28 @@ struct EtubuClusterRootView: View {
 
     private func twinCardsColumn(dialSize: CGFloat, boxW: CGFloat, contentScale: CGFloat) -> some View {
         let boxH = twinCardHeight(dialSize: dialSize)
+        let pinH: CGFloat = remotePinUnderWarn ? max(30, min(38, boxW * 0.24)) : 0
+        let gapExtra: CGFloat = remotePinUnderWarn ? 4 : 0
         return VStack(spacing: twinCardGap) {
             avgSpeedCard(width: boxW, height: boxH, contentScale: contentScale)
                 .frame(width: boxW, height: boxH)
                 .clipped()
             if criticalAlertsOn {
-                roadWarningCard(width: boxW, height: boxH, contentScale: contentScale)
-                    .frame(width: boxW, height: boxH)
-                    .clipped()
+                VStack(spacing: gapExtra) {
+                    roadWarningCard(width: boxW, height: boxH, contentScale: contentScale)
+                        .frame(width: boxW, height: boxH)
+                        .clipped()
+                    if remotePinUnderWarn {
+                        EtubuRemotePinnedBar(width: boxW, theme: theme, tesla: tesla)
+                            .frame(width: boxW, height: pinH)
+                    }
+                }
+                .frame(width: boxW, alignment: .top)
             } else {
                 Color.clear.frame(width: boxW, height: boxH)
             }
         }
-        .frame(width: boxW, height: dialSize, alignment: .top)
-        .clipped()
+        .frame(width: boxW, height: dialSize + (remotePinUnderWarn && criticalAlertsOn ? pinH + gapExtra : 0), alignment: .top)
     }
 
     /// Jul 29 web-style avg panel (trip avg / corridor avg).
@@ -1109,89 +1279,207 @@ struct EtubuClusterRootView: View {
         let _ = telemetry.climateEpoch
         let _ = telemetry.chargeEpoch
         return HStack(spacing: 12) {
-            Text(timeString)
-                .font(EtubuClusterFonts.ui(15, weight: .semibold))
-                .monospacedDigit()
-                .foregroundStyle(theme.primaryText.opacity(0.9))
-            if let out = telemetry.outsideC {
-                Text(String(format: "%.0f°C", out))
-                    .font(EtubuClusterFonts.ui(15, weight: .medium))
-                    .foregroundStyle(theme.secondaryText)
-            } else if telemetry.isAwaitingClimate {
-                Text(EtubuClusterL10n.t("awaitingClimate"))
-                    .font(EtubuClusterFonts.ui(11, weight: .medium))
-                    .foregroundStyle(theme.mutedText)
+            if !powerSaveMode {
+                Text(timeString)
+                    .font(EtubuClusterFonts.ui(15, weight: .semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(theme.primaryText.opacity(0.9))
+                if let out = telemetry.outsideC {
+                    Text(String(format: "%.0f°C", out))
+                        .font(EtubuClusterFonts.ui(15, weight: .medium))
+                        .foregroundStyle(theme.secondaryText)
+                } else if telemetry.isAwaitingClimate {
+                    Text(EtubuClusterL10n.t("awaitingClimate"))
+                        .font(EtubuClusterFonts.ui(11, weight: .medium))
+                        .foregroundStyle(theme.mutedText)
+                } else {
+                    Text("--°C")
+                        .font(EtubuClusterFonts.ui(15, weight: .medium))
+                        .foregroundStyle(theme.secondaryText)
+                }
+                if let inside = telemetry.insideC {
+                    Text(String(format: EtubuClusterL10n.t("insideTempFmt"), inside))
+                        .font(EtubuClusterFonts.ui(12, weight: .medium))
+                        .foregroundStyle(theme.mutedText)
+                }
+                speedSourceChip
+                gpsStatusChip
+                Text(telemetry.connectionQualityLabel)
+                    .font(.system(size: 10, weight: .semibold, design: .rounded))
+                    .foregroundStyle(statusColor.opacity(0.9))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                    .allowsTightening(true)
+                    .frame(maxWidth: 96, alignment: .leading)
             } else {
-                Text("--°C")
-                    .font(EtubuClusterFonts.ui(15, weight: .medium))
-                    .foregroundStyle(theme.secondaryText)
+                Text(timeString)
+                    .font(EtubuClusterFonts.ui(15, weight: .semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(theme.primaryText.opacity(0.9))
             }
-            if let inside = telemetry.insideC {
-                Text(String(format: EtubuClusterL10n.t("insideTempFmt"), inside))
-                    .font(EtubuClusterFonts.ui(12, weight: .medium))
-                    .foregroundStyle(theme.mutedText)
-            }
-            speedSourceChip
-            gpsStatusChip
-            Text(telemetry.connectionQualityLabel)
-                .font(EtubuClusterFonts.ui(11, weight: .semibold))
-                .foregroundStyle(statusColor.opacity(0.9))
 
             Spacer(minLength: 8)
 
-            Button { showVINEditor = true } label: {
-                EtubuPairConnectionBadge(
-                    connectionState: telemetry.connectionState,
-                    theme: theme,
-                    label: pairLabel,
-                    compact: true
-                )
-            }
-            .clusterHotspot(.pair)
+            topChromeControls(compact: true, hit: nil)
+        }
+        .onChange(of: powerSaveMode) { _, on in
+            EtubuTeslaBleSession.shared.setPowerSave(on)
+        }
+    }
 
-            if criticalAlertsOn {
-                Button {
-                    EtubuRouteBridge.primeWarningAudio()
-                    openRouteOrPaywall()
-                } label: {
-                    Image(systemName: telemetry.routeActive ? "point.topleft.down.to.point.bottomright.curvepath.fill" : "point.topleft.down.to.point.bottomright.curvepath")
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(telemetry.routeActive ? theme.accent : theme.secondaryText)
-                        .padding(8)
-                        .background(Circle().fill(theme.surface))
+    /// Üst sağ kontroller: tek butona toplanır / açılır; uzaktan kumanda her zaman görünür.
+    @ViewBuilder
+    private func topChromeControls(compact: Bool, hit: CGFloat?) -> some View {
+        if !chromeExpanded {
+            HStack(spacing: 8) {
+                remoteChromeButton(compact: compact, hit: hit)
+                if powerSaveMode {
+                    powerSaveChromeButton(compact: compact, hit: hit)
                 }
-                .accessibilityLabel(EtubuClusterL10n.route)
-                .accessibilityIdentifier("etubu.route.open")
-                .clusterHotspot(.route)
+                Button {
+                    withAnimation(.easeOut(duration: 0.18)) { chromeExpanded = true }
+                } label: {
+                    Image(systemName: "ellipsis.circle.fill")
+                        .font(compact ? .system(size: 18, weight: .semibold) : .title3.weight(.semibold))
+                        .foregroundStyle(theme.accent)
+                        .frame(width: hit, height: hit)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel(EtubuClusterL10n.t("chromeExpand"))
+                .accessibilityIdentifier("etubu.chrome.expand")
+            }
+        } else {
+            if !powerSaveMode {
+                Button { showVINEditor = true } label: {
+                    EtubuPairConnectionBadge(
+                        connectionState: telemetry.connectionState,
+                        theme: theme,
+                        label: compact ? pairLabel : nil,
+                        compact: true
+                    )
+                }
+                .clusterHotspot(.pair)
+
+                if criticalAlertsOn {
+                    Button {
+                        EtubuRouteBridge.primeWarningAudio()
+                        openRouteOrPaywall()
+                    } label: {
+                        Image(systemName: telemetry.routeActive
+                              ? (compact ? "point.topleft.down.to.point.bottomright.curvepath.fill" : "map.fill")
+                              : (compact ? "point.topleft.down.to.point.bottomright.curvepath" : "map"))
+                            .font(compact ? .body.weight(.semibold) : .title3.weight(.semibold))
+                            .foregroundStyle(telemetry.routeActive ? theme.accent : (compact ? theme.secondaryText : theme.mutedText))
+                            .padding(compact ? 8 : 0)
+                            .background(compact ? Circle().fill(theme.surface) : nil)
+                            .frame(width: hit, height: hit)
+                            .contentShape(Rectangle())
+                    }
+                    .accessibilityLabel(EtubuClusterL10n.route)
+                    .accessibilityIdentifier("etubu.route.open")
+                    .clusterHotspot(.route)
+                }
+
+                if compact {
+                    Text(batteryPhoneLabel)
+                        .font(EtubuClusterFonts.ui(12, weight: .semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(theme.secondaryText)
+                }
+
+                powerSaveChromeButton(compact: compact, hit: hit)
+
+                chromeExitButton(compact: compact, hit: hit)
             }
 
-            Button { showRemoteCommands = true } label: {
-                Image(systemName: "car.side.front.open")
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(telemetry.connectionState == .connected ? theme.accent : theme.secondaryText)
-                    .padding(8)
-                    .background(Circle().fill(theme.surface))
-            }
-            .accessibilityLabel(EtubuClusterL10n.t("remoteCmdSection"))
-            .accessibilityIdentifier("etubu.remote.open")
-            .clusterHotspot(.remote)
-
-            Text(batteryPhoneLabel)
-                .font(EtubuClusterFonts.ui(12, weight: .semibold))
-                .monospacedDigit()
-                .foregroundStyle(theme.secondaryText)
+            // Uzaktan kumanda — gizleme / güç tasarrufunda da kalsın.
+            remoteChromeButton(compact: compact, hit: hit)
 
             Button { showSettings = true } label: {
                 Image(systemName: "gearshape.fill")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(compact ? .system(size: 14, weight: .semibold) : .title3.weight(.semibold))
                     .foregroundStyle(theme.mutedText)
+                    .frame(width: hit, height: hit)
+                    .contentShape(Rectangle())
             }
             .accessibilityLabel(EtubuClusterL10n.settings)
             .accessibilityIdentifier("etubu.settings.open")
             .clusterHotspot(.settings)
 
-            arrivalEnergyChip(compact: true)
+            if powerSaveMode {
+                powerSaveChromeButton(compact: compact, hit: hit)
+            }
+
+            Button {
+                withAnimation(.easeOut(duration: 0.18)) { chromeExpanded = false }
+            } label: {
+                Image(systemName: "chevron.right.circle.fill")
+                    .font(compact ? .system(size: 16, weight: .semibold) : .title3.weight(.semibold))
+                    .foregroundStyle(theme.mutedText)
+                    .frame(width: hit, height: hit)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityLabel(EtubuClusterL10n.t("chromeCollapse"))
+            .accessibilityIdentifier("etubu.chrome.collapse")
         }
+    }
+
+    @ViewBuilder
+    private func remoteChromeButton(compact: Bool, hit: CGFloat?) -> some View {
+        Button { showRemoteCommands = true } label: {
+            Image(systemName: "car.side.front.open")
+                .font(compact ? .body.weight(.semibold) : .title3.weight(.semibold))
+                .foregroundStyle(telemetry.connectionState == .connected
+                                 ? theme.accent
+                                 : (compact ? theme.secondaryText : theme.mutedText))
+                .padding(compact ? 8 : 0)
+                .background(compact ? Circle().fill(theme.surface) : nil)
+                .frame(width: hit, height: hit)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel(EtubuClusterL10n.t("remoteCmdSection"))
+        .accessibilityIdentifier("etubu.remote.open")
+        .clusterHotspot(.remote)
+    }
+
+    @ViewBuilder
+    private func powerSaveChromeButton(compact: Bool, hit: CGFloat?) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                powerSaveMode.toggle()
+            }
+            EtubuTeslaBleSession.shared.setPowerSave(powerSaveMode)
+        } label: {
+            Image(systemName: powerSaveMode ? "leaf.circle.fill" : "leaf.circle")
+                .font(compact ? .system(size: 16, weight: .semibold) : .title3.weight(.semibold))
+                .foregroundStyle(powerSaveMode ? theme.accent : theme.mutedText)
+                .padding(.horizontal, compact ? 4 : 0)
+                .padding(.vertical, compact ? 4 : 0)
+                .background(
+                    Capsule().fill(theme.surface.opacity(powerSaveMode ? 0.95 : 0.7))
+                )
+                .frame(minWidth: hit, minHeight: hit)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel(EtubuClusterL10n.t("powerSaveMode"))
+        .accessibilityValue(powerSaveMode ? EtubuClusterL10n.t("powerSaveOn") : EtubuClusterL10n.t("powerSaveOff"))
+        .accessibilityIdentifier("etubu.powerSave")
+    }
+
+    /// Settings sağında tam uygulama çıkışı (BLE disconnect değil).
+    @ViewBuilder
+    private func chromeExitButton(compact: Bool, hit: CGFloat? = nil) -> some View {
+        Button {
+            showExitConfirm = true
+        } label: {
+            Image(systemName: "xmark.circle.fill")
+                .font(compact ? .system(size: 14, weight: .semibold) : .title3.weight(.semibold))
+                .foregroundStyle(theme.mutedText)
+                .frame(width: hit, height: hit)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel(EtubuClusterL10n.appExit)
+        .accessibilityIdentifier("etubu.exit")
     }
 
     /// Settings sağında varış enerji (araç SoC / menzil / kalan rota).
@@ -1467,61 +1755,31 @@ struct EtubuClusterRootView: View {
         let hit = layout.iconHit
 
         return VStack(spacing: 0) {
-            HStack {
-                Button { showVINEditor = true } label: {
-                    EtubuPairConnectionBadge(
-                        connectionState: telemetry.connectionState,
-                        theme: theme,
-                        label: nil,
-                        compact: true
-                    )
+            HStack(spacing: 8) {
+                if !powerSaveMode {
+                    speedSourceChip
+                    gpsStatusChip
                 }
-                .clusterHotspot(.pair)
-                speedSourceChip
-                gpsStatusChip
                 Spacer(minLength: 0)
-                if criticalAlertsOn {
-                    Button {
-                        EtubuRouteBridge.primeWarningAudio()
-                        openRouteOrPaywall()
-                    } label: {
-                        Image(systemName: telemetry.routeActive ? "map.fill" : "map")
-                            .font(.title3.weight(.semibold))
-                            .foregroundStyle(telemetry.routeActive ? theme.accent : theme.mutedText)
-                            .frame(width: hit, height: hit)
-                            .contentShape(Rectangle())
-                    }
-                    .accessibilityLabel(EtubuClusterL10n.route)
-                    .accessibilityIdentifier("etubu.route.open")
-                    .clusterHotspot(.route)
-                }
-                Button { showRemoteCommands = true } label: {
-                    Image(systemName: "car.side.front.open")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(telemetry.connectionState == .connected ? theme.accent : theme.mutedText)
-                        .frame(width: hit, height: hit)
-                        .contentShape(Rectangle())
-                }
-                .accessibilityLabel(EtubuClusterL10n.t("remoteCmdSection"))
-                .accessibilityIdentifier("etubu.remote.open")
-                .clusterHotspot(.remote)
-                Button { showSettings = true } label: {
-                    Image(systemName: "gearshape.fill")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(theme.mutedText)
-                        .frame(width: hit, height: hit)
-                        .contentShape(Rectangle())
-                }
-                .accessibilityLabel(EtubuClusterL10n.settings)
-                .accessibilityIdentifier("etubu.settings.open")
-                .clusterHotspot(.settings)
-                arrivalEnergyChip(compact: true)
+                topChromeControls(compact: false, hit: hit)
             }
             .padding(.horizontal, hPad)
             .padding(.top, topChrome)
+            .onChange(of: powerSaveMode) { _, on in
+                EtubuTeslaBleSession.shared.setPowerSave(on)
+            }
 
             Spacer(minLength: layout.contentVGap)
 
+            if powerSaveMode {
+                // Yalnız hız kadranı + regen — tüm temalarda aynı sade pano.
+                VStack(spacing: short ? 8 : 12) {
+                    speedDialWithThemeGesture(compact: false, diameter: portraitDialSize)
+                    EtubuPowerRegenBarView(powerKw: telemetry.powerKw, compact: short, theme: theme)
+                        .padding(.horizontal, short ? 18 : 28)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
             HStack(alignment: .top, spacing: layout.isCompactWidth ? 4 : 6) {
                 Spacer(minLength: 0)
                 speedDialWithThemeGesture(compact: false, diameter: portraitDialSize)
@@ -1630,6 +1888,7 @@ struct EtubuClusterRootView: View {
             .padding(.leading, short ? 10 : 14)
             .padding(.trailing, short ? 16 : 22)
             .padding(.bottom, max(10, layout.insets.bottom + 8))
+            } // end !powerSaveMode
         }
         .safeAreaPadding(.top, layout.cutoutStyle == .none ? 0 : 2)
     }
@@ -1698,14 +1957,16 @@ struct EtubuClusterRootView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {
                         Text(EtubuClusterL10n.t("vehicleVin"))
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(.white.opacity(0.6))
+                            .font(EtubuClusterFonts.ui(11, weight: .heavy))
+                            .tracking(1.0)
+                            .foregroundStyle(theme.mutedText)
+                            .textCase(.uppercase)
                         Spacer()
                         Button(EtubuClusterL10n.close) {
                             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                             showVINEditor = false
                         }
-                        .font(.caption.weight(.semibold))
+                        .font(EtubuClusterFonts.ui(14, weight: .semibold))
                         .foregroundStyle(theme.accent)
                     }
                     HStack(spacing: 10) {
@@ -1715,8 +1976,12 @@ struct EtubuClusterRootView: View {
                             .keyboardType(.asciiCapable)
                             .font(.system(.body, design: .monospaced).weight(.semibold))
                             .padding(12)
-                            .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
-                            .foregroundStyle(.white)
+                            .background(theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .strokeBorder(theme.stroke, lineWidth: 1)
+                            )
+                            .foregroundStyle(theme.primaryText)
                             .focused($vinFocused)
                         Button {
                             vinFocused = false
@@ -1724,11 +1989,11 @@ struct EtubuClusterRootView: View {
                         } label: {
                             Text(tesla.pairStep == .sendingRequest || tesla.pairStep == .connectingAfterCard
                                  ? "…" : EtubuClusterL10n.t("pairAction"))
-                                .font(.subheadline.weight(.bold))
+                                .font(EtubuClusterFonts.ui(14, weight: .bold))
                                 .foregroundStyle(.black)
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 12)
-                                .background(theme.accent, in: RoundedRectangle(cornerRadius: 12))
+                                .background(theme.accent, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
                         .disabled(
                             tesla.pairStep == .sendingRequest
@@ -1750,33 +2015,41 @@ struct EtubuClusterRootView: View {
                                 Task { await tesla.connectSaved() }
                             } label: {
                                 Text(EtubuClusterL10n.t("connect"))
-                                    .font(.caption.weight(.bold))
-                                    .foregroundStyle(.white)
+                                    .font(EtubuClusterFonts.ui(12, weight: .bold))
+                                    .foregroundStyle(theme.primaryText)
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 8)
-                                    .background(Color.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+                                    .background(theme.surface, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                            .strokeBorder(theme.stroke, lineWidth: 1)
+                                    )
                             }
                             Button {
                                 Task { await tesla.repair() }
                             } label: {
                                 Text(EtubuClusterL10n.t("rePair"))
-                                    .font(.caption.weight(.bold))
-                                    .foregroundStyle(.white)
+                                    .font(EtubuClusterFonts.ui(12, weight: .bold))
+                                    .foregroundStyle(theme.primaryText)
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 8)
-                                    .background(Color.orange.opacity(0.35), in: RoundedRectangle(cornerRadius: 10))
+                                    .background(theme.surface, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                            .strokeBorder(theme.accent.opacity(0.45), lineWidth: 1)
+                                    )
                             }
                         }
                         Text(telemetry.statusMessage)
-                            .font(.caption2)
-                            .foregroundStyle(.white.opacity(0.45))
+                            .font(EtubuClusterFonts.ui(12, weight: .medium))
+                            .foregroundStyle(theme.mutedText)
                         Text(EtubuClusterL10n.t("pairNfcHint"))
-                            .font(.system(size: 10))
-                            .foregroundStyle(.white.opacity(0.28))
+                            .font(EtubuClusterFonts.ui(11, weight: .medium))
+                            .foregroundStyle(theme.mutedText)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                .padding(16)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .etubuSheetCard(theme)
                 .padding(.horizontal, 16)
                 .padding(.bottom, kbOpen ? max(8, keyboardInset - 4) : 24)
             }
@@ -2003,10 +2276,394 @@ struct EtubuClusterRootView: View {
         )
     }
 
-    private var settingsSheet: some View {
-        let _ = l10nTick
-        return NavigationStack {
+    private struct SettingsHost: View, Equatable {
+        struct Snap: Equatable {
+            var lang: EtubuAppLanguage
+            var l10nTick: Int
+            var theme: ClusterTheme
+            var wallpaper: EtubuWallpaperStyle
+            var demoRunning: Bool
+            var conn: String
+            var src: String
+            var needsCharge: Bool
+            var chargeN: Int
+            var soundOn: Bool
+            var voice: String
+            var mix: String
+            var stealth: Bool
+            var stealthA: Bool
+            var map: Bool
+            var loc: Bool
+            var premium: Bool
+            var soc: Int
+            var remoteLim: Double
+            var alertVol: Double
+            var alertOver: Bool
+            var notch: Bool
+        }
+
+        let snap: Snap
+        @Binding var theme: ClusterTheme
+        @Binding var wallpaper: EtubuWallpaperStyle
+        @Binding var appLanguage: EtubuAppLanguage
+        @Binding var showSettings: Bool
+        @Binding var showExitConfirm: Bool
+        @Binding var showVINEditor: Bool
+        @Binding var showObdMenu: Bool
+        @Binding var showPremiumPaywall: Bool
+        @Binding var showRoutePicker: Bool
+        @Binding var premiumPaywallHint: String?
+        @Binding var soundOn: Bool
+        @Binding var selectedVoice: String
+        @Binding var mixMode: String
+        @Binding var alertOverMusic: Bool
+        @Binding var alertVolume: Double
+        @Binding var stealthMode: Bool
+        @Binding var stealthAnalog: Bool
+        @Binding var mapEnabled: Bool
+        @Binding var locationEnabled: Bool
+        @Binding var notchAuraEnabled: Bool
+        @Binding var remoteChargeLimit: Double
+
+        @ObservedObject private var demo = EtubuDemoDrive.shared
+        @ObservedObject private var tesla = EtubuTeslaBleSession.shared
+        @ObservedObject private var evPlan = EtubuEvRoutePlanner.shared
+        @ObservedObject private var trips = EtubuTripHistoryStore.shared
+        @ObservedObject private var premium = EtubuPremiumManager.shared
+
+        static func == (lhs: Self, rhs: Self) -> Bool { lhs.snap == rhs.snap }
+
+        private var criticalAlertsOn: Bool { appLanguage.criticalAlertsEnabled }
+
+        private func openPremium(hintKey: String? = nil) {
+            premiumPaywallHint = hintKey.map { EtubuClusterL10n.t($0) }
+            showPremiumPaywall = true
+        }
+
+        private func openRouteOrPaywall() {
+            if premium.isPremium {
+                showSettings = false
+                showRoutePicker = true
+                return
+            }
+            if !premium.entitlementReady {
+                Task { @MainActor in
+                    await premium.ensureEntitlementChecked()
+                    openRouteOrPaywall()
+                }
+                return
+            }
+            showSettings = false
+            openPremium(hintKey: "premiumLockedRoute")
+        }
+
+        var body: some View {
+        NavigationStack {
             List {
+                Section {
+                    ForEach(EtubuAppLanguage.allCases) { lang in
+                        Button {
+                            appLanguage = lang
+                            EtubuAppLanguage.setManual(lang)
+                        } label: {
+                            HStack {
+                                Text(lang.title)
+                                    .font(EtubuClusterFonts.ui(16, weight: .medium))
+                                    .foregroundStyle(theme.primaryText)
+                                Spacer()
+                                if appLanguage == lang {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundStyle(theme.accent)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("etubu.language.\(lang.rawValue)")
+                        .accessibilityLabel(lang.title)
+                        .accessibilityAddTraits(appLanguage == lang ? [.isButton, .isSelected] : .isButton)
+                    }
+                } header: {
+                    EtubuSheetSectionTitle(title: EtubuClusterL10n.language, theme: theme, motion: .language)
+                }
+                .etubuSheetSection(theme)
+
+                Section {
+                    Button {
+                        if demo.isRunning {
+                            demo.stop()
+                        } else {
+                            demo.start()
+                            selectedVoice = EtubuClusterAudioBridge.defaultDriveVoice
+                            soundOn = true
+                            DispatchQueue.main.async {
+                                showSettings = false
+                            }
+                        }
+                    } label: {
+                        Label(
+                            demo.isRunning ? EtubuClusterL10n.t("demoStopBtn") : EtubuClusterL10n.t("demoStart"),
+                            systemImage: demo.isRunning ? "stop.fill" : "play.fill"
+                        )
+                        .font(EtubuClusterFonts.ui(16, weight: .semibold))
+                    }
+                    .accessibilityIdentifier("etubu.demo.toggle")
+                    Toggle(EtubuClusterL10n.t("demoMirror"), isOn: $demo.mirrorEnabled)
+                    EtubuSheetHint(text: EtubuClusterL10n.t("demoHint"), theme: theme)
+                    Button(role: .destructive) {
+                        showSettings = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                            showExitConfirm = true
+                        }
+                    } label: {
+                        Label(EtubuClusterL10n.appExit, systemImage: "xmark.circle.fill")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .accessibilityIdentifier("etubu.app.exit")
+                    .accessibilityLabel(EtubuClusterL10n.appExit)
+                } header: {
+                    EtubuSheetSectionTitle(title: EtubuClusterL10n.t("settingsGroupApp"), theme: theme, motion: .app)
+                }
+                .etubuSheetSection(theme)
+
+                Section {
+                    Button(EtubuClusterL10n.pairVin) { showSettings = false; showVINEditor = true }
+                    Button(EtubuClusterL10n.reconnectTesla) { Task { await tesla.connectSaved() } }
+                    Button(EtubuClusterL10n.disconnectTesla) { Task { await tesla.disconnect() } }
+                    Button(EtubuClusterL10n.forgetVehicle, role: .destructive) {
+                        Task { await tesla.clearVehicle() }
+                        showVINEditor = true
+                    }
+                    Button(EtubuClusterL10n.obdFallback) { showObdMenu = true }
+                    LabeledContent(EtubuClusterL10n.quality, value: snap.conn)
+                    LabeledContent(EtubuClusterL10n.source, value: snap.src)
+                    Toggle(EtubuClusterL10n.t("vehicleNotifyToggle"), isOn: Binding(
+                        get: { EtubuVehicleLaunchNotifier.isEnabled },
+                        set: { newValue in
+                            EtubuVehicleLaunchNotifier.isEnabled = newValue
+                            if newValue {
+                                EtubuVehicleLaunchNotifier.shared.requestAuthorizationIfNeeded()
+                            }
+                        }
+                    ))
+                    EtubuSheetHint(text: EtubuClusterL10n.t("vehicleNotifyHint"), theme: theme)
+                } header: {
+                    EtubuSheetSectionTitle(title: EtubuClusterL10n.t("settingsGroupVehicle"), theme: theme, motion: .vehicle)
+                }
+                .etubuSheetSection(theme)
+
+                Section {
+                    if criticalAlertsOn {
+                        Button {
+                            showSettings = false
+                            EtubuRouteBridge.primeWarningAudio()
+                            openRouteOrPaywall()
+                        } label: {
+                            Label(EtubuClusterL10n.pickRoute, systemImage: "point.topleft.down.to.point.bottomright.curvepath")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text(EtubuClusterL10n.t("targetArrivalSoc"))
+                            Spacer()
+                            Text("\(evPlan.targetArrivalSoc)%")
+                                .font(EtubuClusterFonts.gauge(18))
+                                .foregroundStyle(theme.accent)
+                        }
+                        Slider(
+                            value: Binding(
+                                get: { Double(evPlan.targetArrivalSoc) },
+                                set: { evPlan.targetArrivalSoc = Int($0.rounded()) }
+                            ),
+                            in: 5...50,
+                            step: 5
+                        )
+                        .tint(theme.accent)
+                        .onChange(of: evPlan.targetArrivalSoc) { _, _ in
+                            evPlan.refreshFromLiveState()
+                        }
+                        EtubuSheetHint(text: EtubuClusterL10n.t("evPlanHint"), theme: theme)
+                        if snap.needsCharge {
+                            Text(String(format: EtubuClusterL10n.t("chargeSuggestFmt"), max(snap.chargeN, 1)))
+                                .font(EtubuClusterFonts.ui(13, weight: .semibold))
+                                .foregroundStyle(.orange)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("etubu.settings.evRoutePlan")
+                    if premium.isPremium {
+                        Toggle(EtubuClusterL10n.t("mapEnabled"), isOn: $mapEnabled)
+                    } else {
+                        Button {
+                            showSettings = false
+                            openPremium(hintKey: "premiumLockedMap")
+                        } label: {
+                            HStack {
+                                Text(EtubuClusterL10n.t("mapEnabled"))
+                                Spacer()
+                                EtubuPremiumBadge(compact: true)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    EtubuSheetHint(text: EtubuClusterL10n.t("mapEnabledHint"), theme: theme)
+                    Toggle(EtubuClusterL10n.t("locationEnabled"), isOn: $locationEnabled)
+                        .onChange(of: locationEnabled) { _, enabled in
+                            EtubuMapLocationHelper.shared.setLocationEnabled(enabled)
+                        }
+                    EtubuSheetHint(text: EtubuClusterL10n.t("locationEnabledHint"), theme: theme)
+                } header: {
+                    EtubuSheetSectionTitle(title: EtubuClusterL10n.t("settingsGroupRoute"), theme: theme, motion: .route)
+                }
+                .etubuSheetSection(theme)
+
+                Section {
+                    EtubuTripAnalyticsView(store: trips, accent: theme.accent)
+                    if let url = trips.exportCSV() {
+                        ShareLink(item: url) {
+                            Label(EtubuClusterL10n.t("tripExportCSV"), systemImage: "square.and.arrow.up")
+                        }
+                    }
+                    Button(EtubuClusterL10n.t("tripClearHistory"), role: .destructive) {
+                        trips.clearAll()
+                    }
+                } header: {
+                    EtubuSheetSectionTitle(title: EtubuClusterL10n.t("settingsGroupTrip"), theme: theme, motion: .trip)
+                }
+                .etubuSheetSection(theme)
+
+                Section {
+                    DisclosureGroup {
+                        EtubuRemoteCommandCards(tesla: tesla)
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Text(EtubuClusterL10n.t("cmdChargeLimit"))
+                                Spacer()
+                                Text("\(Int(remoteChargeLimit))%")
+                                    .font(EtubuClusterFonts.gauge(16))
+                            }
+                            Slider(value: $remoteChargeLimit, in: 50...100, step: 5)
+                            Button(EtubuClusterL10n.t("cmdApplyLimit")) {
+                                Task { await tesla.setChargeLimit(Int(remoteChargeLimit)) }
+                            }
+                        }
+                    } label: {
+                        Label(EtubuClusterL10n.t("remoteCmdSection"), systemImage: "car.side.front.open")
+                            .font(EtubuClusterFonts.ui(16, weight: .semibold))
+                    }
+                    EtubuRemotePinSettingsSection()
+                } header: {
+                    EtubuSheetSectionTitle(title: EtubuClusterL10n.t("settingsGroupRemote"), theme: theme, motion: .remote)
+                }
+                .etubuSheetSection(theme)
+
+                Section {
+                    EtubuThemeStoreView(theme: $theme, wallpaper: $wallpaper) {
+                        showSettings = false
+                        openPremium(hintKey: "premiumLockedTheme")
+                    }
+                    Toggle(EtubuClusterL10n.t("notchAuraToggle"), isOn: $notchAuraEnabled)
+                    EtubuSheetHint(text: theme.pickerTitle, theme: theme)
+                    Toggle(EtubuClusterL10n.t("stealthMode"), isOn: $stealthMode)
+                    if stealthMode {
+                        Toggle(EtubuClusterL10n.t("stealthAnalog"), isOn: $stealthAnalog)
+                    }
+                    EtubuSheetHint(text: EtubuClusterL10n.t("stealthHint"), theme: theme)
+                } header: {
+                    EtubuSheetSectionTitle(title: EtubuClusterL10n.t("settingsGroupLook"), theme: theme, motion: .look)
+                }
+                .etubuSheetSection(theme)
+
+                Section {
+                    Toggle(EtubuClusterL10n.t("soundOn"), isOn: Binding(
+                        get: { soundOn },
+                        set: { on in
+                            soundOn = on
+                            if on {
+                                let v = selectedVoice == "silent-mode"
+                                    ? theme.driveVoiceKey
+                                    : selectedVoice
+                                selectedVoice = v
+                                EtubuClusterAudioBridge.setVoice(v)
+                                EtubuClusterAudioBridge.setSoundEnabled(true, voice: v)
+                                let t = EtubuVehicleTelemetry.shared
+                                EtubuClusterAudioBridge.startDrive(
+                                    kmh: max(t.kmh, 0),
+                                    gear: t.gear,
+                                    source: t.source.rawValue,
+                                    powerKw: t.powerKw
+                                )
+                            } else {
+                                selectedVoice = "silent-mode"
+                                EtubuClusterAudioBridge.setSoundEnabled(false, voice: "silent-mode")
+                            }
+                        }
+                    ))
+                    EtubuSheetHint(text: EtubuClusterL10n.t("voicePackShared"), theme: theme)
+                    Picker(EtubuClusterL10n.t("voiceGroupTheme"), selection: $selectedVoice) {
+                        ForEach(EtubuSoundVoice.groups, id: \.group) { group in
+                            ForEach(group.voices) { voice in
+                                Text(voice.localizedLabel)
+                                    .tag(voice.key)
+                            }
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .disabled(!soundOn && selectedVoice == "silent-mode")
+                    .onChange(of: selectedVoice) { _, key in
+                        soundOn = key != "silent-mode"
+                        EtubuClusterAudioBridge.setVoice(key)
+                        if key != "silent-mode" {
+                            EtubuClusterAudioBridge.setSoundEnabled(true, voice: key)
+                            let t = EtubuVehicleTelemetry.shared
+                            EtubuClusterAudioBridge.startDrive(
+                                kmh: max(t.kmh, 0),
+                                gear: t.gear,
+                                source: t.source.rawValue,
+                                powerKw: t.powerKw
+                            )
+                        } else {
+                            EtubuClusterAudioBridge.setSoundEnabled(false, voice: "silent-mode")
+                        }
+                    }
+                    Picker(EtubuClusterL10n.audioMix, selection: $mixMode) {
+                        Text(EtubuClusterL10n.t("mixBlend")).tag("blend")
+                        Text(EtubuClusterL10n.t("mixUnder")).tag("under")
+                        Text(EtubuClusterL10n.t("mixSolo")).tag("solo")
+                    }
+                    .onChange(of: mixMode) { _, v in EtubuClusterAudioBridge.setMixMode(v) }
+                    EtubuSheetHint(text: EtubuClusterL10n.t("mixCarHint"), theme: theme)
+                    Toggle(EtubuClusterL10n.alertsOverMusic, isOn: $alertOverMusic)
+                        .onChange(of: alertOverMusic) { _, on in
+                            let mode = on ? "blend" : mixMode
+                            mixMode = on ? "blend" : mixMode
+                            EtubuClusterAudioBridge.setMixMode(on ? "blend" : mode)
+                            AppDelegate.activateDriveAudioSession()
+                        }
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(EtubuClusterL10n.alertDuck)
+                            .font(EtubuClusterFonts.ui(12, weight: .medium))
+                            .foregroundStyle(theme.mutedText)
+                        Slider(value: $alertVolume, in: 0.2...1.0, step: 0.05)
+                            .tint(theme.accent)
+                            .onChange(of: alertVolume) { _, v in
+                                EtubuClusterAudioBridge.setAlertVolume(v)
+                            }
+                    }
+                } header: {
+                    EtubuSheetSectionTitle(title: EtubuClusterL10n.t("settingsGroupSound"), theme: theme, motion: .sound)
+                }
+                .etubuSheetSection(theme)
+
+                if criticalAlertsOn {
+                    EtubuRadarSettingsView()
+                }
+
                 EtubuPremiumSettingsSection(showPaywall: Binding(
                     get: { showPremiumPaywall },
                     set: { want in
@@ -2031,331 +2688,38 @@ struct EtubuClusterRootView: View {
                     DisclosureGroup {
                         VStack(alignment: .leading, spacing: 14) {
                             Text(EtubuAppSummary.text)
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                                .font(EtubuClusterFonts.ui(14, weight: .medium))
+                                .foregroundStyle(theme.secondaryText)
                                 .fixedSize(horizontal: false, vertical: true)
                             EtubuOnboardScreenshotStrip(theme: theme, highlight: nil)
-                            Divider()
+                            Divider().overlay(theme.stroke.opacity(0.4))
                             EtubuOsmAttributionBlock()
                         }
                         .padding(.vertical, 4)
                     } label: {
                         Label(EtubuClusterL10n.t("aboutApp"), systemImage: "info.circle")
-                            .font(.body.weight(.semibold))
-                    }
-                }
-
-                Section(EtubuClusterL10n.language) {
-                    ForEach(EtubuAppLanguage.allCases) { lang in
-                        Button {
-                            appLanguage = lang
-                            EtubuAppLanguage.setManual(lang)
-                        } label: {
-                            HStack {
-                                Text(lang.title)
-                                    .foregroundStyle(.primary)
-                                Spacer()
-                                if appLanguage == lang {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(theme.accent)
-                                }
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("etubu.language.\(lang.rawValue)")
-                        .accessibilityLabel(lang.title)
-                        .accessibilityAddTraits(appLanguage == lang ? [.isButton, .isSelected] : .isButton)
-                    }
-                }
-
-                // Near top — Maestro can reach without deep scroll (remote grid used to bury this).
-                Section(EtubuClusterL10n.t("demoSection")) {
-                    Button {
-                        if demo.isRunning {
-                            demo.stop()
-                        } else {
-                            demo.start()
-                            selectedVoice = EtubuClusterAudioBridge.defaultDriveVoice
-                            soundOn = true
-                            DispatchQueue.main.async {
-                                showSettings = false
-                            }
-                        }
-                    } label: {
-                        Label(
-                            demo.isRunning ? EtubuClusterL10n.t("demoStopBtn") : EtubuClusterL10n.t("demoStart"),
-                            systemImage: demo.isRunning ? "stop.fill" : "play.fill"
-                        )
-                    }
-                    .accessibilityIdentifier("etubu.demo.toggle")
-                    Toggle(EtubuClusterL10n.t("demoMirror"), isOn: $demo.mirrorEnabled)
-                    Text(EtubuClusterL10n.t("demoHint"))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-
-                Section(EtubuClusterL10n.t("evRoutePlan")) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text(EtubuClusterL10n.t("targetArrivalSoc"))
-                            Spacer()
-                            Text("\(evPlan.targetArrivalSoc)%")
-                                .font(.body.monospacedDigit().weight(.semibold))
-                                .foregroundStyle(theme.accent)
-                        }
-                        Slider(
-                            value: Binding(
-                                get: { Double(evPlan.targetArrivalSoc) },
-                                set: { evPlan.targetArrivalSoc = Int($0.rounded()) }
-                            ),
-                            in: 5...50,
-                            step: 5
-                        )
-                        .tint(theme.accent)
-                        .onChange(of: evPlan.targetArrivalSoc) { _, _ in
-                            evPlan.refreshFromLiveState()
-                        }
-                        Text(EtubuClusterL10n.t("evPlanHint"))
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                        if telemetry.needsChargeStop {
-                            Text(String(format: EtubuClusterL10n.t("chargeSuggestFmt"), max(telemetry.suggestedChargeCount, 1)))
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.orange)
-                        }
-                    }
-                    .padding(.vertical, 4)
-                }
-
-                Section(EtubuClusterL10n.t("tripAnalyticsSection")) {
-                    EtubuTripAnalyticsView(store: trips, accent: theme.accent)
-                    if let url = trips.exportCSV() {
-                        ShareLink(item: url) {
-                            Label(EtubuClusterL10n.t("tripExportCSV"), systemImage: "square.and.arrow.up")
-                        }
-                    }
-                    Button(EtubuClusterL10n.t("tripClearHistory"), role: .destructive) {
-                        trips.clearAll()
-                    }
-                }
-
-                Section(EtubuClusterL10n.t("remoteCmdSection")) {
-                    DisclosureGroup {
-                        EtubuRemoteCommandCards(tesla: tesla)
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack {
-                                Text(EtubuClusterL10n.t("cmdChargeLimit"))
-                                Spacer()
-                                Text("\(Int(remoteChargeLimit))%")
-                                    .monospacedDigit()
-                            }
-                            Slider(value: $remoteChargeLimit, in: 50...100, step: 5)
-                            Button(EtubuClusterL10n.t("cmdApplyLimit")) {
-                                Task { await tesla.setChargeLimit(Int(remoteChargeLimit)) }
-                            }
-                        }
-                    } label: {
-                        Label(EtubuClusterL10n.t("remoteCmdSection"), systemImage: "car.side.front.open")
-                    }
-                }
-
-                Section(EtubuClusterL10n.t("vehicleNotifySection")) {
-                    Toggle(EtubuClusterL10n.t("vehicleNotifyToggle"), isOn: Binding(
-                        get: { EtubuVehicleLaunchNotifier.isEnabled },
-                        set: { newValue in
-                            EtubuVehicleLaunchNotifier.isEnabled = newValue
-                            if newValue {
-                                EtubuVehicleLaunchNotifier.shared.requestAuthorizationIfNeeded()
-                            }
-                        }
-                    ))
-                    Text(EtubuClusterL10n.t("vehicleNotifyHint"))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-
-                Section(EtubuClusterL10n.t("themeStoreSection")) {
-                    EtubuThemeStoreView(theme: $theme, wallpaper: $wallpaper) {
-                        showSettings = false
-                        openPremium(hintKey: "premiumLockedTheme")
-                    }
-                }
-                Section(EtubuClusterL10n.t("cameraEffect")) {
-                    Toggle(EtubuClusterL10n.t("notchAuraToggle"), isOn: $notchAuraEnabled)
-                    Text("\(theme.title) · \(EtubuCutoutFX.forTheme(theme).title)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Section {
-                    if premium.isPremium {
-                        Toggle(EtubuClusterL10n.t("mapEnabled"), isOn: $mapEnabled)
-                    } else {
-                        Button {
-                            showSettings = false
-                            openPremium(hintKey: "premiumLockedMap")
-                        } label: {
-                            Text(EtubuClusterL10n.t("mapEnabled"))
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        Text(EtubuClusterL10n.t("premiumLockedMap"))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Text(EtubuClusterL10n.t("mapEnabledHint"))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Toggle(EtubuClusterL10n.t("locationEnabled"), isOn: $locationEnabled)
-                        .onChange(of: locationEnabled) { _, enabled in
-                            EtubuMapLocationHelper.shared.setLocationEnabled(enabled)
-                        }
-                    Text(EtubuClusterL10n.t("locationEnabledHint"))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    EtubuOsmAttributionBlock()
-                        .padding(.top, 4)
-                } header: {
-                    HStack(alignment: .center, spacing: 8) {
-                        Text(EtubuClusterL10n.t("mapFeatures"))
-                        Spacer(minLength: 0)
-                        if !premium.isPremium {
-                            // Üst köşe logo — satır ikonlarını kaplamaz
-                            EtubuPremiumBadge(compact: true)
-                        }
-                    }
-                }
-                Section {
-                    Toggle(EtubuClusterL10n.t("soundOn"), isOn: Binding(
-                        get: { soundOn },
-                        set: { on in
-                            soundOn = on
-                            if on {
-                                let v = selectedVoice == "silent-mode"
-                                    ? theme.driveVoiceKey
-                                    : selectedVoice
-                                selectedVoice = v
-                                EtubuClusterAudioBridge.setVoice(v)
-                                EtubuClusterAudioBridge.setSoundEnabled(true, voice: v)
-                                EtubuClusterAudioBridge.startDrive(
-                                    kmh: max(telemetry.kmh, 0),
-                                    gear: telemetry.gear,
-                                    source: telemetry.source.rawValue,
-                                    powerKw: telemetry.powerKw
-                                )
-                            } else {
-                                selectedVoice = "silent-mode"
-                                EtubuClusterAudioBridge.setSoundEnabled(false, voice: "silent-mode")
-                            }
-                        }
-                    ))
-                    Text(EtubuClusterL10n.t("voicePackShared"))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Picker(EtubuClusterL10n.t("voiceGroupTheme"), selection: $selectedVoice) {
-                        ForEach(EtubuSoundVoice.groups, id: \.group) { group in
-                            ForEach(group.voices) { voice in
-                                Text(voice.localizedLabel)
-                                    .tag(voice.key)
-                            }
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .disabled(!soundOn && selectedVoice == "silent-mode")
-                    .onChange(of: selectedVoice) { _, key in
-                        soundOn = key != "silent-mode"
-                        EtubuClusterAudioBridge.setVoice(key)
-                        if key != "silent-mode" {
-                            EtubuClusterAudioBridge.setSoundEnabled(true, voice: key)
-                            EtubuClusterAudioBridge.startDrive(
-                                kmh: max(telemetry.kmh, 0),
-                                gear: telemetry.gear,
-                                source: telemetry.source.rawValue,
-                                powerKw: telemetry.powerKw
-                            )
-                        } else {
-                            EtubuClusterAudioBridge.setSoundEnabled(false, voice: "silent-mode")
-                        }
+                            .font(EtubuClusterFonts.ui(16, weight: .semibold))
                     }
                 } header: {
-                    Text(EtubuClusterL10n.t("soundSelect"))
+                    EtubuSheetSectionTitle(title: EtubuClusterL10n.t("aboutApp"), theme: theme, motion: .about)
                 }
-                Section(EtubuClusterL10n.audioMix) {
-                    Picker(EtubuClusterL10n.audioMix, selection: $mixMode) {
-                        Text(EtubuClusterL10n.t("mixBlend")).tag("blend")
-                        Text(EtubuClusterL10n.t("mixUnder")).tag("under")
-                        Text(EtubuClusterL10n.t("mixSolo")).tag("solo")
-                    }
-                    .onChange(of: mixMode) { _, v in EtubuClusterAudioBridge.setMixMode(v) }
-                    Toggle(EtubuClusterL10n.alertsOverMusic, isOn: $alertOverMusic)
-                        .onChange(of: alertOverMusic) { _, on in
-                            // blend = müzik üstüne yaz; solo = yalnız uyarı
-                            let mode = on ? "blend" : mixMode
-                            mixMode = on ? "blend" : mixMode
-                            EtubuClusterAudioBridge.setMixMode(on ? "blend" : mode)
-                            AppDelegate.activateDriveAudioSession()
-                        }
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(EtubuClusterL10n.alertDuck)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Slider(value: $alertVolume, in: 0.2...1.0, step: 0.05)
-                            .tint(theme.accent)
-                            .onChange(of: alertVolume) { _, v in
-                                EtubuClusterAudioBridge.setAlertVolume(v)
-                            }
-                    }
-                }
-                if criticalAlertsOn {
-                    EtubuRadarSettingsView()
-                }
-                Section(EtubuClusterL10n.connection) {
-                    LabeledContent(EtubuClusterL10n.quality, value: telemetry.connectionQualityLabel)
-                    LabeledContent(EtubuClusterL10n.source, value: telemetry.speedSourceLabel)
-                }
-                Section(EtubuClusterL10n.vehicle) {
-                    Button(EtubuClusterL10n.pairVin) { showSettings = false; showVINEditor = true }
-                    if criticalAlertsOn {
-                        Button {
-                            showSettings = false
-                            EtubuRouteBridge.primeWarningAudio()
-                            openRouteOrPaywall()
-                        } label: {
-                            Text(EtubuClusterL10n.pickRoute)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                    }
-                    Button(EtubuClusterL10n.reconnectTesla) { Task { await tesla.connectSaved() } }
-                    Button(EtubuClusterL10n.disconnectTesla) { Task { await tesla.disconnect() } }
-                    Button(EtubuClusterL10n.forgetVehicle, role: .destructive) {
-                        Task { await tesla.clearVehicle() }
-                        showVINEditor = true
-                    }
-                    Button(EtubuClusterL10n.obdFallback) { showObdMenu = true }
-                }
-                Section {
-                    Button(role: .destructive) {
-                        showSettings = false
-                        EtubuAppExit.quitFully()
-                    } label: {
-                        Label(EtubuClusterL10n.appExit, systemImage: "xmark.circle.fill")
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .accessibilityIdentifier("etubu.app.exit")
-                }
+                .etubuSheetSection(theme)
             }
+            .etubuSheetList(theme)
+            .environment(\.locale, appLanguage.locale)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    EtubuBrandMark(size: 28, showGlow: true)
+                    EtubuBrandMark(size: 28, showGlow: false)
                 }
                 ToolbarItem(placement: .cancellationAction) {
                     Button(EtubuClusterL10n.done) { showSettings = false }
+                        .font(EtubuClusterFonts.ui(16, weight: .semibold))
+                        .foregroundStyle(theme.accent)
                         .accessibilityIdentifier("etubu.settings.done")
                 }
             }
+        }
         }
     }
 
@@ -2402,14 +2766,17 @@ struct EtubuClusterRootView: View {
 
     private var speedSourceChip: some View {
         Text(telemetry.speedSourceLabel)
-            .font(EtubuClusterFonts.ui(10, weight: .bold))
-            .tracking(0.4)
+            .font(.system(size: 9, weight: .bold, design: .rounded))
+            .tracking(0)
             .foregroundStyle(theme.canvas)
-            .padding(.horizontal, 7)
+            .lineLimit(1)
+            .minimumScaleFactor(0.45)
+            .allowsTightening(true)
+            .padding(.horizontal, 6)
             .padding(.vertical, 3)
-            .background(
-                Capsule().fill(sourceChipFill)
-            )
+            .frame(minWidth: 28, maxWidth: 64)
+            .background(Capsule().fill(sourceChipFill))
+            .clipped()
             .accessibilityLabel(telemetry.speedSourceLabel)
             .accessibilityIdentifier("etubu.source.chip")
     }
@@ -2423,23 +2790,29 @@ struct EtubuClusterRootView: View {
             case .sim: return Color.orange.opacity(0.9)
             }
         }()
-        // Compact labels — avoid crowding route/remote/settings hit targets (Maestro).
-        let short: String = {
+        let mark: String = {
             switch ind {
-            case .ok: return "GPS ✓"
-            case .denied: return "İzin yok"
-            case .sim: return "Sim"
+            case .ok: return "OK"
+            case .denied: return "!"
+            case .sim: return "SIM"
             }
         }()
-        return Text(short)
-            .font(EtubuClusterFonts.ui(9, weight: .bold))
-            .tracking(0.2)
-            .foregroundStyle(Color.white)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
-            .background(Capsule().fill(fill))
-            .accessibilityLabel(ind.label)
-            .accessibilityIdentifier(ind.accessibilityId)
+        return HStack(spacing: 2) {
+            Image(systemName: "location.fill")
+                .font(.system(size: 8, weight: .bold))
+            Text(mark)
+                .font(.system(size: 8, weight: .bold, design: .rounded))
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+        }
+        .foregroundStyle(Color.white)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .frame(minWidth: 36, maxWidth: 58)
+        .background(Capsule().fill(fill))
+        .clipped()
+        .accessibilityLabel(ind.label)
+        .accessibilityIdentifier(ind.accessibilityId)
     }
 
     private var sourceChipFill: Color {

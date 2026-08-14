@@ -2,25 +2,24 @@ import UIKit
 import SwiftUI
 import Capacitor
 import WebKit
+import AVFoundation
 
 /// Bridges cluster sound controls + JS eval to the hidden Capacitor layer.
 enum EtubuClusterAudioBridge {
     static func setMixMode(_ mode: String) {
+        let safe = mode.replacingOccurrences(of: "'", with: "").lowercased()
+        UserDefaults.standard.set(safe, forKey: "etubu.cluster.mixMode")
         DispatchQueue.main.async {
-            if #available(iOS 16.2, *) {
-                EtubuLiveActivityController.ensureAudioSession(mixWithOthers: mode != "solo")
-            }
-            // Uyarılar müziğin üstüne yazsın — duckOthers warn path'te (activateAlertDuckSession).
             AppDelegate.activateDriveAudioSession()
         }
         evalJS("""
         (function(){
           try {
             if (window.EtubuNative && window.EtubuNative.setAudioMixMode) {
-              window.EtubuNative.setAudioMixMode({ mode: '\(mode)' });
+              window.EtubuNative.setAudioMixMode({ mode: '\(safe)' });
             }
             if (window.AudioEngine && window.AudioEngine.setMixMode) {
-              window.AudioEngine.setMixMode('\(mode)');
+              window.AudioEngine.setMixMode('\(safe)');
             }
           } catch (e) {}
         })();
@@ -193,29 +192,38 @@ enum EtubuClusterAudioBridge {
 
     /// Tesla bağlıyken kullanıcı ses açtıysa Cap/native motorunu ayakta tut (demo parity).
     static func ensureLiveDriveSound(kmh: Int, powerKw: Int?, gear: String) {
+        let t = EtubuVehicleTelemetry.shared
+        let gpsFresh = t.lastGpsSampleFresh
+        let fine = gpsFresh && t.gpsKmhFine > 0.4 ? t.gpsKmhFine : (t.kmhFine > 0.4 ? t.kmhFine : Double(kmh))
+        let accel = t.accelKmhS
         guard isSoundWanted else {
             liveDriveSoundArmed = false
-            pushDrive(kmh: kmh, powerKw: powerKw, source: "tesla")
+            pushDrive(kmh: kmh, powerKw: powerKw, source: "tesla", accelKmhS: accel, kmhFine: fine)
             return
         }
         if !liveDriveSoundArmed {
             liveDriveSoundArmed = true
             startDrive(kmh: kmh, gear: gear, source: "tesla", powerKw: powerKw)
         } else {
-            pushDrive(kmh: kmh, powerKw: powerKw, source: "tesla")
-            EtubuNativeDriveAudio.shared.setSpeed(kmh: kmh, powerKw: powerKw)
+            pushDrive(kmh: kmh, powerKw: powerKw, source: "tesla", accelKmhS: accel, kmhFine: fine)
+            EtubuNativeDriveAudio.shared.setSpeed(kmh: fine, powerKw: powerKw.map { Double($0) }, accelKmhS: accel)
         }
     }
 
     /// Feed live speed + Tesla power (negative = regen) into Cap AudioEngine.
     /// Coalesced ~120ms to avoid audible flutter from BLE poll; demo ~50ms + snap.
-    private static var pendingDrive: (kmh: Int, powerKw: Int?, source: String)?
+    private static var pendingDrive: (kmh: Int, kmhFine: Double, powerKw: Int?, accelKmhS: Double, source: String)?
     private static var driveFlushWork: DispatchWorkItem?
     private static let driveThrottleSec: Double = 0.12
     private static var engineRetryWork: DispatchWorkItem?
 
-    static func pushDrive(kmh: Int, powerKw: Int?, source: String, forceImmediate: Bool = false) {
-        pendingDrive = (kmh, powerKw, source)
+    static func pushDrive(kmh: Int, powerKw: Int?, source: String, forceImmediate: Bool = false, accelKmhS: Double? = nil, kmhFine: Double? = nil) {
+        let t = EtubuVehicleTelemetry.shared
+        let fine = (t.lastGpsSampleFresh && t.gpsKmhFine > 0.4)
+            ? t.gpsKmhFine
+            : (kmhFine ?? (t.kmhFine > 0.4 ? t.kmhFine : Double(kmh)))
+        let accel = accelKmhS ?? t.accelKmhS
+        pendingDrive = (kmh, fine, powerKw, accel, source)
         if forceImmediate || source == "demo" {
             driveFlushWork?.cancel()
             driveFlushWork = nil
@@ -319,20 +327,22 @@ enum EtubuClusterAudioBridge {
             if preferNativeOwner || !EtubuNativeDriveAudio.shared.isAudible {
                 EtubuNativeDriveAudio.shared.setMuted(false)
             }
-            EtubuNativeDriveAudio.shared.setSpeed(kmh: d.kmh, powerKw: d.powerKw)
+            EtubuNativeDriveAudio.shared.setSpeed(kmh: d.kmhFine, powerKw: d.powerKw.map { Double($0) }, accelKmhS: d.accelKmhS)
         } else if EtubuNativeDriveAudio.shared.isEngineAlive {
             EtubuNativeDriveAudio.shared.setMuted(true)
         }
 
         let muteJS = soundOn ? "false" : "true"
+        let fine = String(format: "%.3f", d.kmhFine)
+        let accel = String(format: "%.3f", d.accelKmhS)
         evalJS("""
         (function(){
           try {
             window.__etubuDrivePowerKw = \(p);
-            window.__etubuDriveKmh = \(d.kmh);
+            window.__etubuDriveKmh = \(fine);
             var AE = window.AudioEngine;
             if (!AE) {
-              window.__etubuDrivePending = { kmh: \(d.kmh), powerKw: \(p), source: '\(src)' };
+              window.__etubuDrivePending = { kmh: \(fine), powerKw: \(p), accelKmhS: \(accel), source: '\(src)' };
               return;
             }
             if (!\(soundOn ? "true" : "false")) {
@@ -346,23 +356,20 @@ enum EtubuClusterAudioBridge {
               try { AE.start(want); } catch (e2) {}
             }
             if (AE.setMuted) AE.setMuted(\(muteJS));
-            var prev = (typeof window.__etubuPrevKmh === 'number') ? window.__etubuPrevKmh : \(d.kmh);
-            var trend = \(d.kmh) - prev;
             if (\(isDemo ? "true" : "false") && AE.snapSpeed) {
-              // snapSpeed yumuşatıldı — flywheel continuum bozulmasın
-              try { AE.setSpeed(\(d.kmh), { source: 'demo', powerKw: \(p), trend: trend }); } catch (eS) {}
+              try { AE.setSpeed(\(fine), { source: 'demo', powerKw: \(p), trend: \(accel), accelKmhS: \(accel) }); } catch (eS) {}
             } else if (AE.setSpeed) {
-              AE.setSpeed(\(d.kmh), {
+              AE.setSpeed(\(fine), {
                 source: '\(src)',
                 powerKw: \(p),
-                trend: trend
+                trend: \(accel),
+                accelKmhS: \(accel)
               });
             }
             if (AE._running && AE._applyParams) {
-              // force=false: AudioParam iptali yok → kesintisiz ICE tepkisi
-              try { AE._applyParams(AE._smoothKmh != null ? AE._smoothKmh : \(d.kmh), false); } catch (e3) {}
+              try { AE._applyParams(AE._smoothKmh != null ? AE._smoothKmh : \(fine), false); } catch (e3) {}
             }
-            window.__etubuPrevKmh = \(d.kmh);
+            window.__etubuPrevKmh = \(fine);
           } catch (e) {}
         })();
         """)
@@ -410,17 +417,33 @@ enum EtubuClusterAudioBridge {
         ownershipHeartbeat = nil
     }
 
+    /// Cap WebAudio often stays on the phone speaker while Music owns car A2DP.
+    /// Native AVAudioPlayer follows the ducked Bluetooth route.
+    private static var carMixForcesNative: Bool {
+        let session = AVAudioSession.sharedInstance()
+        return session.isOtherAudioPlaying || AppDelegate.isCarMediaRoute(session)
+    }
+
     /// Cap preferred when proven warm; native fallback otherwise. Never leave both muted.
+    /// Car + Music: native always owns (WKWebView does not ride A2DP).
     private static func reconcileAudioOwnership() {
         guard isSoundWanted else { return }
         let gen = driveGeneration
-        if preferNativeOwner {
-            // Demo path: native owns; Cap may also play but native never muted.
+        if preferNativeOwner || carMixForcesNative {
             if !EtubuNativeDriveAudio.shared.isEngineAlive {
                 let voice = storedVoice == "silent-mode" ? defaultDriveVoice : storedVoice
                 EtubuNativeDriveAudio.shared.start(voice: voice)
             }
             EtubuNativeDriveAudio.shared.setMuted(false)
+            if carMixForcesNative {
+                evalJS("""
+                (function(){
+                  try {
+                    if (window.AudioEngine && window.AudioEngine.setMuted) window.AudioEngine.setMuted(true);
+                  } catch (e) {}
+                })();
+                """)
+            }
             return
         }
         evalJSReturning("""
@@ -509,125 +532,27 @@ enum EtubuClusterAudioBridge {
         """)
     }
 
-    /// Uyarı bip + TTS (mesafe söylenmez — yalnızca tür/başlık).
+    /// Uyarı bip — native (TTS yok). Her olay türü ayrı ton; aynı nokta tekrar etmez (DriveWarnings).
     private static var lastWarnCueKey = ""
     private static var lastWarnCueAt = Date.distantPast
 
     static func playWarnCue(id: String, kind: String, stage: String, phrase: String) {
         let beepsOn = UserDefaults.standard.object(forKey: "etubu_radar_beeps") as? Bool ?? true
-        let ttsPref = UserDefaults.standard.object(forKey: "etubu_radar_tts") as? Bool ?? true
-        let ttsOn = ttsPref && EtubuAppLanguage.current.warnTtsEnabled
-        guard beepsOn || ttsOn else { return }
+        guard beepsOn else { return }
+        _ = phrase
+        UserDefaults.standard.set(false, forKey: "etubu_radar_tts")
 
-        let key = "\(id)|\(stage)"
         let now = Date()
-        if key == lastWarnCueKey, now.timeIntervalSince(lastWarnCueAt) < 12 { return }
-        lastWarnCueKey = key
+        if id == lastWarnCueKey, now.timeIntervalSince(lastWarnCueAt) < 1.6 { return }
+        lastWarnCueKey = id
         lastWarnCueAt = now
 
-        let urgent = (stage == "critical" || stage == "near")
-        let beeps = (beepsOn && urgent) ? 2 : (beepsOn ? 1 : 0)
-        // Keep metres/km for WarnVoice composeKeys ("radar 500 metre"); strip only speed ratios.
-        let speakPhrase = Self.sanitizeWarnPhrase(phrase)
-        let safePhrase = speakPhrase
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "'", with: "\\'")
-            .replacingOccurrences(of: "\n", with: " ")
-        AppDelegate.activateAlertDuckSession()
-
-        if ttsOn, !speakPhrase.isEmpty,
-           EtubuWarnVoice.speak(speakPhrase, key: key, urgent: urgent) {
-            if beeps > 0 { Self.fireBeeps(count: beeps, urgent: urgent) }
-            return
-        }
-
-        // Cap / system TTS path — duck for beeps+speech, then unduck.
-        let duckMs = max(0.9, Double(beeps) * 0.35 + (ttsOn && !speakPhrase.isEmpty ? 2.4 : 0.6))
-        DispatchQueue.main.asyncAfter(deadline: .now() + duckMs) {
-            AppDelegate.deactivateAlertDuckSession()
-        }
-
-        evalJS("""
-        (function(){
-          try {
-            if (window.RadarAlert && window.RadarAlert.primeAudio) window.RadarAlert.primeAudio();
-            var Ctx = window.AudioContext || window.webkitAudioContext;
-            if (Ctx && \(beeps) > 0) {
-              if (!window.__etubuBeepCtx) window.__etubuBeepCtx = new Ctx();
-              var ctx = window.__etubuBeepCtx;
-              if (ctx.state === 'suspended') ctx.resume();
-              var now = ctx.currentTime;
-              var freq = \(urgent ? 1180 : 880);
-              for (var i = 0; i < \(beeps); i++) {
-                var o = ctx.createOscillator();
-                var g = ctx.createGain();
-                o.type = 'sine';
-                o.frequency.value = freq;
-                var t0 = now + i * \(urgent ? 0.16 : 0.2);
-                g.gain.setValueAtTime(0.0001, t0);
-                g.gain.exponentialRampToValueAtTime(\(urgent ? 0.22 : 0.16), t0 + 0.02);
-                g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.11);
-                o.connect(g);
-                g.connect(ctx.destination);
-                o.start(t0);
-                o.stop(t0 + 0.13);
-              }
-            }
-            var phrase = '\(safePhrase)';
-            if (\(ttsOn ? "true" : "false") && phrase) {
-              try {
-                if (window.WarnVoice && window.WarnVoice.prime) window.WarnVoice.prime();
-                if (window.WarnVoice && window.WarnVoice.speak &&
-                    window.WarnVoice.speak(phrase, { urgent: \(urgent ? "true" : "false"), key: '\(key.replacingOccurrences(of: "'", with: ""))' })) {
-                  return;
-                }
-              } catch (e0) {}
-              try {
-                if (window.speechSynthesis && typeof SpeechSynthesisUtterance !== 'undefined') {
-                  window.speechSynthesis.cancel();
-                  var u = new SpeechSynthesisUtterance(phrase);
-                  u.lang = 'tr-TR';
-                  u.rate = \(urgent ? 1.08 : 1.02);
-                  window.speechSynthesis.speak(u);
-                }
-              } catch (e1) {}
-            }
-          } catch (e) {}
-        })();
-        """)
+        let urgent = (stage == "critical" || stage == "near") && (kind == "corridor" || kind == "control" || kind == "radar")
+        EtubuWarnVoice.playKindCue(kind: kind, urgent: urgent || stage == "critical")
     }
 
     private static func fireBeeps(count: Int, urgent: Bool) {
-        guard count > 0 else { return }
-        AppDelegate.activateAlertDuckSession()
-        evalJS("""
-        (function(){
-          try {
-            if (window.RadarAlert && window.RadarAlert.primeAudio) window.RadarAlert.primeAudio();
-            var Ctx = window.AudioContext || window.webkitAudioContext;
-            if (!Ctx) return;
-            if (!window.__etubuBeepCtx) window.__etubuBeepCtx = new Ctx();
-            var ctx = window.__etubuBeepCtx;
-            if (ctx.state === 'suspended') ctx.resume();
-            var now = ctx.currentTime;
-            var freq = \(urgent ? 1180 : 880);
-            for (var i = 0; i < \(count); i++) {
-              var o = ctx.createOscillator();
-              var g = ctx.createGain();
-              o.type = 'sine';
-              o.frequency.value = freq;
-              var t0 = now + i * \(urgent ? 0.16 : 0.2);
-              g.gain.setValueAtTime(0.0001, t0);
-              g.gain.exponentialRampToValueAtTime(\(urgent ? 0.22 : 0.16), t0 + 0.02);
-              g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.11);
-              o.connect(g);
-              g.connect(ctx.destination);
-              o.start(t0);
-              o.stop(t0 + 0.13);
-            }
-          } catch (e) {}
-        })();
-        """)
+        EtubuWarnVoice.playBeeps(count: count, urgent: urgent)
     }
 
     /// "Radar 250 m" / "1.2 km" gibi mesafe parçalarını TTS’ten çıkar.

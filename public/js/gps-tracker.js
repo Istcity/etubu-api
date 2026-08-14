@@ -19,6 +19,10 @@ const GpsTracker = (() => {
   let deriveKmh = 0;
   let accelBoostKmh = 0;
   let trendKmhPerSec = 0;
+  /** GPS dv/dt (km/h/s) — 0.2 km/h adımlar dahil; ses planının kaynağı */
+  let accelKmhS = 0;
+  let speedHist = [];
+  let audioPlanKmh = 0;
   let lastFixMs = null;
   let lastEmitMs = 0;
   let sensitivity = 1.24; // UI %20 → SENS_MIN + 0.2*(SENS_MAX-SENS_MIN)
@@ -165,6 +169,46 @@ const GpsTracker = (() => {
     return stationaryLatch;
   }
 
+  /**
+   * Sürüş planı: GPS hızındaki en küçük değişimi ivmeye çevir.
+   * Ses throttle/regen buradan gelir — lag (hedef−smooth) değil.
+   */
+  function noteSpeedSample(kmh, now) {
+    if (!Number.isFinite(kmh) || kmh < 0) return;
+    speedHist.push({ t: now, v: kmh });
+    const cutoff = now - 1700;
+    while (speedHist.length > 14 || (speedHist[0] && speedHist[0].t < cutoff)) {
+      speedHist.shift();
+    }
+    if (speedHist.length < 2) return;
+    const last = speedHist[speedHist.length - 1];
+    let a = null;
+    for (let i = 0; i < speedHist.length - 1; i++) {
+      const dt = (last.t - speedHist[i].t) / 1000;
+      if (dt >= 0.32 && dt <= 1.35) {
+        a = (last.v - speedHist[i].v) / dt;
+        break;
+      }
+    }
+    if (a == null) {
+      const prev = speedHist[speedHist.length - 2];
+      const dt = Math.max(0.04, (last.t - prev.t) / 1000);
+      const dv = last.v - prev.v;
+      // 0.15 km/h bile sayılır; GPS kuantizasyonu için eşik düşük
+      if (Math.abs(dv) >= 0.12 || dt >= 0.2) a = dv / dt;
+      else a = 0;
+    }
+    const alpha = Math.abs(a) < 0.35 ? 0.5 : 0.38;
+    accelKmhS = alpha * accelKmhS + (1 - alpha) * a;
+    trendKmhPerSec = accelKmhS;
+  }
+
+  function plannedAudioKmh(now) {
+    const elapsed = lastFixMs ? Math.min(0.85, Math.max(0, (now - lastFixMs) / 1000)) : 0;
+    const v = gpsKmh + accelKmhS * elapsed;
+    return Math.max(0, v);
+  }
+
   function smoothToward(current, target, dtSec) {
     const rising = target > current;
     const alpha = rising ? EMA_UP : EMA_DOWN;
@@ -266,6 +310,7 @@ const GpsTracker = (() => {
     speedSource = meta.source || "obd";
     if (meta.rpm != null) obdRpm = meta.rpm;
     if (!lastFixMs) lastFixMs = now;
+    noteSpeedSample(next, now);
     fuseAndEmit(now);
   }
 
@@ -325,18 +370,15 @@ const GpsTracker = (() => {
       deriveKmh = deriveKmh * 0.4 + derived * 0.6;
     }
 
-    if (lastFixMs && instant >= 0) {
-      const dt = Math.max(0.04, (now - lastFixMs) / 1000);
-      const trend = (instant - gpsKmh) / dt;
-      trendKmhPerSec = TREND_ALPHA * trendKmhPerSec + (1 - TREND_ALPHA) * trend;
+    gpsKmh = instant;
+    noteSpeedSample(instant, now);
 
+    if (lastFixMs && instant >= 0) {
       // GPS ile doğrulanmış hızlanma → ileri ekseni kalibre et
-      if (trend > 2.5 && !forwardAxis) {
+      if (accelKmhS > 2.5 && !forwardAxis) {
         calibrateForwardFromTrend();
       }
     }
-
-    gpsKmh = instant;
     if (source !== "watchB" || now - (lastFixMs || 0) > 80) {
       lastFixMs = now;
     }
@@ -440,11 +482,12 @@ const GpsTracker = (() => {
 
     const predicted = Math.max(
       0,
-      gpsKmh + trendKmhPerSec * Math.min(elapsed, PREDICT_MAX_SEC) * 0.95 + accelBoostKmh * 0.5
+      gpsKmh + accelKmhS * Math.min(elapsed, PREDICT_MAX_SEC) + accelBoostKmh * 0.5
     );
     const dtPred = 0.02;
     displayKmh = smoothToward(displayKmh, predicted * sensitivity, dtPred);
     if (displayKmh < HARD_ZERO_KMH) displayKmh = 0;
+    audioPlanKmh = plannedAudioKmh(now);
     accumulateKm(now);
     emit();
   }
@@ -466,24 +509,28 @@ const GpsTracker = (() => {
 
   function emit() {
     const now = Date.now();
-    // Hız değişirken ~80 Hz (gaz + fren); sabit ~45 Hz
+    // Mikro ivmede de sık yayın — ses planı GPS dv/dt'yi kaçırmasın
     const changing =
-      Math.abs(trendKmhPerSec) > 0.7 || Math.abs(accelBoostKmh) > 0.6;
-    if (now - lastEmitMs < (changing ? 12 : 22)) return;
+      Math.abs(accelKmhS) > 0.12 ||
+      Math.abs(trendKmhPerSec) > 0.12 ||
+      Math.abs(accelBoostKmh) > 0.35;
+    if (now - lastEmitMs < (changing ? 10 : 28)) return;
     lastEmitMs = now;
     if (onUpdate) {
-      // Ses: ivme yönünde kısa öngörü (hızlanma + yavaşlama simetrik)
-      const pred =
-        trendKmhPerSec * 0.15 +
-        (accelBoostKmh > 0 ? accelBoostKmh * 0.18 : accelBoostKmh * 0.12);
-      let audioKmh = displayKmh < HARD_ZERO_KMH ? 0 : Math.max(0, displayKmh + pred);
+      const planned = plannedAudioKmh(now);
+      audioPlanKmh = planned;
+      let audioKmh =
+        displayKmh < HARD_ZERO_KMH && gpsKmh < HARD_ZERO_KMH
+          ? 0
+          : Math.max(0, planned);
       onUpdate({
         kmh: displayKmh,
         audioKmh,
         rawKmh: gpsKmh,
         deriveKmh,
         accelBoost: accelBoostKmh,
-        trend: trendKmhPerSec,
+        accelKmhS,
+        trend: accelKmhS,
         totalKm,
         trialRemaining: Math.max(0, FREE_TRIAL_KM - totalKm),
         source: speedSource === "obd" && now - obdLastMs < 1800 ? "hybrid" : speedSource,
@@ -651,6 +698,9 @@ const GpsTracker = (() => {
     onKmAccumulated = null;
     accelBoostKmh = 0;
     trendKmhPerSec = 0;
+    accelKmhS = 0;
+    speedHist = [];
+    audioPlanKmh = 0;
     gpsKmh = 0;
     deriveKmh = 0;
     fusedKmh = 0;
@@ -738,6 +788,7 @@ const GpsTracker = (() => {
       fusedKmh = kmh;
       displayKmh = kmh;
       trendKmhPerSec = trend;
+      accelKmhS = trend;
       accelBoostKmh = Math.max(0, trend);
       lastLat = lat;
       lastLng = lng;

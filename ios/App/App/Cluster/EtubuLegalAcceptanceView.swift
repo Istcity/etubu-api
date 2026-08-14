@@ -38,11 +38,14 @@ struct EtubuLegalAcceptanceView: View {
     @State private var accepting = false
     /// Refresh body when `EtubuAppLanguage` changes.
     @State private var langTick = 0
+    /// Avoid reading `UIWindow.safeAreaInsets` inside GeometryReader (layout re-entrancy).
+    @State private var cachedTopInset: CGFloat = 47
+    @State private var cachedBottomInset: CGFloat = 20
 
     var body: some View {
         GeometryReader { geo in
-            let topInset = max(geo.safeAreaInsets.top, Self.windowTopInset(), 12)
-            let bottomInset = max(geo.safeAreaInsets.bottom, Self.windowBottomInset(), 12)
+            let topInset = max(geo.safeAreaInsets.top, cachedTopInset, 12)
+            let bottomInset = max(geo.safeAreaInsets.bottom, cachedBottomInset, 12)
             let _ = langTick
 
             ZStack {
@@ -168,8 +171,14 @@ struct EtubuLegalAcceptanceView: View {
         .ignoresSafeArea()
         .preferredColorScheme(.dark)
         .statusBarHidden(false)
+        .onAppear {
+            DispatchQueue.main.async { refreshCachedInsets() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .etubuLanguageDidChange)) { _ in
             langTick &+= 1
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .etubuClusterGeometryDidChange)) { _ in
+            DispatchQueue.main.async { refreshCachedInsets() }
         }
     }
 
@@ -207,6 +216,13 @@ struct EtubuLegalAcceptanceView: View {
                 .foregroundStyle(.white.opacity(0.88))
                 .fixedSize(horizontal: false, vertical: true)
         }
+    }
+
+    private func refreshCachedInsets() {
+        let top = Self.windowTopInset()
+        let bottom = Self.windowBottomInset()
+        if top != cachedTopInset { cachedTopInset = top }
+        if bottom != cachedBottomInset { cachedBottomInset = bottom }
     }
 
     private static func windowTopInset() -> CGFloat {

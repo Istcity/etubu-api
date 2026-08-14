@@ -49,7 +49,7 @@ appId: com.etubu.app
 - assertVisible:
     id: "etubu.route.active"
 - assertVisible:
-    text: "Konumum"
+    text: ".*Buradan.*"
 - assertNotVisible: ".*ilçe seçin.*"
 - takeScreenshot: qa-route-planned
 - tapOn: "Kapat"

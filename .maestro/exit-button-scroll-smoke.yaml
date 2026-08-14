@@ -1,0 +1,44 @@
+appId: com.etubu.app
+---
+# Chrome Exit (Çıkış) sits right of Settings — assert visible without opening Settings / quit tap.
+- launchApp:
+    clearState: true
+    permissions:
+      all: allow
+      notifications: deny
+    arguments:
+      etubuSkipOnboarding: true
+      etubuForcePremium: true
+- runFlow: setup-legal.yaml
+- extendedWaitUntil:
+    visible:
+      id: "etubu.settings.open"
+    timeout: 10000
+- assertVisible:
+    id: "etubu.exit"
+- assertVisible: "Çıkış"
+# Settings sheet Exit remains as duplicate (optional scroll check)
+- tapOn:
+    id: "etubu.settings.open"
+- extendedWaitUntil:
+    visible:
+      id: "etubu.settings.done"
+    timeout: 10000
+- scrollUntilVisible:
+    element:
+      id: "etubu.app.exit"
+    direction: DOWN
+    timeout: 15000
+    speed: 40
+    visibilityPercentage: 40
+    centerElement: false
+- assertVisible:
+    id: "etubu.app.exit"
+- tapOn:
+    id: "etubu.settings.done"
+- extendedWaitUntil:
+    visible:
+      id: "etubu.settings.open"
+    timeout: 8000
+- assertVisible:
+    id: "etubu.exit"

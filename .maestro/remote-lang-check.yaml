@@ -15,7 +15,8 @@ appId: com.etubu.app
 - tapOn:
     id: "etubu.settings.open"
 - extendedWaitUntil:
-    visible: "Uygulama hakkında"
+    visible:
+      id: "etubu.settings.done"
     timeout: 10000
 - scrollUntilVisible:
     element:

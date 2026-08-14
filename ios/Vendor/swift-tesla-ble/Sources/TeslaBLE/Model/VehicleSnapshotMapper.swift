@@ -17,6 +17,7 @@ enum VehicleSnapshotMapper {
             charge: data.hasChargeState ? mapCharge(data.chargeState) : nil,
             climate: data.hasClimateState ? mapClimate(data.climateState) : nil,
             drive: data.hasDriveState ? mapDrive(data.driveState) : nil,
+            location: data.hasLocationState ? mapLocation(data.locationState) : nil,
             closures: data.hasClosuresState ? mapClosures(data.closuresState) : nil,
             tirePressure: data.hasTirePressureState ? mapTirePressure(data.tirePressureState) : nil,
             media: data.hasMediaState ? mapMedia(data.mediaState) : nil,
@@ -110,7 +111,17 @@ enum VehicleSnapshotMapper {
 
     private static func mapDrive(_ pb: CarServer_DriveState) -> DriveState {
         let shiftState = mapShift(pb.shiftState)
-        let speedMph: Double? = pb.optionalSpeedFloat != nil ? Double(pb.speedFloat) : nil
+        // Prefer speedFloat (mph); fall back to integer `speed` (also mph) when float is unset.
+        let speedMph: Double? = {
+            if pb.optionalSpeedFloat != nil {
+                let v = Double(pb.speedFloat)
+                if v.isFinite, v >= 0, v <= 200 { return v }
+            }
+            if pb.optionalSpeed != nil {
+                return Double(pb.speed)
+            }
+            return nil
+        }()
         let powerKW: Int? = pb.optionalPower != nil ? Int(pb.power) : nil
         let odometerHundredthsMile: Int? = pb.optionalOdometerInHundredthsOfAMile != nil
             ? Int(pb.odometerInHundredthsOfAMile) : nil
@@ -139,6 +150,52 @@ enum VehicleSnapshotMapper {
             activeRouteLatitude: routeLat,
             activeRouteLongitude: routeLng,
         )
+    }
+
+    /// Prefer native WGS/GCJ, then raw lat/lng, then corrected.
+    private static func mapLocation(_ pb: CarServer_LocationState) -> LocationState {
+        let lat: Double? = {
+            if pb.optionalNativeLatitude != nil {
+                let v = Double(pb.nativeLatitude)
+                if v.isFinite, abs(v) <= 90, abs(v) > 0.001 { return v }
+            }
+            if pb.optionalLatitude != nil {
+                let v = Double(pb.latitude)
+                if v.isFinite, abs(v) <= 90, abs(v) > 0.001 { return v }
+            }
+            if pb.optionalCorrectedLatitude != nil {
+                let v = Double(pb.correctedLatitude)
+                if v.isFinite, abs(v) <= 90, abs(v) > 0.001 { return v }
+            }
+            return nil
+        }()
+        let lng: Double? = {
+            if pb.optionalNativeLongitude != nil {
+                let v = Double(pb.nativeLongitude)
+                if v.isFinite, abs(v) <= 180, abs(v) > 0.001 { return v }
+            }
+            if pb.optionalLongitude != nil {
+                let v = Double(pb.longitude)
+                if v.isFinite, abs(v) <= 180, abs(v) > 0.001 { return v }
+            }
+            if pb.optionalCorrectedLongitude != nil {
+                let v = Double(pb.correctedLongitude)
+                if v.isFinite, abs(v) <= 180, abs(v) > 0.001 { return v }
+            }
+            return nil
+        }()
+        let heading: Double? = {
+            if pb.optionalHeading != nil {
+                let v = Double(pb.heading)
+                if v.isFinite { return (v.truncatingRemainder(dividingBy: 360) + 360).truncatingRemainder(dividingBy: 360) }
+            }
+            if pb.optionalGeoHeading != nil {
+                let v = Double(pb.geoHeading)
+                if v.isFinite { return (v.truncatingRemainder(dividingBy: 360) + 360).truncatingRemainder(dividingBy: 360) }
+            }
+            return nil
+        }()
+        return LocationState(latitude: lat, longitude: lng, headingDeg: heading)
     }
 
     private static func mapClosures(_ pb: CarServer_ClosuresState) -> ClosuresState {

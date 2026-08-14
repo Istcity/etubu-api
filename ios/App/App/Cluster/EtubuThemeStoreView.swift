@@ -6,7 +6,6 @@ enum EtubuWallpaperStyle: String, CaseIterable, Identifiable {
     case mesh
     case grid
     case stars
-    case minimal
 
     var id: String { rawValue }
 
@@ -18,7 +17,6 @@ enum EtubuWallpaperStyle: String, CaseIterable, Identifiable {
         case .mesh: return "circle.hexagongrid.fill"
         case .grid: return "grid"
         case .stars: return "sparkles"
-        case .minimal: return "circle.lefthalf.filled"
         }
     }
 
@@ -31,9 +29,13 @@ enum EtubuWallpaperStyle: String, CaseIterable, Identifiable {
 
     static var stored: EtubuWallpaperStyle {
         get {
-            if let raw = UserDefaults.standard.string(forKey: storageKey),
-               let s = EtubuWallpaperStyle(rawValue: raw) {
-                return s
+            if let raw = UserDefaults.standard.string(forKey: storageKey) {
+                // Eski "minimal/sade" kaldırıldı → atmosfer.
+                if raw == "minimal", let atm = EtubuWallpaperStyle(rawValue: "atmospheric") {
+                    UserDefaults.standard.set(atm.rawValue, forKey: storageKey)
+                    return atm
+                }
+                if let s = EtubuWallpaperStyle(rawValue: raw) { return s }
             }
             return .atmospheric
         }
@@ -48,13 +50,15 @@ struct EtubuThemeStoreView: View {
     @ObservedObject private var premium = EtubuPremiumManager.shared
     var onRequestPremium: (() -> Void)? = nil
 
-    private let columns = [GridItem(.adaptive(minimum: 96), spacing: 10)]
+    private let columns = [GridItem(.adaptive(minimum: 92), spacing: 8)]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(EtubuClusterL10n.t("themeStoreThemes"))
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
+                .font(EtubuClusterFonts.ui(11, weight: .heavy))
+                .tracking(0.8)
+                .foregroundStyle(theme.mutedText)
+                .textCase(.uppercase)
 
             LazyVGrid(columns: columns, spacing: 10) {
                 ForEach(ClusterTheme.allCases) { t in
@@ -63,8 +67,10 @@ struct EtubuThemeStoreView: View {
             }
 
             Text(EtubuClusterL10n.t("themeStoreWallpaper"))
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
+                .font(EtubuClusterFonts.ui(11, weight: .heavy))
+                .tracking(0.8)
+                .foregroundStyle(theme.mutedText)
+                .textCase(.uppercase)
                 .padding(.top, 4)
 
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 108), spacing: 10)], spacing: 10) {
@@ -74,8 +80,8 @@ struct EtubuThemeStoreView: View {
             }
 
             Text(EtubuClusterL10n.t("themeStoreHint"))
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+                .font(EtubuClusterFonts.ui(12, weight: .medium))
+                .foregroundStyle(theme.mutedText)
         }
         .padding(.vertical, 4)
     }
@@ -87,6 +93,7 @@ struct EtubuThemeStoreView: View {
     private func themeTile(_ t: ClusterTheme) -> some View {
         let selected = theme == t
         let locked = themeLocked(t)
+        let name = t.pickerTitle
         return Button {
             if locked {
                 onRequestPremium?()
@@ -96,69 +103,44 @@ struct EtubuThemeStoreView: View {
             ClusterTheme.stored = t
         } label: {
             ZStack(alignment: .topTrailing) {
-                VStack(alignment: .leading, spacing: 8) {
-                    // Renk skalası
-                    HStack(spacing: 4) {
-                        ForEach(Array(t.canvasGradient.prefix(4).enumerated()), id: \.offset) { _, c in
-                            RoundedRectangle(cornerRadius: 3, style: .continuous)
-                                .fill(c)
-                                .frame(height: 10)
-                        }
-                        Circle()
-                            .fill(t.accent)
-                            .frame(width: 10, height: 10)
-                    }
-                    .padding(.trailing, locked ? 22 : 0)
+                VStack(spacing: 7) {
+                    EtubuThemeMiniPreview(theme: t)
+                        .frame(height: 78)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .strokeBorder(t.accent.opacity(selected ? 0.7 : 0.28), lineWidth: 1)
+                        )
 
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(
-                                LinearGradient(
-                                    colors: t.canvasGradient,
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                        Text(String(format: "%d", 88))
-                            .font(.system(size: 26, weight: .bold, design: t.gaugeDesign))
-                            .foregroundStyle(.white.opacity(0.92))
-                    }
-                    .frame(height: 48)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(t.title)
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.primary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.75)
-                        Text(EtubuCutoutFX.forTheme(t).title)
-                            .font(.system(size: 9))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
-                    }
+                    Text(name)
+                        .font(EtubuClusterFonts.ui(11, weight: .semibold))
+                        .foregroundStyle(theme.primaryText)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.72)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
                 }
-                .padding(10)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(8)
+                .frame(maxWidth: .infinity)
                 .background(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color.primary.opacity(0.06))
+                        .fill(theme.surface)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(selected ? t.accent : Color.primary.opacity(0.14), lineWidth: selected ? 2 : 1)
+                        .strokeBorder(selected ? t.accent : theme.stroke, lineWidth: selected ? 2 : 1)
                 )
                 .opacity(locked ? 0.78 : 1)
 
                 if locked {
                     EtubuPremiumBadge(compact: true)
-                        .padding(7)
+                        .padding(6)
                         .allowsHitTesting(false)
                 }
             }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(locked ? "\(t.title), \(EtubuClusterL10n.t("premiumRequires"))" : t.title)
+        .accessibilityLabel(locked ? "\(name), \(EtubuClusterL10n.t("premiumRequires"))" : name)
         .accessibilityIdentifier("etubu.theme.\(t.rawValue)")
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
@@ -178,13 +160,13 @@ struct EtubuThemeStoreView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Image(systemName: style.symbol)
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(selected ? theme.accent : .primary)
+                        .foregroundStyle(selected ? theme.accent : theme.primaryText)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.trailing, locked ? 20 : 0)
 
                     Text(style.title)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.primary)
+                        .font(EtubuClusterFonts.ui(13, weight: .medium))
+                        .foregroundStyle(theme.primaryText)
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
                 }
@@ -192,11 +174,11 @@ struct EtubuThemeStoreView: View {
                 .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
                 .background(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(selected ? theme.accent.opacity(0.18) : Color.primary.opacity(0.06))
+                        .fill(selected ? theme.accent.opacity(0.18) : theme.surface)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(selected ? theme.accent : Color.primary.opacity(0.14), lineWidth: selected ? 2 : 1)
+                        .strokeBorder(selected ? theme.accent : theme.stroke, lineWidth: selected ? 2 : 1)
                 )
                 .opacity(locked ? 0.78 : 1)
 
@@ -213,6 +195,80 @@ struct EtubuThemeStoreView: View {
     }
 }
 
+/// Küçük tema kartı — pano zemin + kadran + çentik efekti (durağan kare).
+private struct EtubuThemeMiniPreview: View {
+    let theme: ClusterTheme
+
+    var body: some View {
+        GeometryReader { geo in
+            let size = geo.size
+            let dial = min(size.width, size.height) * 0.52
+            ZStack {
+                LinearGradient(
+                    colors: theme.canvasGradient,
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+
+                RadialGradient(
+                    colors: [theme.accent.opacity(0.42), .clear],
+                    center: .topTrailing,
+                    startRadius: 4,
+                    endRadius: max(size.width, size.height) * 0.85
+                )
+
+                RadialGradient(
+                    colors: [theme.washColors.last?.opacity(0.5) ?? theme.glow, .clear],
+                    center: .bottomLeading,
+                    startRadius: 2,
+                    endRadius: max(size.width, size.height) * 0.7
+                )
+
+                Canvas { ctx, canvasSize in
+                    let island = CGRect(
+                        x: canvasSize.width * 0.28,
+                        y: -2,
+                        width: canvasSize.width * 0.44,
+                        height: max(10, canvasSize.height * 0.16)
+                    )
+                    EtubuCutoutFX.forTheme(theme).draw(
+                        ctx: ctx,
+                        island: island,
+                        t: 0.72,
+                        intensity: 1.15,
+                        accent: theme.accent,
+                        hue: theme.hue,
+                        sizeBoost: 0.85,
+                        motion: 1,
+                        transparentGround: true
+                    )
+                }
+                .allowsHitTesting(false)
+
+                VStack(spacing: 0) {
+                    Spacer(minLength: 10)
+                    ZStack {
+                        Circle()
+                            .fill(Color.black.opacity(0.38))
+                        Circle()
+                            .strokeBorder(theme.accent.opacity(0.7), lineWidth: 2)
+                        Circle()
+                            .trim(from: 0.12, to: 0.78)
+                            .stroke(theme.accent, style: StrokeStyle(lineWidth: 2.4, lineCap: .round))
+                            .rotationEffect(.degrees(140))
+                        Text("88")
+                            .font(.system(size: max(13, dial * 0.34), weight: .bold, design: theme.gaugeDesign))
+                            .foregroundStyle(.white.opacity(0.94))
+                    }
+                    .frame(width: dial, height: dial)
+                    Spacer(minLength: 4)
+                }
+            }
+        }
+        .allowsHitTesting(false)
+    }
+}
+
 /// Pattern overlays drawn above the theme gradient.
 struct EtubuWallpaperOverlay: View {
     let theme: ClusterTheme
@@ -223,8 +279,6 @@ struct EtubuWallpaperOverlay: View {
         switch style {
         case .atmospheric:
             EmptyView()
-        case .minimal:
-            Color.black.opacity(0.28)
         case .mesh:
             mesh
         case .grid:

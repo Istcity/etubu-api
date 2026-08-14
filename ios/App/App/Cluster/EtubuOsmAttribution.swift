@@ -57,22 +57,25 @@ struct EtubuOsmAttributionChip: View {
 
 /// Ayarlar / hakkında için genişletilmiş OSM lisans satırı.
 struct EtubuOsmAttributionBlock: View {
+    @Environment(\.clusterTheme) private var theme
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("OpenStreetMap")
-                .font(.subheadline.weight(.bold))
+                .font(EtubuClusterFonts.ui(14, weight: .bold))
+                .foregroundStyle(theme.primaryText)
             Text(EtubuOsmAttribution.licenseNoteTR)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(EtubuClusterFonts.ui(12, weight: .medium))
+                .foregroundStyle(theme.mutedText)
                 .fixedSize(horizontal: false, vertical: true)
             Text(EtubuOsmAttribution.fullTR)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+                .font(EtubuClusterFonts.ui(11, weight: .medium))
+                .foregroundStyle(theme.mutedText)
                 .fixedSize(horizontal: false, vertical: true)
             Link("openstreetmap.org/copyright", destination: EtubuOsmAttribution.copyrightURL)
-                .font(.caption.weight(.semibold))
+                .font(EtubuClusterFonts.ui(12, weight: .semibold))
             Link("ODbL lisans metni", destination: EtubuOsmAttribution.odblURL)
-                .font(.caption.weight(.semibold))
+                .font(EtubuClusterFonts.ui(12, weight: .semibold))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

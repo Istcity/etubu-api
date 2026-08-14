@@ -2,8 +2,8 @@ import Foundation
 import CoreLocation
 import Combine
 
-/// Rota çizilmeden de çalışır: GPS çevresindeki OSM radar / hız koridoru + TR tohumları.
-/// Web `RadarAlert` ile aynı yaklaşma / koridor girişi mantığı.
+/// Rota/araç-nav aktifken: OSM radar + hız koridoru (rota üzeri). Rota yoksa idle.
+/// Web `RadarAlert` koridor girişi — ortalama hız yalnız koridor oturumu içinde.
 @MainActor
 final class EtubuLiveRadarMonitor: ObservableObject {
     static let shared = EtubuLiveRadarMonitor()
@@ -12,6 +12,7 @@ final class EtubuLiveRadarMonitor: ObservableObject {
     @Published private(set) var corridorActive = false
     @Published private(set) var corridorOver = false
     @Published private(set) var corridorAvgKmh: Int = 0
+    @Published private(set) var corridorInstantKmh: Int = 0
     @Published private(set) var corridorLimit: Int?
     @Published private(set) var corridorRemainLabel: String = ""
     @Published private(set) var corridorLabel: String = ""
@@ -21,14 +22,15 @@ final class EtubuLiveRadarMonitor: ObservableObject {
     private var fetchedAt: Date?
     private var fetching = false
     private var corridor: CorridorSession?
-    private var lastEnterSpokenId = ""
 
     private let fetchRadiusM = 12_000.0
     private let refetchDistM = 4_500.0
     private let refetchAge: TimeInterval = 10 * 60
     private let aheadMaxM = 5_500.0
     private let headingTolerance = 55.0
-    private let enterCorridorM = 280.0
+    /// Koridora gerçek giriş — 3.5 km “yaklaşma” ile avg açma hatası düzeltildi.
+    private let enterCorridorM = 120.0
+    private let onRouteMaxM = 160.0
 
     private let endpoints = [
         "https://overpass-api.de/api/interpreter",
@@ -48,42 +50,53 @@ final class EtubuLiveRadarMonitor: ObservableObject {
         var lastLat: Double
         var lastLng: Double
         var lostTicks: Int
+        var overLatch: Bool
     }
 
     private init() {
-        cameras = EtubuRegion.lastKnownInTurkey ? Self.seedHazards() : []
+        cameras = EtubuTrCorridorStore.nearby(
+            lat: EtubuVehicleTelemetry.shared.latitude ?? 39.9,
+            lng: EtubuVehicleTelemetry.shared.longitude ?? 32.85
+        )
         NotificationCenter.default.addObserver(
             forName: .etubuRegionDidChange,
             object: nil,
             queue: .main
-        ) { [weak self] note in
-            let inTR = (note.object as? Bool) ?? EtubuRegion.lastKnownInTurkey
+        ) { [weak self] _ in
             Task { @MainActor in
                 guard let self else { return }
-                if inTR {
-                    if self.cameras.isEmpty {
-                        self.cameras = Self.seedHazards()
-                    }
+                if self.cameras.isEmpty {
+                    self.cameras = EtubuTrCorridorStore.snapshot()
                 }
             }
         }
     }
 
-    /// DriveWarnings poll’undan çağrılır — rota olsun olmasın.
-    func tick(lat: Double?, lng: Double?, heading: Double?, kmh: Int) {
+    /// DriveWarnings poll’undan — yalnız aktif navigasyon (app veya araç rotası).
+    func tick(
+        lat: Double?,
+        lng: Double?,
+        heading: Double?,
+        kmh: Int,
+        navigationActive: Bool,
+        routeCoords: [CLLocationCoordinate2D] = []
+    ) {
+        guard navigationActive else {
+            clearCorridorAndPrimary()
+            return
+        }
         guard let lat, let lng, lat != 0, lng != 0 else { return }
+        // Veri çekimi parkta da — yaklaşma uyarısı yalnız hareketliyken.
+        refreshCamerasIfNeeded(lat: lat, lng: lng)
         guard kmh >= EtubuOsmSpeedLimit.movingKmhThreshold else {
             if corridor == nil {
                 primary = nil
-                corridorActive = false
-                corridorOver = false
+                if corridorActive { clearCorridorAndPrimary() }
             }
             return
         }
 
-        refreshCamerasIfNeeded(lat: lat, lng: lng)
-
-        let ahead = findAhead(lat: lat, lng: lng, heading: heading)
+        let ahead = findAhead(lat: lat, lng: lng, heading: heading, routeCoords: routeCoords)
         let nearestCorridor = ahead.first { $0.h.kind == "corridor" }
         let corridorSnap = updateCorridor(
             lat: lat, lng: lng, kmh: kmh,
@@ -94,6 +107,7 @@ final class EtubuLiveRadarMonitor: ObservableObject {
             corridorActive = true
             corridorOver = snap.over
             corridorAvgKmh = snap.avg
+            corridorInstantKmh = kmh
             corridorLimit = snap.limit
             corridorRemainLabel = Self.fmtDist(snap.remainM)
             corridorLabel = snap.label
@@ -122,12 +136,8 @@ final class EtubuLiveRadarMonitor: ObservableObject {
             return
         }
 
-        corridorActive = false
-        corridorOver = false
-        corridorRemainLabel = ""
-        corridorLabel = ""
-        corridorLimit = nil
-        corridorAvgKmh = 0
+        // Koridordan çıkıldı — ortalama hız paneli kapanır.
+        clearCorridorPanelOnly()
 
         guard let nearest = ahead.first else {
             primary = nil
@@ -171,6 +181,14 @@ final class EtubuLiveRadarMonitor: ObservableObject {
         return nil
     }
 
+    /// Rota çizilir çizilmez Overpass’i başlat (UI beklemesin).
+    func prefetch(lat: Double, lng: Double) {
+        guard lat != 0, lng != 0 else { return }
+        fetchCenter = nil
+        fetchedAt = nil
+        refreshCamerasIfNeeded(lat: lat, lng: lng)
+    }
+
     private func refreshCamerasIfNeeded(lat: Double, lng: Double) {
         if fetching { return }
         let stale: Bool = {
@@ -189,18 +207,28 @@ final class EtubuLiveRadarMonitor: ObservableObject {
                 self.fetchCenter = CLLocationCoordinate2D(latitude: lat, longitude: lng)
                 self.fetchedAt = Date()
                 self.cameras = Self.merge(
-                    seeds: EtubuRegion.lastKnownInTurkey ? Self.seedHazards() : [],
+                    seeds: EtubuTrCorridorStore.nearby(lat: lat, lng: lng),
                     remote: remote
                 )
             }
         }
     }
 
-    private func findAhead(lat: Double, lng: Double, heading: Double?) -> [(h: EtubuRouteHazard, dM: Double)] {
+    private func findAhead(
+        lat: Double,
+        lng: Double,
+        heading: Double?,
+        routeCoords: [CLLocationCoordinate2D]
+    ) -> [(h: EtubuRouteHazard, dM: Double)] {
         var ahead: [(h: EtubuRouteHazard, dM: Double)] = []
         for h in cameras {
             let dM = EtubuTrafikAPI.haversineKm(lat, lng, h.lat, h.lng) * 1000
             guard dM <= aheadMaxM else { continue }
+            // Rota polyline varsa yalnız rota üzerindeki noktalar.
+            if routeCoords.count >= 2 {
+                let off = Self.minDistanceToRouteM(lat: h.lat, lng: h.lng, coords: routeCoords)
+                guard off <= onRouteMaxM else { continue }
+            }
             if let heading, heading >= 0 {
                 let b = Self.bearingDeg(lat, lng, h.lat, h.lng)
                 let diff = Self.angleDiff(b, heading)
@@ -213,6 +241,43 @@ final class EtubuLiveRadarMonitor: ObservableObject {
         }
         ahead.sort { $0.dM < $1.dM }
         return ahead
+    }
+
+    private func clearCorridorAndPrimary() {
+        corridor = nil
+        primary = nil
+        clearCorridorPanelOnly()
+    }
+
+    private func clearCorridorPanelOnly() {
+        corridorActive = false
+        corridorOver = false
+        corridorRemainLabel = ""
+        corridorLabel = ""
+        corridorLimit = nil
+        corridorAvgKmh = 0
+        corridorInstantKmh = 0
+    }
+
+    private static func minDistanceToRouteM(
+        lat: Double, lng: Double,
+        coords: [CLLocationCoordinate2D]
+    ) -> Double {
+        guard coords.count >= 2 else { return .greatestFiniteMagnitude }
+        var best = Double.greatestFiniteMagnitude
+        for i in 0..<coords.count {
+            let c = coords[i]
+            let d = EtubuTrafikAPI.haversineKm(lat, lng, c.latitude, c.longitude) * 1000
+            best = min(best, d)
+            if i + 1 < coords.count {
+                let n = coords[i + 1]
+                let midLat = (c.latitude + n.latitude) * 0.5
+                let midLng = (c.longitude + n.longitude) * 0.5
+                best = min(best, EtubuTrafikAPI.haversineKm(lat, lng, midLat, midLng) * 1000)
+            }
+            if best < 40 { return best }
+        }
+        return best
     }
 
     private struct CorridorSnap {
@@ -247,13 +312,20 @@ final class EtubuLiveRadarMonitor: ObservableObject {
             }
             corridor = state
             let (display, trueAvg) = corridorAvgs(state, kmh: kmh)
+            let over: Bool = {
+                guard trueAvg > 0 else { return false }
+                if state.overLatch { return trueAvg > state.limit }
+                return trueAvg > state.limit + 2
+            }()
+            state.overLatch = over
+            corridor = state
             return CorridorSnap(
                 id: state.id,
                 remainM: remain,
                 limit: state.limit,
                 avg: display,
                 trueAvg: trueAvg,
-                over: trueAvg > 0 && trueAvg > state.limit + 2,
+                over: over,
                 label: state.label,
                 entered: false
             )
@@ -277,18 +349,9 @@ final class EtubuLiveRadarMonitor: ObservableObject {
             traveledM: 0,
             lastLat: lat,
             lastLng: lng,
-            lostTicks: 0
+            lostTicks: 0,
+            overLatch: false
         )
-        if lastEnterSpokenId != nearest.h.id {
-            lastEnterSpokenId = nearest.h.id
-            // TTS klipleri TR — UI dili bağımsız
-            EtubuClusterAudioBridge.playWarnCue(
-                id: "enter-\(nearest.h.id)",
-                kind: "corridor",
-                stage: "near",
-                phrase: lim > 0 ? "Koridor giriş. Hız sınır \(lim)" : "Koridor giriş"
-            )
-        }
         // Entry: show vehicle speed immediately (no blank / 0 waiting for 35 m).
         let entryAvg = max(0, min(220, kmh))
         return CorridorSnap(
@@ -333,7 +396,7 @@ final class EtubuLiveRadarMonitor: ObservableObject {
         let traveled = state.traveledM
         let elapsedH = Date().timeIntervalSince(state.enteredAt) / 3600
         let trueRaw: Double? = {
-            guard traveled >= 35, elapsedH >= 0.0012 else { return nil }
+            guard traveled >= 50, elapsedH >= 0.0014 else { return nil }
             let avg = traveled / 1000 / elapsedH
             guard avg.isFinite, avg >= 0 else { return nil }
             return min(220, avg)
@@ -342,43 +405,15 @@ final class EtubuLiveRadarMonitor: ObservableObject {
         guard let hist = trueRaw else {
             return (Int(instant.rounded()), 0)
         }
-        let progress = state.lengthM > 0
-            ? min(1, max(0, traveled / state.lengthM))
-            : 0
-        // Start ~50% historical + 50% instant → end ~90% / 10%.
-        let histW = 0.5 + 0.4 * progress
-        let blended = histW * hist + (1 - histW) * instant
-        let display = min(220, max(0, Int(blended.rounded())))
-        return (display, trueAvg)
+        // Show the measured corridor average (what the camera uses) once it exists.
+        return (Int(hist.rounded()), trueAvg)
     }
 
-    // MARK: - Fetch / seeds
-
-    private static func seedHazards() -> [EtubuRouteHazard] {
-        [
-            .init(id: "tem-gebze", kind: "radar", label: "Gebze TEM", lat: 40.802, lng: 29.438, maxspeed: 120),
-            .init(id: "tem-izmit", kind: "radar", label: "İzmit TEM", lat: 40.765, lng: 29.94, maxspeed: 120),
-            .init(id: "kor-sakarya", kind: "corridor", label: "Sakarya koridor", lat: 40.74, lng: 30.35, maxspeed: 120, lengthKm: 12),
-            .init(id: "kor-ankara-bati", kind: "corridor", label: "Ankara batı koridor", lat: 39.95, lng: 32.45, maxspeed: 120, lengthKm: 18),
-            .init(id: "o5-kemalpasa", kind: "radar", label: "Kemalpaşa O-5", lat: 38.45, lng: 27.45, maxspeed: 130),
-            .init(id: "kor-o5-balikesir", kind: "corridor", label: "Balıkesir O-5 koridor", lat: 39.55, lng: 27.95, maxspeed: 130, lengthKm: 22),
-            .init(id: "kor-o5-manisa", kind: "corridor", label: "Manisa O-5 koridor", lat: 38.72, lng: 27.35, maxspeed: 130, lengthKm: 15),
-            .init(id: "kor-konya", kind: "corridor", label: "Konya koridor", lat: 38.0, lng: 32.55, maxspeed: 110, lengthKm: 16),
-            .init(id: "fixed-aksaray", kind: "radar", label: "Aksaray", lat: 38.37, lng: 34.03, maxspeed: 110),
-            .init(id: "fixed-hadimkoy", kind: "radar", label: "Hadımköy", lat: 41.14, lng: 28.6, maxspeed: 120),
-            .init(id: "kor-catalca", kind: "corridor", label: "Çatalca koridor", lat: 41.15, lng: 28.35, maxspeed: 120, lengthKm: 14),
-            .init(id: "fixed-silivri", kind: "radar", label: "Silivri", lat: 41.08, lng: 28.25, maxspeed: 120),
-            .init(id: "fixed-aydin", kind: "radar", label: "Aydın O-31", lat: 37.84, lng: 27.84, maxspeed: 120),
-            .init(id: "kor-antalya", kind: "corridor", label: "Antalya koridor", lat: 37.05, lng: 30.65, maxspeed: 110, lengthKm: 10),
-        ]
-    }
+    // MARK: - Fetch
 
     private static func merge(seeds: [EtubuRouteHazard], remote: [EtubuRouteHazard]) -> [EtubuRouteHazard] {
-        // Seeds / EGM-style points are official; OSM remote supplements without cutting them.
-        let mode: EtubuHazardMerge.OsmMode = EtubuRegion.lastKnownInTurkey && !seeds.isEmpty
-            ? .supplement
-            : .led
-        return EtubuHazardMerge.merge(official: seeds, osm: remote, mode: mode)
+        // Bundled/weekly TR corridors are OSM-id'd; OSM live feed leads, cache fills gaps.
+        return EtubuHazardMerge.merge(official: [], osm: seeds + remote, mode: .led)
     }
 
     private static func fetchOverpass(

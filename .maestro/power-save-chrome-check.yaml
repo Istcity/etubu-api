@@ -1,0 +1,73 @@
+appId: com.etubu.app
+---
+# Güç tasarrufu + chrome collapse: remote her zaman; power save'de yalnız kadran/regen.
+- launchApp:
+    clearState: true
+    permissions:
+      all: allow
+      notifications: deny
+    arguments:
+      etubuSkipOnboarding: true
+      etubuForcePremium: true
+      etubuForceLangTr: true
+- setOrientation: PORTRAIT
+- runFlow: setup-legal.yaml
+- assertVisible:
+    id: "etubu.remote.open"
+- assertVisible:
+    id: "etubu.powerSave"
+- assertVisible:
+    id: "etubu.settings.open"
+- assertVisible:
+    id: "etubu.chrome.collapse"
+- tapOn:
+    id: "etubu.chrome.collapse"
+- waitForAnimationToEnd:
+    timeout: 800
+- assertVisible:
+    id: "etubu.remote.open"
+- assertVisible:
+    id: "etubu.chrome.expand"
+- assertNotVisible:
+    id: "etubu.settings.open"
+- tapOn:
+    id: "etubu.chrome.expand"
+- waitForAnimationToEnd:
+    timeout: 800
+- assertVisible:
+    id: "etubu.settings.open"
+- assertVisible:
+    id: "etubu.powerSave"
+- tapOn:
+    id: "etubu.powerSave"
+- waitForAnimationToEnd:
+    timeout: 1200
+- assertVisible:
+    id: "etubu.dial"
+- assertVisible:
+    id: "etubu.remote.open"
+- assertNotVisible:
+    id: "etubu.ev.portraitStrip"
+- assertNotVisible:
+    id: "etubu.route.open"
+- tapOn:
+    id: "etubu.chrome.collapse"
+- waitForAnimationToEnd:
+    timeout: 800
+- assertVisible:
+    id: "etubu.remote.open"
+- assertVisible:
+    id: "etubu.powerSave"
+- assertVisible:
+    id: "etubu.chrome.expand"
+- tapOn:
+    id: "etubu.chrome.expand"
+- waitForAnimationToEnd:
+    timeout: 600
+- tapOn:
+    id: "etubu.powerSave"
+- waitForAnimationToEnd:
+    timeout: 1000
+- assertVisible:
+    id: "etubu.settings.open"
+- takeScreenshot: qa-power-save-chrome

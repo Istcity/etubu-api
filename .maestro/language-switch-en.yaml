@@ -14,7 +14,8 @@ appId: com.etubu.app
 - tapOn:
     id: "etubu.settings.open"
 - extendedWaitUntil:
-    visible: "About the app"
+    visible:
+      id: "etubu.settings.done"
     timeout: 10000
 - assertVisible: "Done"
 - scrollUntilVisible:
@@ -24,7 +25,7 @@ appId: com.etubu.app
     timeout: 25000
 - assertVisible:
     id: "etubu.language.en"
-- assertVisible: "Language"
+- assertVisible: "English"
 - takeScreenshot: qa-lang-en
 - tapOn:
     id: "etubu.settings.done"

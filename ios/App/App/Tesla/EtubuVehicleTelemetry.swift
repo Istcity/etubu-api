@@ -25,6 +25,11 @@ enum EtubuVehicleConnectionState: String {
 struct EtubuTireReading: Equatable {
     var psi: Double?
     var warning: Bool
+
+    /// Tesla TPMS payload is bar; UI stores psi. 2.5 bar ≈ 36.3 psi.
+    var bar: Double? {
+        psi.map { $0 / 14.5038 }
+    }
 }
 
 /// Unified live vehicle state for the single-screen cluster (Tesla primary, OBD fallback).
@@ -39,6 +44,8 @@ final class EtubuVehicleTelemetry: ObservableObject {
     @Published var lastUpdateAt: Date?
     /// Yalnızca drive poll — GPS bridge / hız tazeliği buna bakar (iklim tick’i yanıltmasın).
     @Published var lastDriveAt: Date?
+    /// Boş paket değil — gerçek hız/vites/güç uygulandığı an. Donmuş HUD tespiti.
+    @Published var lastDriveValueAt: Date?
     /// TPMS / climate / closures son geçerli örnek.
     @Published var lastExtrasAt: Date?
 
@@ -56,6 +63,12 @@ final class EtubuVehicleTelemetry: ObservableObject {
 
     // Drive
     @Published var kmh: Int = 0
+    /// Kesirli hız (GPS / Tesla mph) — ses planı tamsayı km/h yuvarlamasından bağımsız
+    @Published var kmhFine: Double = 0
+    /// Phone GPS kesirli hız (Tesla HUD’dan bağımsız ses planı)
+    @Published var gpsKmhFine: Double = 0
+    /// GPS/Tesla dv/dt (km/h/s) — mikro gaz değişimi
+    @Published var accelKmhS: Double = 0
     @Published var gear: String = "P"
     @Published var powerKw: Int?
     @Published var powerHistory: [Int] = [] // last ~40 samples for sparkline
@@ -99,6 +112,16 @@ final class EtubuVehicleTelemetry: ObservableObject {
     @Published var routeDestLat: Double?
     @Published var routeDestLng: Double?
 
+    /// App rotası veya araç navigasyonu (Tesla dest/kalan) aktif mi — uyarı kapısı.
+    var hasActiveNavigation: Bool {
+        if routeActive { return true }
+        if EtubuDemoDrive.isActive { return true }
+        let dest = navDestination.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !dest.isEmpty { return true }
+        if let rem = navRemainKm, rem > 0.15 { return true }
+        return false
+    }
+
     // TPMS (psi)
     @Published var tpmsFL = EtubuTireReading(psi: nil, warning: false)
     @Published var tpmsFR = EtubuTireReading(psi: nil, warning: false)
@@ -123,10 +146,11 @@ final class EtubuVehicleTelemetry: ObservableObject {
     @Published var mediaAlbum: String = ""
     @Published var mediaSource: String = ""
 
-    // Map (phone GPS fallback — Tesla location not in swift-tesla-ble snapshot)
+    // Map — Tesla LocationState leads; phone GPS fills gaps.
     @Published var latitude: Double?
     @Published var longitude: Double?
     @Published var headingDeg: Double?
+    private var lastTeslaGpsAt: Date?
 
     // OBD-only extras
     @Published var rpm: Int = 0
@@ -158,6 +182,40 @@ final class EtubuVehicleTelemetry: ObservableObject {
     private var preDemoOutsideC: Double?
     private var preDemoInsideC: Double?
     private var preDemoClimateOn: Bool?
+    private var speedHist: [(t: Date, v: Double)] = []
+    private var lastGpsSampleAt: Date?
+    var lastGpsSampleFresh: Bool {
+        lastGpsSampleAt.map { Date().timeIntervalSince($0) < 1.1 } ?? false
+    }
+
+    /// GPS/Tesla kesirli hız → dv/dt. 0.15 km/h adımlar dahil.
+    func noteSpeedSample(_ kmh: Double, at now: Date = Date(), updateFine: Bool = true) {
+        guard kmh.isFinite, kmh >= 0, kmh <= 280 else { return }
+        if updateFine { kmhFine = kmh }
+        speedHist.append((now, kmh))
+        let cutoff = now.addingTimeInterval(-1.7)
+        speedHist.removeAll { $0.t < cutoff }
+        if speedHist.count > 16 {
+            speedHist.removeFirst(speedHist.count - 16)
+        }
+        guard speedHist.count >= 2, let last = speedHist.last else { return }
+        var a: Double?
+        for sample in speedHist.dropLast() {
+            let dt = last.t.timeIntervalSince(sample.t)
+            if dt >= 0.32 && dt <= 1.35 {
+                a = (last.v - sample.v) / dt
+                break
+            }
+        }
+        if a == nil, let prev = speedHist.dropLast().last {
+            let dt = max(0.04, last.t.timeIntervalSince(prev.t))
+            let dv = last.v - prev.v
+            a = (abs(dv) >= 0.12 || dt >= 0.2) ? dv / dt : 0
+        }
+        let raw = a ?? 0
+        let alpha = abs(raw) < 0.35 ? 0.5 : 0.38
+        accelKmhS = alpha * accelKmhS + (1 - alpha) * raw
+    }
 
     /// Bağlı değilken UI’da gösterilen şarj (canlı veya son bilinen, stale değilse).
     static let chargeStaleSeconds: TimeInterval = 6 * 3600
@@ -439,6 +497,7 @@ final class EtubuVehicleTelemetry: ObservableObject {
 
     func applyTeslaDrive(
         kmh: Int?,
+        kmhFine: Double? = nil,
         gear: String?,
         powerKw: Int?,
         odometerKm: Int?,
@@ -469,6 +528,19 @@ final class EtubuVehicleTelemetry: ObservableObject {
             if parked { return 0 }
             return rawKmh
         }()
+        let fine: Double = {
+            if parked { return 0 }
+            if let incomingFine = kmhFine, incomingFine.isFinite { return max(0, min(280, incomingFine)) }
+            return Double(gatedKmh)
+        }()
+        if hasSpeed {
+            let gpsFresh = lastGpsSampleAt.map { Date().timeIntervalSince($0) < 1.0 } ?? false
+            if !gpsFresh {
+                noteSpeedSample(fine)
+            } else {
+                self.kmhFine = fine
+            }
+        }
 
         // Ani sıçrama (paket bozulması) — taze örnek varken >70 km/h delta’yı reddet.
         if hasSpeed,
@@ -483,7 +555,8 @@ final class EtubuVehicleTelemetry: ObservableObject {
         let gatedPower: Int? = {
             guard let powerKw else { return self.powerKw }
             if gatedKmh == 0 { return abs(powerKw) < 8 ? 0 : powerKw }
-            if abs(powerKw) < 4 { return 0 }
+            // 1–3 kW artık sıfırlanmaz — GPS ivmesi küçük gazı tamamlar
+            if abs(powerKw) < 1 { return 0 }
             if abs(powerKw) > 800 { return self.powerKw }
             return powerKw
         }()
@@ -512,21 +585,31 @@ final class EtubuVehicleTelemetry: ObservableObject {
             }
         }
         // Cap rota aktifken Tesla nav hedef/kalan’ı ezmesin — uygulama rotası bağımsız.
+        // Araç nav bittiğinde sticky alanları temizle (yoksa uyarılar sonsuza açık kalır).
         if !routeActive {
-            if let navDestination, !navDestination.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                self.navDestination = navDestination
-            }
-            if let navRemainKm, navRemainKm >= 0, navRemainKm < 20_000 {
-                self.navRemainKm = navRemainKm
-            }
-            if let navEtaMinutes, navEtaMinutes >= 0, navEtaMinutes < 10_000 {
-                self.navEtaMinutes = navEtaMinutes
-            }
-            if let navDestLat, let navDestLng,
-               navDestLat.isFinite, navDestLng.isFinite,
-               abs(navDestLat) > 0.01 || abs(navDestLng) > 0.01 {
-                routeDestLat = navDestLat
-                routeDestLng = navDestLng
+            let destTrim = (navDestination ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let remainLive = (navRemainKm ?? 0) > 0.15
+            if !destTrim.isEmpty {
+                self.navDestination = destTrim
+                if let navRemainKm, navRemainKm >= 0, navRemainKm < 20_000 {
+                    self.navRemainKm = navRemainKm
+                }
+                if let navEtaMinutes, navEtaMinutes >= 0, navEtaMinutes < 10_000 {
+                    self.navEtaMinutes = navEtaMinutes
+                }
+                if let navDestLat, let navDestLng,
+                   navDestLat.isFinite, navDestLng.isFinite,
+                   abs(navDestLat) > 0.01 || abs(navDestLng) > 0.01 {
+                    routeDestLat = navDestLat
+                    routeDestLng = navDestLng
+                }
+            } else if !remainLive {
+                // Tesla paketinde hedef yok + kalan yok → araç navigasyonu kapalı.
+                if !self.navDestination.isEmpty || (self.navRemainKm ?? 0) > 0 {
+                    self.navDestination = ""
+                    self.navRemainKm = nil
+                    self.navEtaMinutes = nil
+                }
             }
         }
         if let vehicleEnergyAtArrival, (0...100).contains(vehicleEnergyAtArrival) {
@@ -539,6 +622,9 @@ final class EtubuVehicleTelemetry: ObservableObject {
         let now = Date()
         lastDriveAt = now
         lastUpdateAt = now
+        if hasSpeed || gear != nil || powerKw != nil {
+            lastDriveValueAt = now
+        }
         if kmhChanged || powerChanged || gearChanged {
             publishWidgetSnapshot()
         }
@@ -608,6 +694,14 @@ final class EtubuVehicleTelemetry: ObservableObject {
         if gotLiveSample { publishWidgetSnapshot() }
     }
 
+    /// VCSEC GET_STATUS — lock / occupant only; never wipes Infotainment doors/TPMS.
+    func applyVcsecStatus(locked: Bool?, userPresent: Bool?) {
+        guard !EtubuDemoDrive.isActive else { return }
+        if let locked { self.locked = locked }
+        if let userPresent { self.userPresent = userPresent }
+        lastUpdateAt = Date()
+    }
+
     private static let homeLatKey = "etubu.tesla.home.lat"
     private static let homeLngKey = "etubu.tesla.home.lng"
     private static let workLatKey = "etubu.tesla.work.lat"
@@ -624,11 +718,26 @@ final class EtubuVehicleTelemetry: ObservableObject {
         }
     }
 
+    /// TR-safe short-name fold — `"İş".lowercased()` alone breaks (İ → i̇).
+    static func aliasFold(_ label: String) -> String {
+        EtubuTrafikAPI.foldQuery(label)
+    }
+
+    static func isHomeWorkAlias(_ label: String) -> Bool {
+        let fold = aliasFold(label)
+        let aliases: Set<String> = [
+            "home", "ev", "casa", "maison", "zuhause",
+            "work", "is", "office", "travail", "arbeit", "oficina",
+            "my home", "my work", "evim", "isim",
+        ]
+        return aliases.contains(fold)
+    }
+
     static func savedPin(for label: String) -> (lat: Double, lng: Double)? {
-        let fold = label.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let fold = aliasFold(label)
         let ud = UserDefaults.standard
-        let isHome = ["home", "ev", "casa", "maison", "zuhause", "家"].contains(fold)
-        let isWork = ["work", "iş", "is", "office", "travail", "arbeit", "仕事", "oficina"].contains(fold)
+        let isHome = ["home", "ev", "casa", "maison", "zuhause", "my home", "evim"].contains(fold)
+        let isWork = ["work", "is", "office", "travail", "arbeit", "oficina", "my work", "isim"].contains(fold)
         guard isHome || isWork else { return nil }
         let latKey = isHome ? homeLatKey : workLatKey
         let lngKey = isHome ? homeLngKey : workLngKey
@@ -636,6 +745,21 @@ final class EtubuVehicleTelemetry: ObservableObject {
         let lng = ud.double(forKey: lngKey)
         guard abs(lat) > 0.01 || abs(lng) > 0.01 else { return nil }
         return (lat, lng)
+    }
+
+    static func placeFromSavedPin(label: String) -> EtubuRoutePlace? {
+        guard let pin = savedPin(for: label) else { return nil }
+        let fold = aliasFold(label)
+        let isHome = ["home", "ev", "casa", "maison", "zuhause", "my home", "evim"].contains(fold)
+        let nice = isHome ? "Ev" : "İş"
+        return EtubuRoutePlace(
+            label: nice,
+            cityName: "",
+            districtName: "",
+            isMyLocation: false,
+            lat: pin.lat,
+            lng: pin.lng
+        )
     }
 
     func applyTeslaClimate(outsideC: Double?, insideC: Double?, climateOn: Bool?) {
@@ -659,8 +783,10 @@ final class EtubuVehicleTelemetry: ObservableObject {
             if let psi = Self.sanitizeTirePsi(next.psi) {
                 let prev = self[keyPath: keyPath]
                 let psiDelta = prev.psi.map { abs($0 - psi) } ?? 99
-                if prev.psi == nil || psiDelta >= 0.12 || prev.warning != next.warning {
-                    self[keyPath: keyPath] = EtubuTireReading(psi: psi, warning: next.warning)
+                let low = psi / 14.5038 < 2.5
+                let warn = next.warning || low
+                if prev.psi == nil || psiDelta >= 0.12 || prev.warning != warn {
+                    self[keyPath: keyPath] = EtubuTireReading(psi: psi, warning: warn)
                     changed = true
                 }
             } else if next.warning != self[keyPath: keyPath].warning {
@@ -708,31 +834,63 @@ final class EtubuVehicleTelemetry: ObservableObject {
         lastExtrasAt = Date()
     }
 
+    func applyTeslaVehicleLocation(lat: Double?, lng: Double?, heading: Double?) {
+        if let lat, let lng, abs(lat) > 0.01, abs(lng) > 0.01 {
+            latitude = lat
+            longitude = lng
+            lastTeslaGpsAt = Date()
+        }
+        if let heading, heading >= 0 {
+            headingDeg = heading
+        }
+    }
+
     func applyMapLocation(lat: Double?, lng: Double?, heading: Double?) {
+        let teslaFresh = lastTeslaGpsAt.map { Date().timeIntervalSince($0) < 2.8 } ?? false
+        if teslaFresh {
+            if headingDeg == nil, let heading { headingDeg = heading }
+            return
+        }
         if let lat { latitude = lat }
         if let lng { longitude = lng }
         if let heading { headingDeg = heading }
     }
 
-    /// Phone GPS hızı — yalnızca Tesla/OBD oturumu yokken. BLE bağlıyken asla ezmez.
-    func applyGpsSpeedBridge(kmh: Int) {
+        /// Phone GPS hızı. Tesla HUD’u ezmez ama ses planı için her zaman dv/dt yazar.
+    func applyGpsSpeedBridge(kmh: Double) {
         if EtubuDemoDrive.isActive { return }
-        // Kesin kaynak: Tesla oturumu (connected / reconnect / connecting / paired live).
-        if source == .tesla { return }
-        if connectionState == .connected
+        let next = max(0, kmh.isFinite ? kmh : 0)
+        // Tesla bağlıyken kadranı ezme — GPS mikro-ivmeyi sese ver.
+        let teslaOwnsHUD = source == .tesla
+            || connectionState == .connected
             || connectionState == .reconnecting
             || connectionState == .connecting
             || connectionState == .pairing
-            || connectionState == .waitingForCard {
+            || connectionState == .waitingForCard
+        let teslaDriveStale = lastDriveValueAt.map { Date().timeIntervalSince($0) > 3.5 } ?? true
+        if next >= 0.8 {
+            lastGpsSampleAt = Date()
+            gpsKmhFine = next
+            noteSpeedSample(next, updateFine: !teslaOwnsHUD || teslaDriveStale)
+        } else if !teslaOwnsHUD {
+            accelKmhS *= 0.45
+            if abs(accelKmhS) < 0.08 { accelKmhS = 0 }
+            kmhFine = 0
+        }
+        // Yedek 2: Tesla paketi donduysa GPS kadranı canlı tutar.
+        if teslaOwnsHUD, teslaDriveStale, next >= 2.4 {
+            self.kmh = Int(next.rounded())
+            self.kmhFine = next
+            lastUpdateAt = Date()
             return
         }
+        if teslaOwnsHUD { return }
         if source == .obd {
             let age = lastDriveAt.map { Date().timeIntervalSince($0) } ?? (connectionFreshnessSeconds ?? 999)
             if age < 0.9 { return }
         }
-        let next = max(0, kmh)
-        // < 5 km/h → park / GPS noise — sıfırla
-        if next < 5 {
+        // < 2.4 km/h → park / GPS noise — HUD sıfır; ses örneği yukarıda alındı
+        if next < 2.4 {
             if source == .gps || source == .none {
                 if self.kmh != 0 { self.kmh = 0 }
                 if source == .gps {
@@ -742,7 +900,8 @@ final class EtubuVehicleTelemetry: ObservableObject {
             }
             return
         }
-        self.kmh = next
+        self.kmh = Int(next.rounded())
+        self.kmhFine = next
         if source == .none || source == .gps {
             source = .gps
             lastUpdateAt = Date()
@@ -770,6 +929,7 @@ final class EtubuVehicleTelemetry: ObservableObject {
         guard kmh >= 0, kmh <= 280 else { return }
         let gated = kmh < 5 ? 0 : max(0, kmh)
         if self.kmh != gated { self.kmh = gated }
+        noteSpeedSample(Double(gated))
         self.rpm = max(0, rpm)
         self.coolantC = coolant
         self.voltageV = voltage

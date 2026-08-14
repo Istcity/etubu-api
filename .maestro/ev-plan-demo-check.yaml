@@ -8,36 +8,9 @@ appId: com.etubu.app
     arguments:
       etubuSkipOnboarding: true
       etubuForcePremium: true
+      etubuForceLangTr: true
 - setOrientation: PORTRAIT
-- runFlow: dismiss-permissions.yaml
-- extendedWaitUntil:
-    visible:
-      id: "etubu.legal.checkbox"
-    timeout: 20000
-- tapOn:
-    id: "etubu.legal.checkbox"
-- tapOn:
-    id: "etubu.legal.accept"
-    optional: true
-- tapOn:
-    point: "50%,92%"
-    optional: true
-- waitForAnimationToEnd:
-    timeout: 2000
-- runFlow: dismiss-permissions.yaml
-- runFlow:
-    when:
-      visible:
-        id: "etubu.sim.skip"
-    commands:
-      - tapOn:
-          id: "etubu.sim.skip"
-      - waitForAnimationToEnd:
-          timeout: 1500
-- extendedWaitUntil:
-    visible:
-      id: "etubu.settings.open"
-    timeout: 25000
+- runFlow: setup-legal.yaml
 - tapOn:
     id: "etubu.settings.open"
 - runFlow: scroll-to-demo.yaml
@@ -83,10 +56,15 @@ appId: com.etubu.app
 - tapOn:
     id: "etubu.settings.open"
 - scrollUntilVisible:
-    element: "EV rota planı"
+    element:
+      id: "etubu.settings.evRoutePlan"
     direction: DOWN
-    timeout: 12000
-- assertVisible: "EV rota planı"
+    timeout: 25000
+    speed: 40
+    visibilityPercentage: 40
+- assertVisible:
+    id: "etubu.settings.evRoutePlan"
+- assertVisible: "Varışta en az şarj"
 - tapOn:
     id: "etubu.settings.done"
     optional: true

@@ -449,9 +449,7 @@ final class EtubuDemoDrive: ObservableObject {
         let w = EtubuDriveWarnings.shared
         w.hazards = list
         w.remainingHazards = list
-        w.brief = EtubuRouteBriefSummary(
-            radarCount: 2, controlCount: 1, corridorCount: 1, chargeCount: 1, weatherCount: 1
-        )
+        w.brief = EtubuRouteBriefSummary.from(hazards: list)
         w.remainingBrief = w.brief
         w.corridorActive = false
         w.corridorLabel = "TEM / O-4"

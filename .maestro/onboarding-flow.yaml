@@ -1,0 +1,66 @@
+appId: com.etubu.app
+---
+# 4-page onboarding: İlerle → ses bilgi kartı → Başla (Atla son sayfada yok)
+- launchApp:
+    clearState: true
+    permissions:
+      all: allow
+      notifications: deny
+    arguments:
+      etubuForcePremium: true
+      etubuForceLangTr: true
+- runFlow: dismiss-permissions.yaml
+- extendedWaitUntil:
+    visible:
+      id: "etubu.legal.checkbox"
+    timeout: 20000
+- tapOn:
+    id: "etubu.legal.checkbox"
+- waitForAnimationToEnd:
+    timeout: 400
+- tapOn:
+    id: "etubu.legal.accept"
+    optional: true
+- tapOn:
+    point: "50%,90%"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 1500
+- runFlow: dismiss-permissions.yaml
+- extendedWaitUntil:
+    visible:
+      id: "etubu.sim.root"
+    timeout: 20000
+- assertVisible:
+    id: "etubu.sim.skip"
+- assertVisible:
+    id: "etubu.sim.continue"
+- tapOn:
+    id: "etubu.sim.continue"
+- waitForAnimationToEnd:
+    timeout: 800
+- assertVisible:
+    id: "etubu.sim.continue"
+- tapOn:
+    id: "etubu.sim.continue"
+- waitForAnimationToEnd:
+    timeout: 800
+- tapOn:
+    id: "etubu.sim.continue"
+- waitForAnimationToEnd:
+    timeout: 800
+- assertNotVisible:
+    id: "etubu.sim.skip"
+- assertVisible:
+    id: "etubu.sim.start"
+- assertVisible:
+    id: "etubu.sim.audio.card"
+- tapOn:
+    id: "etubu.sim.start"
+- waitForAnimationToEnd:
+    timeout: 2000
+- extendedWaitUntil:
+    visible:
+      id: "etubu.settings.open"
+    timeout: 25000
+- assertVisible: "km/h"

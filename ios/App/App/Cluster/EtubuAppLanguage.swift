@@ -6,6 +6,18 @@ enum EtubuAppLanguage: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    var locale: Locale {
+        switch self {
+        case .tr: return Locale(identifier: "tr_TR")
+        case .en: return Locale(identifier: "en_US")
+        case .de: return Locale(identifier: "de_DE")
+        case .fr: return Locale(identifier: "fr_FR")
+        case .es: return Locale(identifier: "es_ES")
+        case .ja: return Locale(identifier: "ja_JP")
+        case .ru: return Locale(identifier: "ru_RU")
+        }
+    }
+
     var title: String {
         switch self {
         case .tr: return "Türkçe"
@@ -18,10 +30,10 @@ enum EtubuAppLanguage: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Rota / radar / şarj / hava — dil bağımsız (OSM global; EGM radar yalnızca TR).
+    /// Rota / radar / şarj / hava — dil bağımsız (OSM global; TR koridor cache yalnız TR dil).
     var criticalAlertsEnabled: Bool { true }
 
-    /// Uyarı TTS klipleri yalnızca Türkçe UI’da.
+    /// Uyarı TTS / klipler yalnız Türkçe UI’da. Diğer dillerde yalnızca bip.
     var warnTtsEnabled: Bool { self == .tr }
 
     private static let storageKey = "etubu.app.language"

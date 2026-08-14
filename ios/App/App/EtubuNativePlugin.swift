@@ -122,23 +122,9 @@ public class EtubuNativePlugin: CAPPlugin, CAPBridgedPlugin {
 
     @objc func setAudioMixMode(_ call: CAPPluginCall) {
         let mode = (call.getString("mode") ?? "blend").lowercased()
-        if #available(iOS 16.2, *) {
-            EtubuLiveActivityController.ensureAudioSession(mixWithOthers: mode != "solo")
-            call.resolve(["ok": true, "mode": mode])
-            return
-        }
-        do {
-            let session = AVAudioSession.sharedInstance()
-            if mode == "solo" {
-                try session.setCategory(.playback, mode: .default, options: [])
-            } else {
-                try session.setCategory(.playback, mode: .default, options: [.mixWithOthers, .allowBluetoothA2DP, .allowAirPlay])
-            }
-            try session.setActive(true, options: [])
-            call.resolve(["ok": true, "mode": mode])
-        } catch {
-            call.resolve(["ok": false, "error": error.localizedDescription])
-        }
+        UserDefaults.standard.set(mode, forKey: "etubu.cluster.mixMode")
+        AppDelegate.activateDriveAudioSession()
+        call.resolve(["ok": true, "mode": mode])
     }
 
     @objc func showAudioRoutePicker(_ call: CAPPluginCall) {
@@ -194,8 +180,11 @@ public class EtubuNativePlugin: CAPPlugin, CAPBridgedPlugin {
         } else {
             do {
                 let session = AVAudioSession.sharedInstance()
-                var opts: AVAudioSession.CategoryOptions = [.allowBluetoothA2DP]
-                if mix { opts.insert(.mixWithOthers) }
+                var opts: AVAudioSession.CategoryOptions = [.allowBluetoothA2DP, .allowAirPlay]
+                if mix {
+                    opts.insert(.mixWithOthers)
+                    opts.insert(.duckOthers)
+                }
                 try session.setCategory(.playback, mode: .default, options: opts)
                 try session.setActive(true)
                 call.resolve(["ok": true, "liveActivity": false, "reason": "iOS 16.2+ required for Live Activity"])

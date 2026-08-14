@@ -1,5 +1,5 @@
 {
-  "originHash" : "4943d18a32f05208550c13b1f875b9c3fde57f16fc0b67710f66cb15cf19dee1",
+  "originHash" : "71ad7c68f08ba19b5824f72e8507f99b17aeb15d306d034921be7b476604fdf7",
   "pins" : [
     {
       "identity" : "swift-protobuf",
@@ -8,15 +8,6 @@
       "state" : {
         "revision" : "55d7a1cc5666b85c13464aea1c4b4a90feccb4c8",
         "version" : "1.38.1"
-      }
-    },
-    {
-      "identity" : "swift-tesla-ble",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/shoujiaxin/swift-tesla-ble",
-      "state" : {
-        "revision" : "68696f6367e23b468c4f5fb2c8007a211fb18764",
-        "version" : "1.0.0"
       }
     }
   ],

@@ -13,18 +13,14 @@ appId: com.etubu.app
 - tapOn:
     id: "etubu.settings.open"
 - extendedWaitUntil:
-    visible: "Uygulama hakkında"
+    visible:
+      id: "etubu.settings.done"
     timeout: 10000
-# Align timeouts with theme-apply-check (flake: 25s scroll often misses Tema mağazası)
-- scrollUntilVisible:
-    element: "Tema mağazası"
-    direction: DOWN
-    timeout: 30000
 - scrollUntilVisible:
     element:
       id: "etubu.theme.tesla"
     direction: DOWN
-    timeout: 25000
+    timeout: 30000
 - assertVisible:
     id: "etubu.theme.tesla"
 - assertVisible:

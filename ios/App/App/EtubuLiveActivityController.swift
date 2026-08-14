@@ -23,16 +23,11 @@ enum EtubuLiveActivityController {
     }
 
     static func ensureAudioSession(mixWithOthers: Bool) {
-        let session = AVAudioSession.sharedInstance()
-        do {
-            var opts: AVAudioSession.CategoryOptions = [.allowBluetoothA2DP, .allowAirPlay]
-            if mixWithOthers {
-                opts.insert(.mixWithOthers)
-            }
-            try session.setCategory(.playback, mode: .default, options: opts)
-            try session.setActive(true, options: [])
-        } catch {
-            print("ETUBU audio session:", error)
+        if mixWithOthers {
+            AppDelegate.activateDriveAudioSession()
+        } else {
+            UserDefaults.standard.set("solo", forKey: "etubu.cluster.mixMode")
+            AppDelegate.activateDriveAudioSession()
         }
     }
 

@@ -1430,8 +1430,9 @@
       kmh = 0;
       audioKmh = 0;
     }
-    // Demo dışında düşük gürültüyü göstergede tutma
-    if (!demoMode && kmh < 2.2) {
+    const accelNow = Number(data.accelKmhS != null ? data.accelKmhS : data.trend) || 0;
+    // Demo dışında crawl gürültüsünü göstergede tutma — ivme varsa ses açık kalsın
+    if (!demoMode && kmh < 2.2 && audioKmh < 2.2 && accelNow < 0.35) {
       kmh = 0;
       audioKmh = 0;
     }
@@ -1439,7 +1440,9 @@
     let gearInfo = running
       ? AudioEngine.setSpeed(audioKmh, {
           source: data.source || "gps",
-          trend: data.trend,
+          trend: data.accelKmhS != null ? data.accelKmhS : data.trend,
+          accelKmhS: data.accelKmhS != null ? data.accelKmhS : data.trend,
+          powerKw: data.powerKw,
         })
       : { gear: 0, rpm: 0.12 };
     updateHud(kmh, gearInfo, { ...data, kmh });
@@ -2356,6 +2359,9 @@
     });
     step("catalog", () => refreshCatalogUi());
     step("ads", () => Ads.init());
+    step("intro", () => {
+      if (typeof SiteIntro !== "undefined") SiteIntro.init();
+    });
     step("music", () => MusicHub.init());
     step("orient", () => loadOrientLock());
     step("hud", () => {

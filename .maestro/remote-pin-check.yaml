@@ -1,0 +1,63 @@
+appId: com.etubu.app
+---
+# Pin bar under road warning + Settings slot pickers (etubuForceRemotePin).
+- launchApp:
+    clearState: true
+    permissions:
+      all: allow
+      notifications: deny
+    arguments:
+      etubuSkipOnboarding: true
+      etubuForcePremium: true
+      etubuForceLangTr: true
+      etubuForceRemotePin: true
+- setOrientation: PORTRAIT
+- runFlow: setup-legal.yaml
+- extendedWaitUntil:
+    visible:
+      id: "etubu.remote.pinnedBar"
+    timeout: 12000
+- assertVisible:
+    id: "etubu.remote.pin.0"
+- assertVisible:
+    id: "etubu.remote.pin.1"
+- assertVisible:
+    id: "etubu.remote.pin.2"
+- tapOn:
+    id: "etubu.settings.open"
+- scrollUntilVisible:
+    element:
+      id: "etubu.settings.remotePin.toggle"
+    direction: DOWN
+    timeout: 25000
+    speed: 40
+    visibilityPercentage: 40
+- assertVisible:
+    id: "etubu.settings.remotePin.toggle"
+- scrollUntilVisible:
+    element:
+      id: "etubu.settings.remotePin.slot0"
+    direction: DOWN
+    timeout: 15000
+    speed: 40
+    visibilityPercentage: 40
+- assertVisible:
+    id: "etubu.settings.remotePin.toggle"
+- assertVisible:
+    id: "etubu.settings.remotePin.slot0"
+- assertVisible:
+    id: "etubu.settings.remotePin.slot1"
+- assertVisible:
+    id: "etubu.settings.remotePin.slot2"
+- assertVisible: "1. buton"
+- tapOn:
+    id: "etubu.settings.done"
+    optional: true
+- tapOn:
+    text: "Tamam"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 1200
+- assertVisible:
+    id: "etubu.remote.pinnedBar"
+- takeScreenshot: qa-remote-pin-bar

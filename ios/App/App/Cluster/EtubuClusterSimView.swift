@@ -6,260 +6,270 @@ extension Notification.Name {
     static let etubuSimFinished = Notification.Name("etubu.sim.finished")
 }
 
-/// Klasik swipe onboarding — 4 ekran, altta dots, Atla + son ekranda Başla.
-/// İzinler (konum + Bluetooth) ilk ekranda istenir.
+/// İlk açılış öğreticisi — 4 sayfa, nokta göstergesi, Atla / İlerle / Başla.
 struct EtubuClusterSimView: View {
     var theme: ClusterTheme
     var onFinished: () -> Void
 
     @State private var page = 0
-    @ObservedObject private var permissions = EtubuSimPermissionState.shared
+    @State private var dismissing = false
 
-    private var pages: [OnboardPage] {
+    private var pages: [EtubuOnboardPage] {
         [
-            OnboardPage(
-                icon: "sparkles",
+            EtubuOnboardPage(
+                symbol: "speedometer",
                 title: EtubuClusterL10n.t("simPage1Title"),
-                body: EtubuClusterL10n.t("simPage1Body")
+                body: EtubuClusterL10n.t("simPage1Body"),
+                card: nil
             ),
-            OnboardPage(
-                icon: "antenna.radiowaves.left.and.right",
+            EtubuOnboardPage(
+                symbol: "car.side.front.open",
                 title: EtubuClusterL10n.t("simPage2Title"),
-                body: EtubuClusterL10n.t("simPage2Body")
+                body: EtubuClusterL10n.t("simPage2Body"),
+                card: nil
             ),
-            OnboardPage(
-                icon: "point.topleft.down.to.point.bottomright.curvepath",
+            EtubuOnboardPage(
+                symbol: "point.topleft.down.to.point.bottomright.curvepath",
                 title: EtubuClusterL10n.t("simPage3Title"),
-                body: EtubuClusterL10n.t("simPage3Body")
+                body: EtubuClusterL10n.t("simPage3Body"),
+                card: nil
             ),
-            OnboardPage(
-                icon: "waveform",
+            EtubuOnboardPage(
+                symbol: "speaker.wave.2.fill",
                 title: EtubuClusterL10n.t("simPage4Title"),
-                body: EtubuClusterL10n.t("simPage4Body")
+                body: EtubuClusterL10n.t("simPage4Body"),
+                card: EtubuClusterL10n.t("simAudioCard")
             ),
         ]
     }
 
+    private var isLast: Bool { page >= pages.count - 1 }
+
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: theme.canvasGradient,
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            EtubuSheetBackdrop(theme: theme)
 
             VStack(spacing: 0) {
-                HStack {
-                    Text(EtubuClusterL10n.t("simSkip"))
-                        .font(EtubuClusterFonts.ui(15, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.8))
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 12)
-                        .frame(minWidth: 72, minHeight: 44)
-                        .background(Capsule().fill(Color.white.opacity(0.14)))
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            finish(requestRemainder: false)
-                        }
-                        .accessibilityLabel(EtubuClusterL10n.t("simSkip"))
-                        .accessibilityAddTraits(.isButton)
-                        .accessibilityIdentifier("etubu.sim.skip")
-                        .accessibilityAction {
-                            finish(requestRemainder: false)
-                        }
-                    Spacer()
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 12)
-                .safeAreaPadding(.top, 8)
-                .zIndex(20)
+                topBar
+                    .padding(.horizontal, 20)
+                    .padding(.top, 10)
+                    .safeAreaPadding(.top, 6)
 
                 TabView(selection: $page) {
                     ForEach(Array(pages.enumerated()), id: \.offset) { index, item in
-                        pageContent(item, index: index)
+                        EtubuOnboardPageView(page: item, index: index, theme: theme)
                             .tag(index)
                     }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
-                .animation(.easeInOut(duration: 0.25), value: page)
-                .clipped()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .animation(.easeInOut(duration: 0.28), value: page)
 
                 progressDots
-                    .padding(.top, 8)
-                    .padding(.bottom, 12)
-                    .zIndex(20)
+                    .padding(.top, 10)
+                    .padding(.bottom, 14)
 
                 bottomCTA
                     .padding(.horizontal, 24)
                     .padding(.bottom, 28)
-                    .padding(.top, 8)
-                    .frame(maxWidth: .infinity)
-                    .background(theme.canvas.opacity(0.97))
-                    .zIndex(40)
+                    .padding(.top, 4)
             }
         }
-        .onAppear {
-            // Konum/Bluetooth izinlerini otomatik isteme — legal/onboarding üstüne
-            // sistem diyaloğu biner ve “siyah ekran / takılı” gibi görünür.
-        }
+        .opacity(dismissing ? 0 : 1)
+        .offset(x: dismissing ? -36 : 0)
+        .preferredColorScheme(.dark)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("etubu.sim.root")
     }
 
-    private func pageContent(_ item: OnboardPage, index: Int) -> some View {
-        let shot = EtubuOnboardShot.forPage(index)
-        return ScrollView(showsIndicators: false) {
-            VStack(spacing: 18) {
-                Spacer(minLength: 8)
-
-                VStack(spacing: 10) {
-                    if index == 0 {
-                        EtubuBrandMark(size: 44, showGlow: true)
-                    } else {
-                        Image(systemName: item.icon)
-                            .font(.system(size: 28, weight: .semibold))
-                            .foregroundStyle(theme.accent)
-                            .frame(width: 52, height: 52)
-                            .background(Circle().fill(theme.accent.opacity(0.14)))
-                    }
-
-                    Text(item.title)
-                        .font(EtubuClusterFonts.ui(24, weight: .bold))
-                        .foregroundStyle(.white)
-                        .multilineTextAlignment(.center)
-                    Text(item.body)
-                        .font(EtubuClusterFonts.ui(14, weight: .medium))
-                        .foregroundStyle(theme.secondaryText)
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, 4)
-                }
-
-                // Tanıtım metninin altında gerçek ekran görüntüleri + işaretlemeler
-                VStack(spacing: 10) {
-                    EtubuOnboardScreenshotCard(
-                        shot: shot,
-                        theme: theme,
-                        emphasized: true,
-                        width: index == 2 ? 260 : 168,
-                        height: index == 2 ? 148 : 280
-                    )
-
-                    EtubuOnboardScreenshotStrip(theme: theme, highlight: shot)
-                }
-                .padding(.top, 2)
-
-                if index == 0 {
-                    permissionHints
-                        .padding(.top, 4)
-                }
-
-                if index == 2 {
-                    Text(EtubuClusterL10n.t("premiumFreeNote"))
-                        .font(EtubuClusterFonts.ui(12, weight: .semibold))
-                        .foregroundStyle(theme.accent)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
-                        .frame(maxWidth: .infinity)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(theme.accent.opacity(0.12))
-                        )
-                        .accessibilityIdentifier("etubu.sim.premium.note")
-                }
-
-                Spacer(minLength: 12)
-            }
-            .padding(.horizontal, 24)
-            .frame(maxWidth: .infinity)
-        }
-    }
-
-    private var permissionHints: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            permRow(
-                ok: permissions.locationReady,
-                title: EtubuClusterL10n.t("simPermLocation"),
-                detail: EtubuClusterL10n.t("simPermLocationDetail")
-            )
-            permRow(
-                ok: permissions.bluetoothAsked,
-                title: EtubuClusterL10n.t("simPermBluetooth"),
-                detail: EtubuClusterL10n.t("simPermBluetoothDetail")
-            )
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.white.opacity(0.07))
-        )
-    }
-
-    private func permRow(ok: Bool, title: String, detail: String) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: ok ? "checkmark.circle.fill" : "circle")
-                .foregroundStyle(ok ? Color.green : theme.mutedText)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title)
-                    .font(EtubuClusterFonts.ui(13, weight: .semibold))
-                    .foregroundStyle(.white)
-                Text(detail)
-                    .font(EtubuClusterFonts.ui(11, weight: .medium))
-                    .foregroundStyle(theme.mutedText)
-            }
+    private var topBar: some View {
+        HStack {
+            EtubuBrandMark(size: 28, showGlow: true)
             Spacer(minLength: 0)
+            if !isLast {
+                Button(EtubuClusterL10n.t("simSkip")) {
+                    complete()
+                }
+                .font(EtubuClusterFonts.ui(15, weight: .semibold))
+                .foregroundStyle(theme.primaryText)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 9)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(.ultraThinMaterial)
+                )
+                .overlay(
+                    Capsule(style: .continuous)
+                        .strokeBorder(theme.stroke.opacity(0.7), lineWidth: 1)
+                )
+                .accessibilityLabel(EtubuClusterL10n.t("simSkip"))
+                .accessibilityIdentifier("etubu.sim.skip")
+                .transition(.opacity.combined(with: .scale(scale: 0.92)))
+            }
         }
+        .frame(minHeight: 44)
+        .animation(.easeInOut(duration: 0.22), value: isLast)
     }
 
     private var progressDots: some View {
         HStack(spacing: 8) {
             ForEach(0..<pages.count, id: \.self) { i in
                 Capsule()
-                    .fill(i == page ? theme.accent : Color.white.opacity(0.25))
+                    .fill(i == page ? theme.accent : theme.stroke.opacity(0.55))
                     .frame(width: i == page ? 22 : 8, height: 8)
-                    .animation(.easeOut(duration: 0.2), value: page)
+                    .shadow(color: i == page ? theme.glow.opacity(0.55) : .clear, radius: 6)
             }
         }
+        .animation(.easeOut(duration: 0.22), value: page)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(page + 1) / \(pages.count)")
     }
 
     private var bottomCTA: some View {
-        let isLast = page >= pages.count - 1
-        return EtubuSimUIKitButton(
+        EtubuSimUIKitButton(
             title: isLast ? EtubuClusterL10n.t("simStart") : EtubuClusterL10n.t("simContinue"),
             accessibilityId: isLast ? "etubu.sim.start" : "etubu.sim.continue",
             accent: UIColor(theme.accent)
         ) {
             if isLast {
-                finish(requestRemainder: false)
+                complete()
             } else {
-                withAnimation { page += 1 }
+                withAnimation(.easeInOut(duration: 0.28)) { page += 1 }
             }
         }
-        .frame(height: 52)
+        .frame(height: 54)
     }
 
-    private func finish(requestRemainder: Bool) {
+    private func complete() {
+        guard !dismissing else { return }
         UserDefaults.standard.set(true, forKey: Self.doneKey)
         UserDefaults.standard.synchronize()
         NotificationCenter.default.post(name: .etubuSimFinished, object: nil)
-        if requestRemainder {
-            if !permissions.locationReady {
-                permissions.requestLocation(completion: nil)
-            }
-            if !permissions.bluetoothAsked {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                    permissions.requestBluetooth(completion: nil)
-                }
-            }
+        withAnimation(.easeInOut(duration: 0.45)) {
+            dismissing = true
         }
-        onFinished()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.42) {
+            onFinished()
+        }
     }
 
-    /// v4 — gerçek ekran görüntüleri + işaretlemeler
-    static let doneKey = "etubu.cluster.simDone.v4"
-    static var isDone: Bool { UserDefaults.standard.bool(forKey: doneKey) }
+    static let doneKey = "etubu.cluster.simDone.v5"
+    private static let legacyDoneKeys = [
+        "etubu.cluster.simDone.v4",
+        "etubu.cluster.simDone.v3",
+        "etubu.cluster.simDone",
+    ]
+
+    static var isDone: Bool {
+        if UserDefaults.standard.bool(forKey: doneKey) { return true }
+        return legacyDoneKeys.contains { UserDefaults.standard.bool(forKey: $0) }
+    }
+}
+
+private struct EtubuOnboardPage {
+    let symbol: String
+    let title: String
+    let body: String
+    let card: String?
+}
+
+private struct EtubuOnboardPageView: View {
+    let page: EtubuOnboardPage
+    let index: Int
+    var theme: ClusterTheme
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: 22) {
+                Spacer(minLength: 12)
+                EtubuOnboardHero(symbol: page.symbol, theme: theme, brand: index == 0)
+                VStack(spacing: 10) {
+                    Text(page.title)
+                        .font(EtubuClusterFonts.ui(26, weight: .bold))
+                        .foregroundStyle(theme.primaryText)
+                        .multilineTextAlignment(.center)
+                    Text(page.body)
+                        .font(EtubuClusterFonts.ui(16, weight: .medium))
+                        .foregroundStyle(theme.secondaryText)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.horizontal, 8)
+
+                if let card = page.card, !card.isEmpty {
+                    HStack(alignment: .top, spacing: 12) {
+                        Image(systemName: "info.circle.fill")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(theme.accent)
+                            .padding(.top, 1)
+                        Text(card)
+                            .font(EtubuClusterFonts.ui(14, weight: .medium))
+                            .foregroundStyle(theme.primaryText)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .strokeBorder(theme.stroke.opacity(0.85), lineWidth: 1.1)
+                    )
+                    .accessibilityIdentifier("etubu.sim.audio.card")
+                }
+
+                Spacer(minLength: 20)
+            }
+            .padding(.horizontal, 28)
+            .frame(maxWidth: .infinity)
+        }
+    }
+}
+
+private struct EtubuOnboardHero: View {
+    let symbol: String
+    var theme: ClusterTheme
+    var brand: Bool
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [theme.accent.opacity(0.28), theme.accent.opacity(0.04), .clear],
+                        center: .center,
+                        startRadius: 8,
+                        endRadius: 88
+                    )
+                )
+                .frame(width: 176, height: 176)
+
+            Circle()
+                .fill(.ultraThinMaterial)
+                .frame(width: 112, height: 112)
+                .overlay(
+                    Circle()
+                        .strokeBorder(
+                            LinearGradient(
+                                colors: [theme.accent.opacity(0.85), theme.stroke.opacity(0.4)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1.4
+                        )
+                )
+                .shadow(color: theme.glow.opacity(0.45), radius: 16, y: 4)
+
+            if brand {
+                EtubuBrandMark(size: 48, showGlow: true)
+            } else {
+                Image(systemName: symbol)
+                    .font(.system(size: 40, weight: .semibold))
+                    .foregroundStyle(theme.accent)
+                    .shadow(color: theme.glow.opacity(0.55), radius: 8)
+            }
+        }
+        .frame(height: 176)
+        .accessibilityHidden(true)
+    }
 }
 
 /// Maestro/XCTest güvenilir hit — `accessibilityActivate` (touchUpInside değil) kullanır.
@@ -276,7 +286,7 @@ private struct EtubuSimUIKitButton: UIViewRepresentable {
         b.titleLabel?.font = .systemFont(ofSize: 17, weight: .bold)
         b.setTitleColor(.black, for: .normal)
         b.backgroundColor = accent
-        b.layer.cornerRadius = 26
+        b.layer.cornerRadius = 27
         b.clipsToBounds = true
         b.addTarget(context.coordinator, action: #selector(Coordinator.tap), for: .touchUpInside)
         b.onActivate = { [weak coordinator = context.coordinator] in
@@ -311,12 +321,6 @@ private final class EtubuA11yButton: UIButton {
         onActivate?()
         return true
     }
-}
-
-private struct OnboardPage {
-    let icon: String
-    let title: String
-    let body: String
 }
 
 @MainActor

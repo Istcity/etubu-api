@@ -1,89 +1,185 @@
 import Foundation
 import AVFoundation
 import UIKit
+import AudioToolbox
 
-/// Native ElevenLabs warn-clip player — does not depend on Cap WebView / TTS.
+/// Native warn clips + beeps — Cap WebView bağımsız (SwiftUI overlay altında da çalışır).
+/// Klipler Türkçe; UI dili ne olursa olsun çalınır (Tesla tarzı duck over BT).
+/// Native warn tones — Cap WebView bağımsız. TTS yok; her olay türünün kendi bip’i var.
 enum EtubuWarnVoice {
     private static var players: [AVAudioPlayer] = []
+    private static var playerBoxes: [PlayerBox] = []
     private static var playToken = 0
     private static var lastKey = ""
     private static var lastAt = Date.distantPast
+    private static var toneEngines: [AVAudioEngine] = []
 
-    private static let distM: [Int] = [
-        50, 100, 150, 200, 250, 300, 350, 400, 500, 550, 600, 650, 700, 750, 800, 850, 900, 950,
-    ]
-    private static let distKm: [Int] = [1, 2, 3, 4, 5, 10]
-    private static let limits: [Int] = [50, 70, 82, 90, 100, 110, 120, 130, 140]
-
-    /// Speak a HUD/demo phrase using modular clips. Returns true if handled.
+    /// TTS kaldırıldı — çağıranlar kırılmasın diye no-op.
     @discardableResult
-    static func speak(_ text: String, key: String? = nil, urgent: Bool = false) -> Bool {
-        guard EtubuAppLanguage.current.warnTtsEnabled else { return false }
-        let ttsOn = UserDefaults.standard.object(forKey: "etubu_radar_tts") as? Bool ?? true
-        guard ttsOn else { return false }
-        let msg = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !msg.isEmpty else { return false }
-
-        let debounceKey = key ?? msg
-        let now = Date()
-        let gap: TimeInterval = urgent ? 12 : 26
-        if debounceKey == lastKey, now.timeIntervalSince(lastAt) < gap { return true }
-        lastKey = debounceKey
-        lastAt = now
-
-        guard let keys = composeKeys(msg), !keys.isEmpty else { return false }
-        let urls = keys.compactMap { urlForClip($0) }
-        guard urls.count == keys.count else { return false }
-
-        AppDelegate.activateAlertDuckSession()
-        playToken &+= 1
-        let token = playToken
-        players.forEach { $0.stop() }
-        players.removeAll()
-
-        let volume = Float(max(0.15, min(1.0, UserDefaults.standard.object(forKey: "etubu.cluster.alertVolume") as? Double ?? 0.9)))
-        playSequence(urls: urls, index: 0, token: token, volume: volume)
-        return true
+    static func speak(
+        _ text: String,
+        key: String? = nil,
+        urgent: Bool = false,
+        completion: (() -> Void)? = nil
+    ) -> Bool {
+        _ = text
+        _ = key
+        _ = urgent
+        completion?()
+        return false
     }
 
-    /// Stop in-flight warn clips (demo end / mute path).
+    /// Native beeps (no Cap AudioContext) — works over BT A2DP with duck session.
+    static func playBeeps(count: Int, urgent: Bool) {
+        playKindCue(kind: urgent ? "corridor" : "radar", urgent: urgent, countOverride: count)
+    }
+
+    /// Distinct pattern per hazard kind (Waze/Coyote-style: tone identity, not speech).
+    static func playKindCue(kind: String, urgent: Bool, countOverride: Int? = nil) {
+        let beepsOn = UserDefaults.standard.object(forKey: "etubu_radar_beeps") as? Bool ?? true
+        guard beepsOn else { return }
+        AppDelegate.activateAlertDuckSession()
+        let vol = max(0.18, min(1.0, UserDefaults.standard.object(forKey: "etubu.cluster.alertVolume") as? Double ?? 0.9))
+        let tones = countOverride != nil
+            ? Array(repeating: (urgent ? 1180.0 : 880.0, urgent ? 0.09 : 0.11), count: max(1, countOverride!))
+            : Self.tonePattern(kind: kind, urgent: urgent)
+        playToken &+= 1
+        let token = playToken
+        var delay = 0.0
+        for (i, spec) in tones.enumerated() {
+            let d = delay
+            DispatchQueue.main.asyncAfter(deadline: .now() + d) {
+                guard token == playToken else { return }
+                playTone(frequency: spec.0, duration: spec.1, volume: Float(vol * (urgent ? 0.9 : 0.7)))
+            }
+            delay += spec.1 + (urgent ? 0.09 : 0.12)
+            if i == tones.count - 1 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay + 0.25) {
+                    guard token == playToken else { return }
+                    AppDelegate.deactivateAlertDuckSession()
+                }
+            }
+        }
+        if tones.isEmpty {
+            AppDelegate.deactivateAlertDuckSession()
+        }
+    }
+
+    private static func tonePattern(kind: String, urgent: Bool) -> [(Double, TimeInterval)] {
+        if urgent, kind == "corridor" {
+            return [(1320, 0.08), (1320, 0.08), (1480, 0.14)]
+        }
+        switch kind {
+        case "radar":
+            return [(1180, 0.08), (1180, 0.10)]
+        case "corridor":
+            return [(660, 0.16), (820, 0.12)]
+        case "railway":
+            return [(520, 0.12), (390, 0.18)]
+        case "tunnel":
+            return [(420, 0.22)]
+        case "winding", "climb":
+            return [(780, 0.10), (640, 0.14)]
+        case "road_condition", "animal":
+            return [(700, 0.12), (560, 0.12)]
+        case "weather":
+            return [(500, 0.18)]
+        case "charge":
+            return [(900, 0.14)]
+        case "traffic_light":
+            return [(1040, 0.07), (880, 0.07)]
+        case "stop", "give_way":
+            return [(980, 0.10)]
+        case "crossing", "bump":
+            return [(940, 0.06)]
+        case "control":
+            return [(1400, 0.07), (1400, 0.07), (1400, 0.10)]
+        default:
+            return [(880, 0.11)]
+        }
+    }
+
     static func stopAll() {
         playToken &+= 1
-        players.forEach { $0.stop() }
+        players.forEach {
+            $0.delegate = nil
+            $0.stop()
+        }
         players.removeAll()
+        playerBoxes.removeAll()
+        toneEngines.forEach { $0.stop() }
+        toneEngines.removeAll()
         lastKey = ""
         lastAt = Date.distantPast
         AppDelegate.deactivateAlertDuckSession()
     }
 
-    private static func playSequence(urls: [URL], index: Int, token: Int, volume: Float) {
-        guard token == playToken else { return }
-        guard index < urls.count else {
-            AppDelegate.deactivateAlertDuckSession()
-            return
+    // MARK: - Playback
+
+    private final class PlayerBox: NSObject, AVAudioPlayerDelegate {
+        let player: AVAudioPlayer
+        init(player: AVAudioPlayer) {
+            self.player = player
+            super.init()
+            player.delegate = self
         }
-        do {
-            let player = try AVAudioPlayer(contentsOf: urls[index])
-            player.volume = volume
-            player.prepareToPlay()
-            players = [player]
-            // Re-assert duck session in case Music stole the route mid-sequence.
-            AppDelegate.activateAlertDuckSession()
-            player.play()
-            let delay = player.duration + (urgentGap(index: index, total: urls.count))
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                playSequence(urls: urls, index: index + 1, token: token, volume: volume)
-            }
-        } catch {
-            // Skip broken clip; continue chain.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                playSequence(urls: urls, index: index + 1, token: token, volume: volume)
-            }
+        func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+            player.delegate = nil
+            EtubuWarnVoice.dropBox(self)
+        }
+        func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: Error?) {
+            player.delegate = nil
+            EtubuWarnVoice.dropBox(self)
         }
     }
 
-    private static func urgentGap(index: Int, total: Int) -> TimeInterval {
-        index + 1 < total ? 0.06 : 0
+    private static func dropBox(_ box: PlayerBox) {
+        box.player.delegate = nil
+        players.removeAll { $0 === box.player }
+        playerBoxes.removeAll { $0 === box }
+    }
+
+    private static func playTone(frequency: Double, duration: TimeInterval, volume: Float) {
+        let engine = AVAudioEngine()
+        let player = AVAudioPlayerNode()
+        engine.attach(player)
+        let sampleRate: Double = 22_050
+        let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1)!
+        engine.connect(player, to: engine.mainMixerNode, format: format)
+        engine.mainMixerNode.outputVolume = volume
+
+        let frameCount = AVAudioFrameCount(duration * sampleRate)
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else {
+            AudioServicesPlaySystemSound(1057)
+            return
+        }
+        buffer.frameLength = frameCount
+        let data = buffer.floatChannelData![0]
+        let twoPi = 2.0 * Double.pi
+        for i in 0..<Int(frameCount) {
+            let t = Double(i) / sampleRate
+            var sample = sin(twoPi * frequency * t)
+            let fade = min(1, Double(i) / 200) * min(1, Double(Int(frameCount) - i) / 400)
+            sample *= fade
+            data[i] = Float(sample)
+        }
+        do {
+            try engine.start()
+            while toneEngines.count >= 4 {
+                let old = toneEngines.removeFirst()
+                old.stop()
+            }
+            toneEngines.append(engine)
+            player.scheduleBuffer(buffer, at: nil, options: []) {
+                DispatchQueue.main.async {
+                    engine.stop()
+                    toneEngines.removeAll { $0 === engine }
+                }
+            }
+            player.play()
+        } catch {
+            AudioServicesPlaySystemSound(1057)
+        }
     }
 
     private static func urlForClip(_ key: String) -> URL? {
@@ -94,6 +190,8 @@ enum EtubuWarnVoice {
                 .appendingPathComponent("public/assets/audio/warn/\(name).mp3"),
             Bundle.main.bundleURL
                 .appendingPathComponent("public/assets/audio/warn/\(name).mp3"),
+            Bundle.main.bundleURL
+                .appendingPathComponent("www/assets/audio/warn/\(name).mp3"),
         ]
         for u in candidates {
             if let u, FileManager.default.fileExists(atPath: u.path) { return u }
@@ -101,21 +199,33 @@ enum EtubuWarnVoice {
         return nil
     }
 
-    // MARK: - Phrase → clip keys (mirrors public/js/warn-voice.js)
+    // MARK: - Phrase → clip keys (unused after TTS removal; kept for clip catalog)
+
+    private static let distM: [Int] = [
+        50, 100, 150, 200, 250, 300, 350, 400, 500, 550, 600, 650, 700, 750, 800, 850, 900, 950,
+    ]
+    private static let distKm: [Int] = [1, 2, 3, 4, 5, 10]
+    private static let limits: [Int] = [50, 70, 82, 90, 100, 110, 120, 130, 140]
 
     static func composeKeys(_ text: String) -> [String]? {
         var s = text
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased(with: Locale(identifier: "tr_TR"))
         guard !s.isEmpty else { return nil }
+
+        // Normalize UI distance labels before punctuation strip.
+        // After "1.2 km" → "1.2 kilometre", do not strip the decimal point.
         s = s
-            .replacingOccurrences(of: #"[.,;:!?"']"#, with: " ", options: .regularExpression)
-            .replacingOccurrences(of: #"\b(\d+)\s*km\b"#, with: " $1 kilometre ", options: .regularExpression)
+            .replacingOccurrences(of: ",", with: ".")
+            .replacingOccurrences(of: #"\b(\d+(?:\.\d+)?)\s*km\b"#, with: " $1 kilometre ", options: .regularExpression)
             .replacingOccurrences(of: #"\b(\d+)\s*m\b"#, with: " $1 metre ", options: .regularExpression)
+            .replacingOccurrences(of: #"[;:!?"'·]"#, with: " ", options: .regularExpression)
         s = s.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespaces)
 
-        if s == "yavaşla" || s == "yavasla" { return ["yavasla"] }
+        if s == "yavaşla" || s == "yavasla" || s.hasPrefix("yavaşla") || s.hasPrefix("yavasla") {
+            return ["yavasla"]
+        }
         if s == "koridor bitti" { return ["koridor_bitti"] }
 
         if s.hasPrefix("rota hazır") || s.hasPrefix("rota hazir") {
@@ -144,9 +254,23 @@ enum EtubuWarnVoice {
         } else if s.hasPrefix("hava olayı") || s.hasPrefix("hava olayi") {
             keys.append("hava_olayi")
             s = stripPrefix(s, patterns: ["hava olayı", "hava olayi"])
-        } else if s.hasPrefix("kontrol") {
+        } else if s.hasPrefix("lastik") || s.hasPrefix("tpms") {
             keys.append("kontrol")
-            s = stripPrefix(s, patterns: ["kontrol"])
+            s = stripPrefix(s, patterns: ["lastik basıncı düşük", "lastik basinci dusuk", "lastik", "tpms"])
+        } else if s.hasPrefix("batarya") || s.hasPrefix("battery") {
+            keys.append("kontrol")
+            s = stripPrefix(s, patterns: ["batarya kritik", "battery critical", "batarya"])
+        } else if s.hasPrefix("kontrol") || s.hasPrefix("demiryolu") || s.hasPrefix("trafik")
+                    || s.hasPrefix("dur ") || s == "dur" || s.hasPrefix("yol ver")
+                    || s.hasPrefix("yaya") || s.hasPrefix("tümsek") || s.hasPrefix("tumsek") {
+            keys.append("kontrol")
+            for p in ["kontrol", "demiryolu geçidi", "demiryolu gecidi", "trafik lambası", "trafik lambasi",
+                      "dur", "yol ver", "yaya geçidi", "yaya gecidi", "tümsek", "tumsek"] {
+                if s.hasPrefix(p) {
+                    s = String(s.dropFirst(p.count)).trimmingCharacters(in: .whitespaces)
+                    break
+                }
+            }
         } else if s.hasPrefix("koridor") {
             keys.append("koridor")
             s = stripPrefix(s, patterns: ["koridor"])
@@ -154,7 +278,8 @@ enum EtubuWarnVoice {
             keys.append("radar")
             s = stripPrefix(s, patterns: ["radar"])
         } else {
-            return nil
+            // Unknown phrase — still try distance-only after a generic radar chime.
+            keys.append("radar")
         }
 
         s = s.trimmingCharacters(in: .whitespaces)
@@ -187,10 +312,11 @@ enum EtubuWarnVoice {
     }
 
     private static func distKey(from s: String) -> String? {
-        if let m = s.range(of: #"(\d+(?:[.,]\d+)?)\s*kilometre"#, options: .regularExpression) {
-            let num = String(s[m]).replacingOccurrences(of: ",", with: ".")
-            if let v = Double(num.split(separator: " ").first.map(String.init) ?? "") {
-                return distKmKey(Int(v.rounded()))
+        if let m = s.range(of: #"(\d+(?:\.\d+)?)\s*kilometre"#, options: .regularExpression) {
+            let chunk = String(s[m])
+            let num = chunk.replacingOccurrences(of: "[^0-9.]", with: "", options: .regularExpression)
+            if let v = Double(num) {
+                return distKmKey(max(1, Int(v.rounded())))
             }
         }
         if let m = s.range(of: #"(\d+)\s*metre"#, options: .regularExpression) {
@@ -281,12 +407,9 @@ enum EtubuWarnVoice {
     private static func firstWordNumber(in s: String) -> Int? {
         let map: [String: Int] = [
             "bir": 1, "iki": 2, "üç": 3, "uc": 3, "dört": 4, "dort": 4,
-            "beş": 5, "bes": 5, "altı": 6, "alti": 6, "yedi": 7, "sekiz": 8, "dokuz": 9, "on": 10,
+            "beş": 5, "bes": 5, "altı": 6, "alti": 6, "yedi": 7, "sekiz": 8, "dokuz": 9,
         ]
         for (w, n) in map where s.contains(w) { return n }
-        if let r = s.range(of: #"\b(\d+)\b"#, options: .regularExpression) {
-            return Int(s[r].filter(\.isNumber))
-        }
         return nil
     }
 }

@@ -252,30 +252,30 @@ struct EtubuRadarSettingsView: View {
         Section {
             Toggle(EtubuClusterL10n.t("warnBeeps"), isOn: $beeps)
                 .disabled(!premium.isPremium)
-            if EtubuAppLanguage.current.warnTtsEnabled {
-                Toggle(EtubuClusterL10n.t("warnTts"), isOn: $tts)
-                    .disabled(!premium.isPremium)
-            }
             Toggle(EtubuClusterL10n.t("warnCards"), isOn: $cards)
                 .disabled(!premium.isPremium)
             Toggle(EtubuClusterL10n.t("warnCorridor"), isOn: $corridor)
                 .disabled(!premium.isPremium)
             Text(premium.isPremium ? EtubuClusterL10n.t("warnSoundsHint") : EtubuClusterL10n.t("premiumLockedWarn"))
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+                .font(EtubuClusterFonts.ui(12, weight: .medium))
+                .foregroundStyle(ClusterTheme.stored.mutedText)
         } header: {
             HStack {
-                Text(EtubuClusterL10n.t("warnSoundsSection"))
+                EtubuSheetSectionTitle(title: EtubuClusterL10n.t("warnSoundsSection"), theme: ClusterTheme.stored, motion: .alerts)
                 if !premium.isPremium {
                     EtubuPremiumBadge(compact: true)
                 }
             }
         }
+        .etubuSheetSection(ClusterTheme.stored)
         .onChange(of: beeps) { _, _ in sync() }
-        .onChange(of: tts) { _, _ in sync() }
         .onChange(of: cards) { _, _ in sync() }
         .onChange(of: corridor) { _, _ in sync() }
-        .onAppear { sync() }
+        .onAppear {
+            tts = false
+            UserDefaults.standard.set(false, forKey: "etubu_radar_tts")
+            sync()
+        }
     }
 
     private func sync() {
@@ -284,12 +284,12 @@ struct EtubuRadarSettingsView: View {
         (function(){
           try {
             localStorage.setItem('etubu_radar_beeps', '\(p && beeps ? "1" : "0")');
-            localStorage.setItem('etubu_radar_tts', '\(p && tts ? "1" : "0")');
+            localStorage.setItem('etubu_radar_tts', '0');
             localStorage.setItem('etubu_radar_cards', '\(p && cards ? "1" : "0")');
             localStorage.setItem('etubu_radar_corridor', '\(p && corridor ? "1" : "0")');
             window.__etubuRadarPrefs = {
               beeps: \(p && beeps),
-              tts: \(p && tts),
+              tts: false,
               cards: \(p && cards),
               corridor: \(p && corridor)
             };

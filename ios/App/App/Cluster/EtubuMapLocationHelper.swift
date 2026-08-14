@@ -229,14 +229,15 @@ final class EtubuMapLocationHelper: NSObject, ObservableObject, CLLocationManage
                 Self.syncForceTrRouteFlag()
             }
             let t = EtubuVehicleTelemetry.shared
+            let course = loc.course
             t.applyMapLocation(
                 lat: lat,
                 lng: lng,
-                heading: t.headingDeg
+                heading: course >= 0 ? course : t.headingDeg
             )
             // Valid CLLocation.speed is m/s (≥ 0); ignore invalid (-1) and crawl noise.
             if loc.speed >= 0, loc.horizontalAccuracy >= 0, loc.horizontalAccuracy < 65 {
-                let gpsKmh = Int((loc.speed * 3.6).rounded())
+                let gpsKmh = loc.speed * 3.6
                 t.applyGpsSpeedBridge(kmh: gpsKmh)
             } else if loc.speed < 0 {
                 t.applyGpsSpeedBridge(kmh: 0)

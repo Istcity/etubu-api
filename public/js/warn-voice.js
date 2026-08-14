@@ -23,11 +23,7 @@ const WarnVoice = (() => {
   let lastAt = 0;
 
   function ttsEnabled() {
-    try {
-      const v = localStorage.getItem("etubu_radar_tts");
-      if (v === "0" || v === "false") return false;
-    } catch (_) {}
-    return true;
+    return false;
   }
 
   function alertVolume() {
@@ -156,14 +152,11 @@ const WarnVoice = (() => {
     if (!raw) return null;
     let s = raw
       .toLocaleLowerCase("tr-TR")
-      .replace(/[.,;:!?"']/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-
-    // normalize digits-with-units early
-    s = s
-      .replace(/\b(\d+)\s*km\b/gi, " $1 kilometre ")
+      .replace(/,/g, ".")
+      // Units before stripping dots so "1.2 km" survives.
+      .replace(/\b(\d+(?:\.\d+)?)\s*km\b/gi, " $1 kilometre ")
       .replace(/\b(\d+)\s*m\b/gi, " $1 metre ")
+      .replace(/[.;:!?"']/g, " ")
       .replace(/\s+/g, " ")
       .trim();
 
@@ -225,9 +218,26 @@ const WarnVoice = (() => {
     } else if (s.startsWith("hava olayı") || s.startsWith("hava olayi")) {
       keys.push("hava_olayi");
       s = s.replace(/^hava\s+olay[iı]\s*/, "");
-    } else if (s.startsWith("kontrol")) {
+    } else if (
+      s.startsWith("kontrol") ||
+      s.startsWith("demiryolu") ||
+      s.startsWith("trafik") ||
+      s.startsWith("dur ") ||
+      s === "dur" ||
+      s.startsWith("yol ver") ||
+      s.startsWith("yaya") ||
+      s.startsWith("tümsek") ||
+      s.startsWith("tumsek") ||
+      s.startsWith("lastik") ||
+      s.startsWith("batarya")
+    ) {
       keys.push("kontrol");
-      s = s.replace(/^kontrol\s*/, "");
+      s = s
+        .replace(
+          /^(kontrol|demiryolu\s+ge[cç]idi|trafik\s+lambas[iı]|dur|yol\s+ver|yaya\s+ge[cç]idi|t[uü]msek|lastik(?:\s+bas[iı]nc[iı]\s+d[uü][sş][uü]k)?|batarya(?:\s+kritik)?)\s*/i,
+          ""
+        )
+        .trim();
     } else if (s.startsWith("koridor")) {
       keys.push("koridor");
       s = s.replace(/^koridor\s*/, "");
@@ -235,7 +245,8 @@ const WarnVoice = (() => {
       keys.push("radar");
       s = s.replace(/^radar\s*/, "");
     } else {
-      return null;
+      // Unknown HUD phrase — still try distance after a generic radar chime.
+      keys.push("radar");
     }
 
     s = s.trim();
