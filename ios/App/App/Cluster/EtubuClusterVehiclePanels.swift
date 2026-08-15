@@ -5,42 +5,26 @@ struct EtubuTPMSGridView: View {
     /// Burun yukarı çizim (dik + yatay sol kart).
     var noseUp: Bool = true
     var compact: Bool = false
+    var maxWidth: CGFloat = 128
+    var maxHeight: CGFloat = 112
     private var theme: ClusterTheme { ClusterTheme.stored }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            ZStack {
-                // Kontur-only (şeffaf dolgu) — tema canvas arkadan görünür
-                Image(noseUp ? "EtubuCarTopUp" : "EtubuCarTop")
-                    .renderingMode(.template)
-                    .resizable()
-                    .interpolation(.high)
-                    .antialiased(true)
-                    .scaledToFit()
-                    .foregroundStyle(theme.tpmsCarStroke)
-                    .accessibilityHidden(true)
+    /// Asset intrinsic ratio (EtubuCarTopUp 680×1408).
+    private static let noseUpRatio: CGFloat = 680.0 / 1408.0
+    private static let noseSideRatio: CGFloat = 1408.0 / 680.0
 
-                GeometryReader { geo in
-                    let w = geo.size.width
-                    let h = geo.size.height
-                    if noseUp {
-                        psiText(telemetry.tpmsFL, corner: "FL").position(x: w * 0.05, y: h * 0.20)
-                        psiText(telemetry.tpmsFR, corner: "FR").position(x: w * 0.95, y: h * 0.20)
-                        psiText(telemetry.tpmsRL, corner: "RL").position(x: w * 0.05, y: h * 0.80)
-                        psiText(telemetry.tpmsRR, corner: "RR").position(x: w * 0.95, y: h * 0.80)
-                    } else {
-                        psiText(telemetry.tpmsFL, corner: "FL").position(x: w * 0.20, y: h * 0.05)
-                        psiText(telemetry.tpmsFR, corner: "FR").position(x: w * 0.20, y: h * 0.95)
-                        psiText(telemetry.tpmsRL, corner: "RL").position(x: w * 0.80, y: h * 0.05)
-                        psiText(telemetry.tpmsRR, corner: "RR").position(x: w * 0.80, y: h * 0.95)
-                    }
+    var body: some View {
+        let fit = Self.fit(in: CGSize(width: maxWidth, height: maxHeight), noseUp: noseUp, compact: compact)
+        VStack(alignment: .leading, spacing: 2) {
+            Group {
+                if noseUp {
+                    noseUpDiagram(carW: fit.carW, carH: fit.carH, gutter: fit.gutter)
+                } else {
+                    noseSideDiagram(carW: fit.carW, carH: fit.carH, gutter: fit.gutter)
                 }
             }
-            .frame(maxWidth: .infinity)
-            .aspectRatio(noseUp ? (680.0 / 1408.0) : (1408.0 / 680.0), contentMode: .fit)
-            // Yatay eski 188 → 132 (−%30)
-            .frame(maxHeight: 132)
-            .background(Color.clear)
+            .frame(width: fit.totalW, height: fit.totalH, alignment: .center)
+            .clipped()
             .accessibilityIdentifier("etubu.tpms.grid")
 
             if telemetry.isAwaitingTPMS {
@@ -52,7 +36,76 @@ struct EtubuTPMSGridView: View {
                     .accessibilityIdentifier("etubu.tpms.awaiting")
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(width: fit.totalW, height: fit.totalH, alignment: .leading)
+    }
+
+    private func noseUpDiagram(carW: CGFloat, carH: CGFloat, gutter: CGFloat) -> some View {
+        let tirePad = carH * 0.15
+        return HStack(alignment: .center, spacing: 0) {
+            tireColumn(top: telemetry.tpmsFL, topId: "FL", bottom: telemetry.tpmsRL, bottomId: "RL", tirePad: tirePad)
+                .frame(width: gutter, height: carH)
+
+            carImage
+                .frame(width: carW, height: carH)
+
+            tireColumn(top: telemetry.tpmsFR, topId: "FR", bottom: telemetry.tpmsRR, bottomId: "RR", tirePad: tirePad)
+                .frame(width: gutter, height: carH)
+        }
+        .frame(width: carW + gutter * 2, height: carH)
+    }
+
+    private func noseSideDiagram(carW: CGFloat, carH: CGFloat, gutter: CGFloat) -> some View {
+        let tirePad = carW * 0.15
+        return VStack(alignment: .center, spacing: 0) {
+            HStack {
+                Spacer(minLength: 0).frame(width: tirePad)
+                psiText(telemetry.tpmsFL, corner: "FL")
+                Spacer(minLength: 0)
+                psiText(telemetry.tpmsRL, corner: "RL")
+                Spacer(minLength: 0).frame(width: tirePad)
+            }
+            .frame(width: carW, height: gutter)
+
+            carImage
+                .frame(width: carW, height: carH)
+
+            HStack {
+                Spacer(minLength: 0).frame(width: tirePad)
+                psiText(telemetry.tpmsFR, corner: "FR")
+                Spacer(minLength: 0)
+                psiText(telemetry.tpmsRR, corner: "RR")
+                Spacer(minLength: 0).frame(width: tirePad)
+            }
+            .frame(width: carW, height: gutter)
+        }
+        .frame(width: carW, height: carH + gutter * 2)
+    }
+
+    private func tireColumn(
+        top: EtubuTireReading,
+        topId: String,
+        bottom: EtubuTireReading,
+        bottomId: String,
+        tirePad: CGFloat
+    ) -> some View {
+        VStack(spacing: 0) {
+            Spacer(minLength: 0).frame(height: tirePad)
+            psiText(top, corner: topId)
+            Spacer(minLength: 0)
+            psiText(bottom, corner: bottomId)
+            Spacer(minLength: 0).frame(height: tirePad)
+        }
+    }
+
+    private var carImage: some View {
+        Image(noseUp ? "EtubuCarTopUp" : "EtubuCarTop")
+            .renderingMode(.template)
+            .resizable()
+            .interpolation(.high)
+            .antialiased(true)
+            .scaledToFit()
+            .foregroundStyle(theme.tpmsCarStroke)
+            .accessibilityHidden(true)
     }
 
     private func psiText(_ tire: EtubuTireReading, corner: String) -> some View {
@@ -62,11 +115,55 @@ struct EtubuTPMSGridView: View {
         }()
         let warn = tire.warning || (tire.psi.map { $0 < 32 || $0 > 48 } ?? false)
         return Text(label)
-            .font(.system(size: compact ? 12 : 14, weight: warn ? .bold : .semibold, design: .rounded).monospacedDigit())
+            .font(.system(size: compact ? 11 : 13, weight: warn ? .bold : .semibold, design: .rounded).monospacedDigit())
             .foregroundStyle(warn ? Color.orange : Color.white.opacity(0.92))
             .shadow(color: .black.opacity(0.7), radius: 2, y: 1)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+            .frame(maxWidth: .infinity)
+            .clipped()
             .accessibilityLabel("\(corner) \(label)")
             .accessibilityIdentifier("etubu.tpms.\(corner.lowercased())")
+    }
+
+    private struct Fit {
+        var carW: CGFloat
+        var carH: CGFloat
+        var gutter: CGFloat
+        var totalW: CGFloat
+        var totalH: CGFloat
+    }
+
+    private static func fit(in budget: CGSize, noseUp: Bool, compact: Bool) -> Fit {
+        let ratio: CGFloat = noseUp ? noseUpRatio : noseSideRatio
+        let maxW = max(56, budget.width)
+        let maxH = max(48, budget.height)
+        let gutterCap: CGFloat = compact ? 24 : 28
+        if noseUp {
+            var gutter = min(gutterCap, max(16, maxW * 0.24))
+            var carH = maxH
+            var carW = carH * ratio
+            if carW + gutter * 2 > maxW {
+                gutter = max(16, min(gutter, (maxW - 28) / 2))
+                carW = max(24, maxW - gutter * 2)
+                carH = carW / ratio
+            }
+            if carH > maxH {
+                carH = maxH
+                carW = carH * ratio
+                gutter = max(16, min(gutterCap, (maxW - carW) / 2))
+            }
+            return Fit(carW: carW, carH: carH, gutter: gutter, totalW: carW + gutter * 2, totalH: carH)
+        }
+        var gutter = min(gutterCap, max(16, maxH * 0.22))
+        var carW = maxW
+        var carH = carW / ratio
+        if carH + gutter * 2 > maxH {
+            gutter = max(16, min(gutter, (maxH - 28) / 2))
+            carH = max(24, maxH - gutter * 2)
+            carW = carH * ratio
+        }
+        return Fit(carW: carW, carH: carH, gutter: gutter, totalW: carW, totalH: carH + gutter * 2)
     }
 }
 

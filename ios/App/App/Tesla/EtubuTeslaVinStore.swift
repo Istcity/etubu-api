@@ -20,6 +20,7 @@ enum EtubuTeslaVinStore {
                 let cleaned = normalize(newValue)
                 memoryCache = cleaned
                 saveToKeychain(cleaned)
+                rememberRecent(cleaned)
             } else {
                 memoryCache = nil
                 deleteFromKeychain()
@@ -43,6 +44,38 @@ enum EtubuTeslaVinStore {
     static func setPairedConfirmed(_ confirmed: Bool, for vin: String) {
         let key = pairedPrefix + normalize(vin)
         UserDefaults.standard.set(confirmed, forKey: key)
+    }
+
+    private static let recentsKey = "etubu.vin.recents"
+    private static let maxRecents = 6
+
+    /// Last-used VINs (current first), for switching cars without retyping.
+    static var recents: [String] {
+        let raw = UserDefaults.standard.stringArray(forKey: recentsKey) ?? []
+        var seen = Set<String>()
+        var out: [String] = []
+        if let current = vin {
+            seen.insert(current)
+            out.append(current)
+        }
+        for item in raw {
+            let v = normalize(item)
+            guard isValidVIN(v), !seen.contains(v) else { continue }
+            seen.insert(v)
+            out.append(v)
+            if out.count >= maxRecents { break }
+        }
+        return out
+    }
+
+    static func rememberRecent(_ vin: String) {
+        let v = normalize(vin)
+        guard isValidVIN(v) else { return }
+        var list = UserDefaults.standard.stringArray(forKey: recentsKey) ?? []
+        list.removeAll { normalize($0) == v }
+        list.insert(v, at: 0)
+        if list.count > maxRecents { list = Array(list.prefix(maxRecents)) }
+        UserDefaults.standard.set(list, forKey: recentsKey)
     }
 
     private static func normalizeOptional(_ value: String?) -> String? {

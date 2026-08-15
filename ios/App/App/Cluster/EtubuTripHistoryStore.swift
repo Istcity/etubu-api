@@ -2,6 +2,13 @@ import Foundation
 import UIKit
 
 /// Yolculuk geçmişi — odo / mesafe / ortalama hız / yaklaşık Wh/km.
+struct EtubuTripTrackPoint: Codable, Equatable {
+    var t: TimeInterval
+    var lat: Double
+    var lng: Double
+    var kmh: Int
+}
+
 struct EtubuTripRecord: Codable, Identifiable, Equatable {
     var id: String
     var startedAt: Date
@@ -15,10 +22,59 @@ struct EtubuTripRecord: Codable, Identifiable, Equatable {
     /// Yaklaşık net enerji (kWh) — powerHistory örneklerinden.
     var energyKwh: Double?
     var whPerKm: Double?
+    var track: [EtubuTripTrackPoint]
 
     var durationMinutes: Int {
         let end = endedAt ?? Date()
         return max(1, Int(end.timeIntervalSince(startedAt) / 60))
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, startedAt, endedAt, startOdoKm, endOdoKm, distanceKm, maxKmh, avgKmh, routeTo, energyKwh, whPerKm, track
+    }
+
+    init(
+        id: String,
+        startedAt: Date,
+        endedAt: Date?,
+        startOdoKm: Int?,
+        endOdoKm: Int?,
+        distanceKm: Double,
+        maxKmh: Int,
+        avgKmh: Double,
+        routeTo: String,
+        energyKwh: Double?,
+        whPerKm: Double?,
+        track: [EtubuTripTrackPoint] = []
+    ) {
+        self.id = id
+        self.startedAt = startedAt
+        self.endedAt = endedAt
+        self.startOdoKm = startOdoKm
+        self.endOdoKm = endOdoKm
+        self.distanceKm = distanceKm
+        self.maxKmh = maxKmh
+        self.avgKmh = avgKmh
+        self.routeTo = routeTo
+        self.energyKwh = energyKwh
+        self.whPerKm = whPerKm
+        self.track = track
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        startedAt = try c.decode(Date.self, forKey: .startedAt)
+        endedAt = try c.decodeIfPresent(Date.self, forKey: .endedAt)
+        startOdoKm = try c.decodeIfPresent(Int.self, forKey: .startOdoKm)
+        endOdoKm = try c.decodeIfPresent(Int.self, forKey: .endOdoKm)
+        distanceKm = try c.decode(Double.self, forKey: .distanceKm)
+        maxKmh = try c.decode(Int.self, forKey: .maxKmh)
+        avgKmh = try c.decode(Double.self, forKey: .avgKmh)
+        routeTo = try c.decode(String.self, forKey: .routeTo)
+        energyKwh = try c.decodeIfPresent(Double.self, forKey: .energyKwh)
+        whPerKm = try c.decodeIfPresent(Double.self, forKey: .whPerKm)
+        track = try c.decodeIfPresent([EtubuTripTrackPoint].self, forKey: .track) ?? []
     }
 }
 
@@ -34,19 +90,20 @@ final class EtubuTripHistoryStore: ObservableObject {
     private var samplePowerSum: Double = 0
     private var samplePowerCount: Int = 0
     private var lastGear: String = "P"
+    private var lastTrackAt: Date = .distantPast
 
     private init() {
         trips = Self.load()
     }
 
-    func noteTelemetry(kmh: Int, gear: String, odo: Int?, powerKw: Int?, routeTo: String) {
+    func noteTelemetry(kmh: Int, gear: String, odo: Int?, powerKw: Int?, routeTo: String, lat: Double? = nil, lng: Double? = nil) {
         let g = gear.uppercased()
         // D’ye geçiş → trip başlat
         if ["D", "R", "N"].contains(g), active == nil, kmh >= 5 {
             start(odo: odo, routeTo: routeTo)
         }
         // P + yavaş → trip bitir
-        if g == "P", let cur = active, kmh < 3 {
+        if g == "P", active != nil, kmh < 3 {
             end(odo: odo)
         }
         lastGear = g
@@ -66,13 +123,38 @@ final class EtubuTripHistoryStore: ObservableObject {
             samplePowerSum += Double(p)
             samplePowerCount += 1
         }
+        appendTrackPoint(to: &cur, kmh: kmh, lat: lat, lng: lng)
         active = cur
+    }
+
+    private func appendTrackPoint(to cur: inout EtubuTripRecord, kmh: Int, lat: Double?, lng: Double?) {
+        guard let lat, let lng, lat.isFinite, lng.isFinite else { return }
+        guard abs(lat) > 0.01 || abs(lng) > 0.01 else { return }
+        guard cur.track.count < 900 else { return }
+        let now = Date()
+        if let last = cur.track.last {
+            let dlat = (lat - last.lat) * 111_000
+            let dlng = (lng - last.lng) * 111_000 * cos(lat * .pi / 180)
+            let moved = (dlat * dlat + dlng * dlng).squareRoot()
+            let dt = now.timeIntervalSince(lastTrackAt)
+            guard moved >= 12 || dt >= 4 else { return }
+        }
+        lastTrackAt = now
+        cur.track.append(
+            EtubuTripTrackPoint(
+                t: now.timeIntervalSince(cur.startedAt),
+                lat: lat,
+                lng: lng,
+                kmh: kmh
+            )
+        )
     }
 
     func start(odo: Int?, routeTo: String) {
         guard active == nil else { return }
         samplePowerSum = 0
         samplePowerCount = 0
+        lastTrackAt = .distantPast
         active = EtubuTripRecord(
             id: UUID().uuidString,
             startedAt: Date(),
@@ -84,7 +166,8 @@ final class EtubuTripHistoryStore: ObservableObject {
             avgKmh: 0,
             routeTo: routeTo,
             energyKwh: nil,
-            whPerKm: nil
+            whPerKm: nil,
+            track: []
         )
     }
 
@@ -203,6 +286,55 @@ final class EtubuTripHistoryStore: ObservableObject {
         } catch {
             return nil
         }
+    }
+
+    func exportGPX(tripId: String? = nil) -> URL? {
+        let source: [EtubuTripRecord]
+        if let tripId, let one = trips.first(where: { $0.id == tripId }) ?? (active?.id == tripId ? active : nil) {
+            source = [one]
+        } else {
+            var all = trips
+            if let active { all.insert(active, at: 0) }
+            source = all.filter { !$0.track.isEmpty }
+        }
+        guard !source.isEmpty, source.contains(where: { !$0.track.isEmpty }) else { return nil }
+        let iso = ISO8601DateFormatter()
+        var xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <gpx version="1.1" creator="Etubu" xmlns="http://www.topografix.com/GPX/1/1">
+
+        """
+        for trip in source {
+            guard !trip.track.isEmpty else { continue }
+            let name = Self.gpxEscape(trip.routeTo.isEmpty ? "Etubu" : trip.routeTo)
+            xml += "  <trk><name>\(name)</name><trkseg>\n"
+            for pt in trip.track {
+                let when = iso.string(from: trip.startedAt.addingTimeInterval(pt.t))
+                let ms = max(0, Double(pt.kmh) / 3.6)
+                xml += String(
+                    format: "    <trkpt lat=\"%.6f\" lon=\"%.6f\"><time>%@</time><speed>%.2f</speed></trkpt>\n",
+                    pt.lat, pt.lng, when, ms
+                )
+            }
+            xml += "  </trkseg></trk>\n"
+        }
+        xml += "</gpx>\n"
+        let name = tripId == nil ? "etubu-trips.gpx" : "etubu-trip.gpx"
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)
+        do {
+            try xml.write(to: url, atomically: true, encoding: .utf8)
+            return url
+        } catch {
+            return nil
+        }
+    }
+
+    private static func gpxEscape(_ raw: String) -> String {
+        raw
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
     }
 
     private static func load() -> [EtubuTripRecord] {

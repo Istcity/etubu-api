@@ -55,6 +55,34 @@ a { color: var(--cyan); }
 
 .nav-legal a { text-decoration: none; }
 .nav-legal a:hover { text-decoration: underline; }
+.nav-legal .link-btn {
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: var(--cyan);
+  cursor: pointer;
+}
+.nav-legal .link-btn:hover { text-decoration: underline; }
+
+.cookie-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0 20px;
+  font-size: 0.92rem;
+}
+.cookie-table th,
+.cookie-table td {
+  border: 1px solid var(--border);
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+.cookie-table th {
+  color: #a8c4d8;
+  font-weight: 600;
+}
 
 .payment-badges {
   display: flex;
@@ -80,6 +108,14 @@ a { color: var(--cyan); }
   border-top: 1px solid var(--border);
   font-size: 13px;
   color: var(--dim);
+}
+.legal-footer .link-btn {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--cyan);
+  cursor: pointer;
 }
 
 .notice {

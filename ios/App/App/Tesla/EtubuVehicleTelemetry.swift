@@ -57,6 +57,9 @@ final class EtubuVehicleTelemetry: ObservableObject {
     @Published private(set) var liveChargeConfirmed: Bool = false
     /// True after a BLE climate packet with at least one real temp.
     @Published private(set) var liveClimateConfirmed: Bool = false
+    /// HUD speed is phone GPS because Tesla drive speed is missing/stale.
+    @Published private(set) var hudUsesGpsSpeed: Bool = false
+    @Published var lastClimateAt: Date?
 
     /// Demo tick — RootView dial’ının SwiftUI yenilemesi için.
     @Published var demoUIEpoch: Int = 0
@@ -77,6 +80,8 @@ final class EtubuVehicleTelemetry: ObservableObject {
     // Charge
     @Published var socPercent: Int?
     @Published var rangeKm: Int?
+    /// Ideal remaining range (km) from `ideal_battery_range`. Nil if vehicle omitted it.
+    @Published var rangeIdealKm: Int?
     @Published var chargeKw: Int?
     @Published var isCharging: Bool = false
     @Published var chargeLimitPercent: Int?
@@ -184,8 +189,42 @@ final class EtubuVehicleTelemetry: ObservableObject {
     private var preDemoClimateOn: Bool?
     private var speedHist: [(t: Date, v: Double)] = []
     private var lastGpsSampleAt: Date?
+    /// Last real CoreLocation speed fix (predictions do not move this).
+    private var lastGpsFixAt: Date?
+    private var gpsFixKmh: Double = 0
+    private var gpsAccelKmhS: Double = 0
+    /// Last Tesla drive speed (HUD fusion). Independent of gear-only packets.
+    private var teslaKmhFineHeld: Double = 0
+    private var lastTeslaSpeedAt: Date?
+    /// Last CoreLocation sample passed `SpeedFusion.isGpsSampleValid`.
+    private var gpsSampleValid = false
     var lastGpsSampleFresh: Bool {
-        lastGpsSampleAt.map { Date().timeIntervalSince($0) < 1.1 } ?? false
+        lastGpsSampleAt.map { Date().timeIntervalSince($0) < 1.4 } ?? false
+    }
+    /// BLE speed is live enough that GPS need not own the HUD.
+    /// Connected Tesla owns the needle; GPS only fills gaps while moving.
+    var teslaSpeedFreshForHud: Bool {
+        lastTeslaSpeedAt.map { Date().timeIntervalSince($0) < 2.4 } ?? false
+    }
+
+    var teslaSessionLive: Bool {
+        connectionState == .connected || connectionState == .reconnecting
+    }
+
+    /// Tesla BLE or OBD — phone GPS HUD is not allowed without this.
+    var vehicleSessionLive: Bool {
+        teslaSessionLive || source == .obd
+    }
+
+    /// Park / Neutral / crawl → pin and needle stay at rest.
+    var isVehicleStopped: Bool {
+            if teslaSessionLive {
+                let g = gear.uppercased()
+                if g.hasPrefix("P") || g.hasPrefix("N") { return true }
+                return teslaKmhFineHeld < SpeedFusion.lockKmh
+            }
+        if source == .obd { return kmh < 3 }
+        return kmhFine < 2.2 || kmh < 2
     }
 
     /// GPS/Tesla kesirli hız → dv/dt. 0.15 km/h adımlar dahil.
@@ -222,18 +261,15 @@ final class EtubuVehicleTelemetry: ObservableObject {
 
     var displaySocPercent: Int? {
         if source == .demo { return socPercent }
-        if isLiveTesla {
-            // Cache-as-live was the stuck-SoC bug: restored UserDefaults looked "live".
-            return liveChargeConfirmed ? socPercent : nil
-        }
+        if liveChargeConfirmed { return socPercent }
+        if isLiveTesla { return nil }
         if isChargeStale { return nil }
         return socPercent
     }
     var displayRangeKm: Int? {
         if source == .demo { return rangeKm }
-        if isLiveTesla {
-            return liveChargeConfirmed ? rangeKm : nil
-        }
+        if liveChargeConfirmed { return rangeKm }
+        if isLiveTesla { return nil }
         if isChargeStale { return nil }
         return rangeKm
     }
@@ -262,6 +298,11 @@ final class EtubuVehicleTelemetry: ObservableObject {
     /// Hız kaynağı rozeti metni.
     var speedSourceLabel: String {
         if EtubuDemoDrive.isActive || source == .demo { return EtubuClusterL10n.t("sourceDemo") }
+        if hudUsesGpsSpeed,
+           connectionState != .connected,
+           connectionState != .reconnecting {
+            return EtubuClusterL10n.t("sourceGPS")
+        }
         switch source {
         case .tesla: return EtubuClusterL10n.t("sourceTesla")
         case .obd: return EtubuClusterL10n.t("sourceOBD")
@@ -271,24 +312,15 @@ final class EtubuVehicleTelemetry: ObservableObject {
         }
     }
 
-    /// Canlı Tesla bağlı ama TPMS/iklim henüz boş.
-    var isAwaitingVehicleExtras: Bool {
-        isLiveTesla
-            && (!liveChargeConfirmed
-                || (tpmsFL.psi == nil && tpmsFR.psi == nil && tpmsRL.psi == nil && tpmsRR.psi == nil)
-                || !liveClimateConfirmed)
-    }
-    var isAwaitingTPMS: Bool {
-        isLiveTesla && tpmsFL.psi == nil && tpmsFR.psi == nil && tpmsRL.psi == nil && tpmsRR.psi == nil
-    }
-    var isAwaitingClimate: Bool {
-        isLiveTesla && !liveClimateConfirmed
-    }
-    /// Extras poll: keep requesting until live SoC + climate + at least one tire are confirmed.
+    /// Don't flash "waiting…" — show dashes until a real sample exists.
+    var isAwaitingVehicleExtras: Bool { false }
+    var isAwaitingTPMS: Bool { false }
+    var isAwaitingClimate: Bool { false }
+    /// Minute-sync extras: need a live charge anchor, then refresh ~60 s. Climate/TPMS are background.
     var needsVehicleExtrasRefresh: Bool {
-        !liveChargeConfirmed
-            || !liveClimateConfirmed
-            || (tpmsFL.psi == nil && tpmsFR.psi == nil && tpmsRL.psi == nil && tpmsRR.psi == nil)
+        if !liveChargeConfirmed { return true }
+        let chargeAge = lastChargeAt.map { Date().timeIntervalSince($0) } ?? 99
+        return chargeAge > 58
     }
 
     private func restoreLastChargeSnapshot() {
@@ -436,7 +468,12 @@ final class EtubuVehicleTelemetry: ObservableObject {
         }
     }
 
-    var isLiveTesla: Bool { source == .tesla && connectionState == .connected }
+    /// BLE session up — GPS may own the speed HUD without dropping Tesla charge/climate.
+    var isLiveTesla: Bool {
+        (connectionState == .connected || connectionState == .reconnecting)
+            && source != .obd && source != .demo
+            && (source == .tesla || source == .gps || hudUsesGpsSpeed)
+    }
 
     var anyDoorOpen: Bool {
         [doorFLOpen, doorFROpen, doorRLOpen, doorRROpen, frunkOpen, trunkOpen]
@@ -469,13 +506,10 @@ final class EtubuVehicleTelemetry: ObservableObject {
         }
     }
 
-    /// BLE oturumu açılınca kaynak kilidi — GPS/OBD hızı ezmesin.
+    /// BLE oturumu açılınca kaynak kilidi — GPS/OBD hızı ezmesin. SoC/iklim son doğru değerde kalsın.
     func lockToTeslaSource() {
         guard !EtubuDemoDrive.isActive else { return }
         source = .tesla
-        // Don't treat disk cache as live until first BLE charge/climate packet.
-        liveChargeConfirmed = false
-        liveClimateConfirmed = false
     }
 
     /// Geçersiz drive paketinde bile bağlantı tazeliğini koru (weak/delayed flash yok).
@@ -533,40 +567,36 @@ final class EtubuVehicleTelemetry: ObservableObject {
             if let incomingFine = kmhFine, incomingFine.isFinite { return max(0, min(280, incomingFine)) }
             return Double(gatedKmh)
         }()
-        if hasSpeed {
-            let gpsFresh = lastGpsSampleAt.map { Date().timeIntervalSince($0) < 1.0 } ?? false
-            if !gpsFresh {
-                noteSpeedSample(fine)
-            } else {
-                self.kmhFine = fine
-            }
-        }
-
-        // Ani sıçrama (paket bozulması) — taze örnek varken >70 km/h delta’yı reddet.
-        if hasSpeed,
-           let lastDriveAt,
-           Date().timeIntervalSince(lastDriveAt) < 2.5,
-           abs(gatedKmh - self.kmh) > 70,
-           self.kmh > 0 || gatedKmh > 80 {
+        let junkJump = hasSpeed
+            && lastTeslaSpeedAt.map { Date().timeIntervalSince($0) < 2.5 } == true
+            && abs(fine - teslaKmhFineHeld) > 70
+            && (teslaKmhFineHeld > 0 || fine > 80)
+        if parked {
+            teslaKmhFineHeld = 0
+            lastTeslaSpeedAt = Date()
+        } else if hasSpeed, !junkJump {
+            teslaKmhFineHeld = fine
+            lastTeslaSpeedAt = Date()
+            noteSpeedSample(fine)
+        } else if junkJump {
             touchDriveHealth()
-            return
         }
+        publishFusedHudSpeed(parkedHint: parked, gearOverride: effectiveGear)
 
         let gatedPower: Int? = {
             guard let powerKw else { return self.powerKw }
-            if gatedKmh == 0 { return abs(powerKw) < 8 ? 0 : powerKw }
-            // 1–3 kW artık sıfırlanmaz — GPS ivmesi küçük gazı tamamlar
+            if parked { return abs(powerKw) < 8 ? 0 : powerKw }
             if abs(powerKw) < 1 { return 0 }
             if abs(powerKw) > 800 { return self.powerKw }
             return powerKw
         }()
 
-        let kmhChanged = hasSpeed && self.kmh != gatedKmh
+        let kmhChanged = hasSpeed && self.kmh != Int((parked ? 0 : fine).rounded())
         let gearChanged = self.gear != effectiveGear
         let powerChanged = self.powerKw != gatedPower
-        if hasSpeed, kmhChanged { self.kmh = gatedKmh }
         if gearChanged { self.gear = effectiveGear }
         if powerChanged { self.powerKw = gatedPower }
+        EtubuChargeEstimator.shared.ingestPower(kw: gatedPower, speedKmh: self.kmhFine > 0.2 ? self.kmhFine : fine)
 
         if gatedKmh > 0, let gatedPower {
             var hist = powerHistory
@@ -579,6 +609,9 @@ final class EtubuVehicleTelemetry: ObservableObject {
                 let delta = odometerKm - prev
                 if delta >= 0, delta <= 80 {
                     self.odometerKm = odometerKm
+                    if delta >= 1 {
+                        EtubuChargeEstimator.shared.ingestOdoDeltaKm(Double(delta))
+                    }
                 }
             } else {
                 self.odometerKm = odometerKm
@@ -635,7 +668,9 @@ final class EtubuVehicleTelemetry: ObservableObject {
                 gear: effectiveGear,
                 odo: self.odometerKm,
                 powerKw: gatedPower,
-                routeTo: tripRoute
+                routeTo: tripRoute,
+                lat: self.latitude,
+                lng: self.longitude
             )
         }
     }
@@ -643,6 +678,7 @@ final class EtubuVehicleTelemetry: ObservableObject {
     func applyTeslaCharge(
         soc: Int?,
         rangeKm: Int?,
+        rangeIdealKm: Int? = nil,
         chargeKw: Int?,
         charging: Bool,
         limitPercent: Int?,
@@ -667,6 +703,9 @@ final class EtubuVehicleTelemetry: ObservableObject {
             self.rangeKm = rangeKm
             gotLiveSample = true
         }
+        if let rangeIdealKm, rangeIdealKm > 0, rangeIdealKm < 1200 {
+            self.rangeIdealKm = rangeIdealKm
+        }
         if chargeKw != nil { self.chargeKw = chargeKw }
         isCharging = charging
         if let limitPercent, (50...100).contains(limitPercent) {
@@ -686,12 +725,47 @@ final class EtubuVehicleTelemetry: ObservableObject {
             liveChargeConfirmed = true
             persistLastChargeSnapshot()
             lastExtrasAt = Date()
+            if let soc = socPercent {
+                let range = rangeKm ?? self.rangeKm
+                if let range, range > 0 {
+                    EtubuChargeEstimator.shared.ingestLive(
+                        soc: soc,
+                        rangeKm: range,
+                        charging: charging,
+                        idealRangeKm: rangeIdealKm ?? self.rangeIdealKm
+                    )
+                } else {
+                    EtubuChargeEstimator.shared.ingestCharging(charging)
+                }
+            } else {
+                EtubuChargeEstimator.shared.ingestCharging(charging)
+            }
+            chargeEpoch &+= 1
+            publishWidgetSnapshot()
+        } else {
+            EtubuChargeEstimator.shared.ingestCharging(charging)
         }
+        lastUpdateAt = Date()
+        recomputeEnergyAtArrival()
+        objectWillChange.send()
+    }
+
+    /// Estimator drain between live BLE charge samples. Only publishes integer SoC/range changes.
+    func applyEstimatedCharge(soc: Int, rangeKm: Int) {
+        guard !EtubuDemoDrive.isActive else { return }
+        guard liveChargeConfirmed else { return }
+        let soc = min(100, max(0, soc))
+        let range = max(0, rangeKm)
+        let socChanged = socPercent != soc
+        let rangeChanged = self.rangeKm != range
+        guard socChanged || rangeChanged else { return }
+        if socChanged { socPercent = soc }
+        if rangeChanged, range > 0, range < 1200 { self.rangeKm = range }
         lastUpdateAt = Date()
         chargeEpoch &+= 1
         recomputeEnergyAtArrival()
         objectWillChange.send()
-        if gotLiveSample { publishWidgetSnapshot() }
+        publishWidgetSnapshot()
     }
 
     /// VCSEC GET_STATUS — lock / occupant only; never wipes Infotainment doors/TPMS.
@@ -763,13 +837,31 @@ final class EtubuVehicleTelemetry: ObservableObject {
     }
 
     func applyTeslaClimate(outsideC: Double?, insideC: Double?, climateOn: Bool?) {
-        if let outsideC { self.outsideC = outsideC }
-        if let insideC { self.insideC = insideC }
-        if let climateOn { self.climateOn = climateOn }
+        var changed = false
+        if let outsideC {
+            let prev = self.outsideC
+            if prev == nil || abs(prev! - outsideC) >= 0.45 {
+                self.outsideC = outsideC
+                changed = true
+            }
+        }
+        if let insideC {
+            let prev = self.insideC
+            if prev == nil || abs(prev! - insideC) >= 0.45 {
+                self.insideC = insideC
+                changed = true
+            }
+        }
+        if let climateOn, self.climateOn != climateOn {
+            self.climateOn = climateOn
+            changed = true
+        }
         if outsideC != nil || insideC != nil {
             liveClimateConfirmed = true
+            lastClimateAt = Date()
             lastExtrasAt = Date()
         }
+        guard changed else { return }
         lastUpdateAt = Date()
         climateEpoch &+= 1
         objectWillChange.send()
@@ -802,7 +894,7 @@ final class EtubuVehicleTelemetry: ObservableObject {
         apply(rr, into: \.tpmsRR)
         lastExtrasAt = Date()
         lastUpdateAt = Date()
-        // Always bump epoch so UI knows extras poll landed (even identical psi).
+        guard changed else { return }
         tpmsEpoch &+= 1
         if changed { objectWillChange.send() }
     }
@@ -835,6 +927,10 @@ final class EtubuVehicleTelemetry: ObservableObject {
     }
 
     func applyTeslaVehicleLocation(lat: Double?, lng: Double?, heading: Double?) {
+        if isVehicleStopped, latitude != nil, longitude != nil {
+            lastTeslaGpsAt = Date()
+            return
+        }
         if let lat, let lng, abs(lat) > 0.01, abs(lng) > 0.01 {
             latitude = lat
             longitude = lng
@@ -851,65 +947,107 @@ final class EtubuVehicleTelemetry: ObservableObject {
             if headingDeg == nil, let heading { headingDeg = heading }
             return
         }
+        if isVehicleStopped, latitude != nil, longitude != nil {
+            return
+        }
         if let lat { latitude = lat }
         if let lng { longitude = lng }
         if let heading { headingDeg = heading }
     }
 
-        /// Phone GPS hızı. Tesla HUD’u ezmez ama ses planı için her zaman dv/dt yazar.
-    func applyGpsSpeedBridge(kmh: Double) {
+    /// Phone GPS may fill BLE gaps only while a vehicle session is live and moving.
+    /// Real CoreLocation samples pass `sampleValid`; motion predictions do not update GPS validity.
+    func applyGpsSpeedBridge(kmh: Double, isPrediction: Bool = false, sampleValid: Bool? = nil) {
         if EtubuDemoDrive.isActive { return }
         let next = max(0, kmh.isFinite ? kmh : 0)
-        // Tesla bağlıyken kadranı ezme — GPS mikro-ivmeyi sese ver.
-        let teslaOwnsHUD = source == .tesla
-            || connectionState == .connected
-            || connectionState == .reconnecting
-            || connectionState == .connecting
-            || connectionState == .pairing
-            || connectionState == .waitingForCard
-        let teslaDriveStale = lastDriveValueAt.map { Date().timeIntervalSince($0) > 3.5 } ?? true
-        if next >= 0.8 {
-            lastGpsSampleAt = Date()
-            gpsKmhFine = next
-            noteSpeedSample(next, updateFine: !teslaOwnsHUD || teslaDriveStale)
-        } else if !teslaOwnsHUD {
-            accelKmhS *= 0.45
-            if abs(accelKmhS) < 0.08 { accelKmhS = 0 }
-            kmhFine = 0
+        if !isPrediction {
+            let now = Date()
+            if let prevAt = lastGpsFixAt {
+                let dt = now.timeIntervalSince(prevAt)
+                if dt > 0.04, dt < 3.0 {
+                    let a = (next - gpsFixKmh) / dt
+                    let alpha = abs(a) < 0.35 ? 0.5 : 0.38
+                    gpsAccelKmhS = alpha * gpsAccelKmhS + (1 - alpha) * a
+                }
+            }
+            gpsFixKmh = next
+            lastGpsFixAt = now
+            if let sampleValid {
+                gpsSampleValid = sampleValid
+                if sampleValid {
+                    lastGpsSampleAt = now
+                    gpsKmhFine = next
+                } else {
+                    gpsSampleValid = false
+                }
+            } else {
+                lastGpsSampleAt = now
+                gpsKmhFine = next
+                gpsSampleValid = true
+            }
         }
-        // Yedek 2: Tesla paketi donduysa GPS kadranı canlı tutar.
-        if teslaOwnsHUD, teslaDriveStale, next >= 2.4 {
-            self.kmh = Int(next.rounded())
-            self.kmhFine = next
-            lastUpdateAt = Date()
-            return
-        }
-        if teslaOwnsHUD { return }
         if source == .obd {
             let age = lastDriveAt.map { Date().timeIntervalSince($0) } ?? (connectionFreshnessSeconds ?? 999)
             if age < 0.9 { return }
         }
-        // < 2.4 km/h → park / GPS noise — HUD sıfır; ses örneği yukarıda alındı
-        if next < 2.4 {
-            if source == .gps || source == .none {
-                if self.kmh != 0 { self.kmh = 0 }
-                if source == .gps {
-                    source = .gps
-                    lastUpdateAt = Date()
-                }
-            }
-            return
+        publishFusedHudSpeed()
+        if teslaSpeedFreshForHud { return }
+        if hudUsesGpsSpeed, teslaSessionLive {
+            statusMessage = EtubuClusterL10n.t("gpsSpeed")
         }
-        self.kmh = Int(next.rounded())
-        self.kmhFine = next
-        if source == .none || source == .gps {
-            source = .gps
-            lastUpdateAt = Date()
-            if connectionState == .idle || connectionState == .needsVIN || connectionState == .disconnected {
-                statusMessage = EtubuClusterL10n.t("gpsSpeed")
-            }
+    }
+
+    /// Tesla/OBD is primary. `SpeedFusion` fills BLE gaps with valid GPS while moving.
+    /// Unpaired GPS never owns the HUD. Stopped → always 0.
+    func publishFusedHudSpeed(parkedHint: Bool? = nil, gearOverride: String? = nil) {
+        if EtubuDemoDrive.isActive { return }
+        let teslaAge = lastTeslaSpeedAt.map { Date().timeIntervalSince($0) } ?? 99
+        let gpsAge = lastGpsSampleAt.map { Date().timeIntervalSince($0) } ?? 99
+        let teslaSession = teslaSessionLive
+        let vehicleLive = vehicleSessionLive
+        let gearNow = gearOverride ?? gear
+
+        var fused: Double = 0
+        var usingGps = false
+
+        if !vehicleLive {
+            fused = 0
+        } else if source == .obd {
+            let age = lastDriveAt.map { Date().timeIntervalSince($0) } ?? 99
+            fused = age < 2.5 ? Double(kmh) : 0
+            if fused < 3 { fused = 0 }
+        } else if teslaSession {
+            let gpsFresh = gpsSampleValid && gpsAge < 1.6
+            let out = SpeedFusion.blend(
+                SpeedFusion.Input(
+                    gear: gearNow,
+                    parkedHint: parkedHint == true,
+                    bleKmh: teslaKmhFineHeld,
+                    bleAge: teslaAge,
+                    gpsKmh: gpsKmhFine,
+                    gpsValid: gpsFresh
+                )
+            )
+            fused = out.kmh
+            usingGps = out.usingGps
+        } else {
+            fused = 0
         }
-        publishWidgetSnapshot()
+
+        if fused < SpeedFusion.lockKmh { fused = 0; usingGps = false }
+        fused = max(0, min(280, fused))
+
+        hudUsesGpsSpeed = usingGps
+        if teslaSession, source != .tesla { source = .tesla }
+        else if !vehicleLive, source == .gps { source = .none }
+
+        let prevInt = kmh
+        kmhFine = fused
+        noteSpeedSample(fused, updateFine: false)
+        let nextInt = Int(fused.rounded())
+        if kmh != nextInt { kmh = nextInt }
+        lastUpdateAt = Date()
+        if prevInt != kmh { publishWidgetSnapshot() }
     }
 
     func clearMapLocation() {
@@ -947,14 +1085,27 @@ final class EtubuVehicleTelemetry: ObservableObject {
 
     func publishWidgetSnapshot(primaryWarn: String? = nil) {
         // nil = uyarıyı silme (DriveWarnings ayrı yazar); boş string = temizle.
-        EtubuSharedDriveSnapshot.publish(
-            kmh: kmh,
-            soc: socPercent,
-            gear: gear,
-            rangeKm: rangeKm,
-            primaryWarn: primaryWarn,
-            clearWarnIfNil: false
-        )
+        let kmh = self.kmh
+        let soc = socPercent
+        let gear = self.gear
+        let rangeKm = self.rangeKm
+        DispatchQueue.main.async {
+            let lim = EtubuOsmSpeedLimit.shared.limitKmh
+            let over: Bool = {
+                guard let lim, lim > 0 else { return false }
+                return kmh > lim + 3
+            }()
+            EtubuSharedDriveSnapshot.publish(
+                kmh: kmh,
+                soc: soc,
+                gear: gear,
+                rangeKm: rangeKm,
+                primaryWarn: primaryWarn,
+                clearWarnIfNil: false,
+                limitKmh: lim,
+                overLimit: over
+            )
+        }
     }
 
     /// Cap / demo / Tesla sonrası varış SoC + şarj planını yenile.

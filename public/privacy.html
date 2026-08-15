@@ -3,13 +3,19 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <!-- Google tag (gtag.js) -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-9FQ0VVHGYC"></script>
   <script>
     window.dataLayer = window.dataLayer || [];
     function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-    gtag('config', 'G-9FQ0VVHGYC');
+    gtag('consent', 'default', {
+      analytics_storage: 'denied',
+      ad_storage: 'denied',
+      ad_user_data: 'denied',
+      ad_personalization: 'denied',
+      functionality_storage: 'denied',
+      personalization_storage: 'denied',
+      security_storage: 'granted',
+      wait_for_update: 500
+    });
   </script>
   <title>Gizlilik Politikası — ETUBU EV Driving Sounds</title>
   <meta name="description" content="ETUBU gizlilik politikası: GPS hızı cihazda işlenir, sürüş rotası saklanmaz." />
@@ -32,10 +38,11 @@
     <a href="privacy.html">Gizlilik</a>
     <a href="terms.html">Kullanım şartları</a>
     <a href="disclaimer.html">Sorumluluk reddi</a>
+    <button type="button" class="link-btn" data-consent-open>Çerez ayarları</button>
   </nav>
 
   <h1>Gizlilik Politikası</h1>
-  <p class="muted">Son güncelleme: 16 Temmuz 2026</p>
+  <p class="muted">Son güncelleme: 14 Ağustos 2026</p>
 
   <p><strong>ETUBU</strong> (etubu.com / iOS uygulaması), elektrikli araç sürüşüne GPS hızına göre sentetik ses ve görsel deneyim sunar.</p>
 
@@ -48,8 +55,50 @@
     <li><strong>Giriş (isteğe bağlı):</strong> Apple / Google ile girişte kimlik eşleştirme için e-posta kullanılabilir.</li>
   </ul>
 
-  <h2>2. Çerezler ve reklamlar</h2>
-  <p>Web’de Google AdSense, iOS’ta Google AdMob etkinleştirildiğinde reklam çerezleri / kimlikleri kullanılabilir. Banner reklamlar, ömür boyu reklamsız satın alma ile kaldırılabilir. <a href="https://adssettings.google.com" target="_blank" rel="noopener">Google reklam ayarları</a>.</p>
+  <h2>2. Çerezler, depolama ve reklamlar</h2>
+  <p>Web sitesinde çerez ve benzeri teknolojiler (localStorage, cookie) kullanılır. Analitik ve reklam araçları
+    <strong>sizin açık izniniz olmadan yüklenmez</strong>. Tercihinizi dilediğiniz zaman
+    <button type="button" class="link-btn" data-consent-open>Çerez ayarları</button> ile değiştirebilirsiniz.
+    Kayıt yaklaşık 6 ay sonra yeniden sorulur. iOS uygulamasında bu banner gösterilmez; App Store gizlilik etiketleri geçerlidir.</p>
+  <table class="cookie-table">
+    <thead>
+      <tr>
+        <th>Kategori</th>
+        <th>Ne için</th>
+        <th>Araç / anahtar</th>
+        <th>Süre</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Zorunlu</td>
+        <td>Güvenlik ve verdiğiniz izin kaydı. Siteyi kullanmak için gereklidir; kapatılamaz.</td>
+        <td><code>etubu_consent</code></td>
+        <td>6 ay</td>
+      </tr>
+      <tr>
+        <td>Tercihler (izinli)</td>
+        <td>Dil, ses/tema, tanıtım turunun tekrar gösterilmemesi. Tesla tarayıcısında oturumun dağılmaması için çerez kullanılır.</td>
+        <td><code>etubu_intro_seen</code>, dil/tema tercih çerezleri</td>
+        <td>En fazla 1 yıl</td>
+      </tr>
+      <tr>
+        <td>Analitik (izinli)</td>
+        <td>Ziyaret ölçümü. IP kısmi maskelenir. İzin vermezseniz Google etiketi yüklenmez.</td>
+        <td>Google Analytics <code>G-9FQ0VVHGYC</code></td>
+        <td>Google’ın çerez süreleri</td>
+      </tr>
+      <tr>
+        <td>Reklam (izinli)</td>
+        <td>Yandex RTB ve (açıksa) Google reklamları. Banner’lar ömür boyu reklamsız satın alma ile kaldırılabilir.</td>
+        <td>Yandex RTB / AdSense</td>
+        <td>Sağlayıcı çerezleri</td>
+      </tr>
+    </tbody>
+  </table>
+  <p>Google reklam tercihleri: <a href="https://adssettings.google.com" target="_blank" rel="noopener">adssettings.google.com</a>.
+    iOS’ta Google AdMob, uygulama içi reklam kimliği kullanabilir.</p>
+  <p>Tipografi için Google Fonts stil dosyası istenir; bu istek üçüncü taraf sunucusuna gider. Ödeme, giriş ve harita (OpenStreetMap / Overpass) ayrı üçüncü taraf hizmetlerdir.</p>
 
   <h2>3. KVKK / GDPR</h2>
   <p>Türkiye KVKK ve AB GDPR kapsamındaki haklarınız (erişim, silme, düzeltme) için bizimle iletişime geçebilirsiniz. Prompt, sohbet veya sürüş rotası geçmişi tutmayız.</p>
@@ -58,7 +107,9 @@
   <ul>
     <li>Ödeme sağlayıcısı — web ödeme</li>
     <li>Apple — App Store ödemeleri (iOS)</li>
-    <li>Google — Sign-In, AdSense, AdMob (açıksa)</li>
+    <li>Google — Sign-In; izinliyse Analytics ve reklamlar; AdMob (iOS, açıksa)</li>
+    <li>Yandex — izinliyse sitedeki reklamlar</li>
+    <li>OpenStreetMap / Overpass — yol ve hız limiti verisi (konum cihazınızda kalır; sorgu yaklaşık konumla yapılır)</li>
   </ul>
 
   <div class="payment-badges" aria-label="Ödeme yöntemleri">
@@ -71,6 +122,7 @@
     E-posta: <a href="mailto:privacy@etubu.com">privacy@etubu.com</a> · <a href="contact.html">İletişim sayfası</a>
   </div>
 
-  <footer class="legal-footer">© 2026 ETUBU · etubu.com</footer>
+  <footer class="legal-footer">© 2026 ETUBU · etubu.com · <button type="button" class="link-btn" data-consent-open>Çerez ayarları</button></footer>
+  <script src="js/consent.js?v=20260814e"></script>
 </body>
 </html>

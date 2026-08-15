@@ -45,16 +45,17 @@ enum EtubuWarnVoice {
             : Self.tonePattern(kind: kind, urgent: urgent)
         playToken &+= 1
         let token = playToken
-        var delay = 0.0
+        var delay = 0.08
         for (i, spec) in tones.enumerated() {
             let d = delay
             DispatchQueue.main.asyncAfter(deadline: .now() + d) {
                 guard token == playToken else { return }
-                playTone(frequency: spec.0, duration: spec.1, volume: Float(vol * (urgent ? 0.9 : 0.7)))
+                AppDelegate.activateAlertDuckSession()
+                playTone(frequency: spec.0, duration: spec.1, volume: Float(vol * (urgent ? 0.95 : 0.78)))
             }
             delay += spec.1 + (urgent ? 0.09 : 0.12)
             if i == tones.count - 1 {
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay + 0.25) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay + 1.15) {
                     guard token == playToken else { return }
                     AppDelegate.deactivateAlertDuckSession()
                 }
@@ -76,7 +77,7 @@ enum EtubuWarnVoice {
             return [(660, 0.16), (820, 0.12)]
         case "railway":
             return [(520, 0.12), (390, 0.18)]
-        case "tunnel":
+        case "tunnel", "underpass", "overpass":
             return [(420, 0.22)]
         case "winding", "climb":
             return [(780, 0.10), (640, 0.14)]
@@ -140,46 +141,59 @@ enum EtubuWarnVoice {
     }
 
     private static func playTone(frequency: Double, duration: TimeInterval, volume: Float) {
-        let engine = AVAudioEngine()
-        let player = AVAudioPlayerNode()
-        engine.attach(player)
         let sampleRate: Double = 22_050
-        let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1)!
-        engine.connect(player, to: engine.mainMixerNode, format: format)
-        engine.mainMixerNode.outputVolume = volume
-
-        let frameCount = AVAudioFrameCount(duration * sampleRate)
-        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else {
+        let frameCount = Int(duration * sampleRate)
+        guard frameCount > 16, let wav = pcmWav(frequency: frequency, frames: frameCount, sampleRate: sampleRate) else {
             AudioServicesPlaySystemSound(1057)
             return
         }
-        buffer.frameLength = frameCount
-        let data = buffer.floatChannelData![0]
-        let twoPi = 2.0 * Double.pi
-        for i in 0..<Int(frameCount) {
-            let t = Double(i) / sampleRate
-            var sample = sin(twoPi * frequency * t)
-            let fade = min(1, Double(i) / 200) * min(1, Double(Int(frameCount) - i) / 400)
-            sample *= fade
-            data[i] = Float(sample)
-        }
         do {
-            try engine.start()
-            while toneEngines.count >= 4 {
-                let old = toneEngines.removeFirst()
-                old.stop()
-            }
-            toneEngines.append(engine)
-            player.scheduleBuffer(buffer, at: nil, options: []) {
-                DispatchQueue.main.async {
-                    engine.stop()
-                    toneEngines.removeAll { $0 === engine }
-                }
-            }
+            let player = try AVAudioPlayer(data: wav)
+            player.volume = volume
+            player.prepareToPlay()
+            let box = PlayerBox(player: player)
+            playerBoxes.append(box)
+            players.append(player)
             player.play()
         } catch {
             AudioServicesPlaySystemSound(1057)
         }
+    }
+
+    private static func pcmWav(frequency: Double, frames: Int, sampleRate: Double) -> Data? {
+        var data = Data()
+        func appendU32(_ v: UInt32) {
+            var le = v.littleEndian
+            data.append(Data(bytes: &le, count: 4))
+        }
+        func appendU16(_ v: UInt16) {
+            var le = v.littleEndian
+            data.append(Data(bytes: &le, count: 2))
+        }
+        let dataBytes = UInt32(frames * 2)
+        data.append(contentsOf: [0x52, 0x49, 0x46, 0x46]) // RIFF
+        appendU32(36 + dataBytes)
+        data.append(contentsOf: [0x57, 0x41, 0x56, 0x45, 0x66, 0x6D, 0x74, 0x20]) // WAVEfmt
+        appendU32(16)
+        appendU16(1)
+        appendU16(1)
+        appendU32(UInt32(sampleRate))
+        appendU32(UInt32(sampleRate) * 2)
+        appendU16(2)
+        appendU16(16)
+        data.append(contentsOf: [0x64, 0x61, 0x74, 0x61]) // data
+        appendU32(dataBytes)
+        let twoPi = 2.0 * Double.pi
+        for i in 0..<frames {
+            let t = Double(i) / sampleRate
+            var sample = sin(twoPi * frequency * t)
+            let fade = min(1, Double(i) / 200) * min(1, Double(frames - i) / 400)
+            sample *= fade
+            var s = Int16(max(-1, min(1, sample)) * 32767)
+            var le = s.littleEndian
+            data.append(Data(bytes: &le, count: 2))
+        }
+        return data
     }
 
     private static func urlForClip(_ key: String) -> URL? {

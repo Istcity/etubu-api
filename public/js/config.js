@@ -11,15 +11,16 @@ window.ETUBU_CONFIG = {
   ADSENSE_SLOT_LEFT: "",
   ADSENSE_SLOT_RIGHT: "",
   ADSENSE_SLOT_MIDDLE: "",
-  ADS_ENABLED: true,            // banner: üst / sağ / alt (orta) — sol yok
+  ADS_ENABLED: true,            // banner: üst / sağ / alt + açılış turunda 4 kenar
   ADMOB_BANNER_UNIT_ID: "ca-app-pub-8420759480841389/8858393138", // native iOS/Android banner
 
   // Yandex RTB (web banner) — https://partner.yandex.com/
   YANDEX_RTB_ENABLED: true,
   YANDEX_RTB_BLOCK_TOP: "R-A-19654756-1",
   YANDEX_RTB_BLOCK_MIDDLE: "R-A-19654756-1",
-  YANDEX_RTB_BLOCK_LEFT: "",
+  YANDEX_RTB_BLOCK_LEFT: "R-A-19654756-1",
   YANDEX_RTB_BLOCK_RIGHT: "R-A-19654756-1",
+  YANDEX_RTB_BLOCK_BOTTOM: "R-A-19654756-1",
 
   // Google ile giriş — Web client ID (client_secret tarayıcıya KONMAZ)
   // Origins + redirect: https://etubu.com

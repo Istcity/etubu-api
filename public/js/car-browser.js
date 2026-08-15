@@ -105,6 +105,7 @@ const CarBrowser = (() => {
 
   function writeCookie(name, value) {
     try {
+      if (typeof Consent !== "undefined" && !Consent.allows("preferences")) return;
       const secure = location.protocol === "https:" ? "; Secure" : "";
       document.cookie = `${name}=${encodeURIComponent(value)}; Path=/; Max-Age=${COOKIE_MAX_AGE}; SameSite=Lax${secure}`;
     } catch (_) {}
@@ -120,6 +121,7 @@ const CarBrowser = (() => {
 
   function writeLs(key, value) {
     try {
+      if (typeof Consent !== "undefined" && !Consent.allows("preferences")) return;
       localStorage.setItem(key, value);
     } catch (_) {}
   }
@@ -142,6 +144,9 @@ const CarBrowser = (() => {
     if (!meta) return null;
     const fromUrl = readUrlParam(meta.url);
     if (fromUrl != null) return fromUrl;
+    try {
+      if (typeof Consent !== "undefined" && !Consent.allows("preferences")) return null;
+    } catch (_) {}
     const fromCookie = readCookie(meta.cookie);
     if (fromCookie != null) return fromCookie;
     return readLs(meta.ls);

@@ -68,8 +68,6 @@ struct EtubuDashboardRootView: View {
             )
         }
         .onAppear { startLiveActivityIfNeeded() }
-        .onReceive(telemetry.$kmh) { _ in pushLiveActivity() }
-        .onReceive(telemetry.$rpm) { _ in pushLiveActivity() }
         .onReceive(telemetry.$connectionState) { state in
             if state == .connected { startLiveActivityIfNeeded() }
         }

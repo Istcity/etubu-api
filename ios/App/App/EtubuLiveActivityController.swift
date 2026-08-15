@@ -2,6 +2,7 @@ import Foundation
 import ActivityKit
 import AVFoundation
 import UIKit
+import SwiftUI
 
 /// Live Activity + Dynamic Island — sürüş sırasında ön/arka plan.
 @available(iOS 16.2, *)
@@ -10,8 +11,10 @@ enum EtubuLiveActivityController {
     private static var engine: AVAudioEngine?
     private static var player: AVAudioPlayerNode?
 
-    /// Uygulama öldürülürse güncelleme kesilir; bu süre sonra sistem LA’yı bayat sayar.
-    private static let staleSeconds: TimeInterval = 75
+    /// Uygulama öldürülürse güncelleme kesilir; seyrek meaningful update’lerde
+    /// 75 s bayat çok kısa kalır (Apple: hız tick’i basma).
+    private static let staleSeconds: TimeInterval = 4 * 60 * 60
+    private static var lastMeaningfulSignature = ""
 
     /// Sürüş aktifken LA/Island güncellenir — park/idle bağlıyken sürekli tutma.
     @MainActor
@@ -108,6 +111,10 @@ enum EtubuLiveActivityController {
             let name = h.label.isEmpty ? h.kindTitle : h.label
             return String(("\(h.kindTitle): \(name)\(dist)").prefix(48))
         }()
+        let theme = ClusterTheme.stored
+        let accent = Self.rgb(theme.accent)
+        let canvas = Self.rgb(theme.canvas)
+        let plan = EtubuEvRoutePlanner.shared.plan
         return EtubuDriveAttributes.ContentState(
             kmh: kmh ?? t.kmh,
             gear: gear ?? t.gear,
@@ -133,9 +140,26 @@ enum EtubuLiveActivityController {
             rangeKm: t.displayRangeKm ?? t.rangeKm,
             remainKm: t.effectiveRemainKm,
             etaMinutes: t.navEtaMinutes.map { Int($0.rounded()) },
-            arrivalSocPercent: t.energyAtArrivalPercent,
+            arrivalSocPercent: plan?.destSocPlanned ?? t.energyAtArrivalPercent,
             islandEtaLabel: EtubuClusterL10n.t("islandEtaRemain"),
-            islandKmRemainLabel: EtubuClusterL10n.t("islandKmRemain")
+            islandKmRemainLabel: EtubuClusterL10n.t("islandKmRemain"),
+            limitKmh: EtubuOsmSpeedLimit.shared.limitKmh,
+            overLimit: {
+                guard let lim = EtubuOsmSpeedLimit.shared.limitKmh, lim > 0 else { return false }
+                return (kmh ?? t.kmh) > lim + 3
+            }(),
+            accentR: accent.0,
+            accentG: accent.1,
+            accentB: accent.2,
+            canvasR: canvas.0,
+            canvasG: canvas.1,
+            canvasB: canvas.2,
+            outsideC: t.outsideC.map { Int($0.rounded()) },
+            powerKw: t.powerKw,
+            planSummary: plan?.summaryLine,
+            planStop1: plan?.legs.first.map { String($0.compactLine.prefix(52)) },
+            planStop2: plan?.legs.dropFirst().first.map { String($0.compactLine.prefix(52)) },
+            planWhPerKm: plan.map { Int($0.whPerKm.rounded()) }
         )
     }
 
@@ -160,9 +184,16 @@ enum EtubuLiveActivityController {
         }
         if let existing = current ?? Activity<EtubuDriveAttributes>.activities.first {
             current = existing
-            await update(
-                kmh: kmh, gear: gear, rpm: rpm, voice: voice, source: source,
-                tpmsFL: tpmsFL, tpmsFR: tpmsFR, tpmsRL: tpmsRL, tpmsRR: tpmsRR
+            await publishState(
+                await MainActor.run {
+                    var s = makeState(voice: voice, kmh: kmh, gear: gear, rpm: rpm, source: source)
+                    if tpmsFL != nil { s.tpmsFL = tpmsFL }
+                    if tpmsFR != nil { s.tpmsFR = tpmsFR }
+                    if tpmsRL != nil { s.tpmsRL = tpmsRL }
+                    if tpmsRR != nil { s.tpmsRR = tpmsRR }
+                    return s
+                },
+                force: true
             )
             return true
         }
@@ -182,6 +213,7 @@ enum EtubuLiveActivityController {
                 pushType: nil
             )
             current = activity
+            lastMeaningfulSignature = meaningfulSignature(state)
             return true
         } catch {
             print("ETUBU Live Activity start:", error)
@@ -212,7 +244,7 @@ enum EtubuLiveActivityController {
             if tpmsRR != nil { s.tpmsRR = tpmsRR }
             return s
         }
-        await activity.update(makeContent(state: state))
+        await publishState(state, force: false)
     }
 
     /// Sürüşte Island/LA güncelle; yoksa başlat. Oturum bitince kapat.
@@ -232,6 +264,33 @@ enum EtubuLiveActivityController {
         }
         current = activity
         let state = await MainActor.run { makeState(voice: voice) }
+        await publishState(state, force: false)
+    }
+
+    /// Gear / SoC / warn / nav — never live speed. Apple ActivityKit budget.
+    private static func meaningfulSignature(_ s: EtubuDriveAttributes.ContentState) -> String {
+        let remain = s.remainKm.map { Int(($0 * 10).rounded()) } ?? -1
+        let soc = s.socPercent ?? -1
+        let range = s.rangeKm ?? -1
+        let eta = s.etaMinutes ?? -1
+        let arrival = s.arrivalSocPercent ?? -1
+        let limit = s.limitKmh ?? -1
+        let over = (s.overLimit ?? false) ? 1 : 0
+        let routeFlag = s.routeActive ? 1 : 0
+        let tpms = "\(s.tpmsFL ?? -1),\(s.tpmsFR ?? -1),\(s.tpmsRL ?? -1),\(s.tpmsRR ?? -1)"
+        let counts = "\(s.radarCount),\(s.corridorCount),\(s.chargeCount),\(s.controlCount),\(s.weatherCount),\(s.remainingPoints)"
+        return "\(s.gear)|\(s.source)|\(soc)|\(range)|\(remain)|\(eta)|\(arrival)|\(routeFlag)|\(s.routeTo)|\(counts)|\(s.primaryWarn)|\(s.aheadWarn2)|\(limit)|\(over)|\(tpms)|\(s.planSummary ?? "")|\(s.outsideC ?? -1)"
+    }
+
+    private static func publishState(
+        _ state: EtubuDriveAttributes.ContentState,
+        force: Bool
+    ) async {
+        guard let activity = current ?? Activity<EtubuDriveAttributes>.activities.first else { return }
+        current = activity
+        let sig = meaningfulSignature(state)
+        if !force, sig == lastMeaningfulSignature { return }
+        lastMeaningfulSignature = sig
         await activity.update(makeContent(state: state))
     }
 
@@ -267,6 +326,7 @@ enum EtubuLiveActivityController {
         stopSilentKeepalive()
         let activities = Activity<EtubuDriveAttributes>.activities
         current = nil
+        lastMeaningfulSignature = ""
         for activity in activities {
             await activity.end(nil, dismissalPolicy: .immediate)
         }
@@ -276,10 +336,21 @@ enum EtubuLiveActivityController {
     static func endAllNow() {
         stopSilentKeepalive()
         current = nil
+        lastMeaningfulSignature = ""
         Task { @MainActor in
             for activity in Activity<EtubuDriveAttributes>.activities {
                 await activity.end(nil, dismissalPolicy: .immediate)
             }
         }
+    }
+}
+
+@available(iOS 16.2, *)
+private extension EtubuLiveActivityController {
+    static func rgb(_ color: Color) -> (Double, Double, Double) {
+        let ui = UIColor(color)
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        ui.getRed(&r, green: &g, blue: &b, alpha: &a)
+        return (Double(r), Double(g), Double(b))
     }
 }

@@ -53,6 +53,8 @@ struct EtubuRouteHazard: Equatable, Identifiable {
         case "crossing": return EtubuClusterL10n.t("warnKindCrossing")
         case "bump": return EtubuClusterL10n.t("warnKindBump")
         case "tunnel": return EtubuClusterL10n.t("warnKindTunnel")
+        case "underpass": return EtubuClusterL10n.t("warnKindUnderpass")
+        case "overpass": return EtubuClusterL10n.t("warnKindOverpass")
         case "winding": return EtubuClusterL10n.t("warnKindWinding")
         case "climb": return EtubuClusterL10n.t("warnKindClimb")
         case "road_condition": return EtubuClusterL10n.t("warnKindRoadCondition")
@@ -87,7 +89,7 @@ struct EtubuRouteBriefSummary: Equatable {
 
     static func isOsmCritical(_ kind: String) -> Bool {
         switch kind {
-        case "railway", "tunnel", "winding", "climb", "road_condition", "animal",
+        case "railway", "tunnel", "underpass", "overpass", "winding", "climb", "road_condition", "animal",
              "stop", "give_way":
             return true
         default:
@@ -326,12 +328,12 @@ final class EtubuDriveWarnings: ObservableObject {
         }
 
         if let hs = json["hazards"] as? [[String: Any]], !hs.isEmpty {
-            hazards = hs.compactMap { Self.parseHazard($0) }
+            hazards = Self.sortedForDisplay(hs.compactMap { Self.parseHazard($0) })
         }
         // Boş Cap hazards native EGM listesini silmesin.
 
         if let rh = json["remaining"] as? [[String: Any]], !rh.isEmpty {
-            remainingHazards = rh.compactMap { Self.parseHazard($0, idPrefix: "rem-") }
+            remainingHazards = Self.sortedForDisplay(rh.compactMap { Self.parseHazard($0, idPrefix: "rem-") })
         } else if (json["active"] as? Bool == true) || EtubuVehicleTelemetry.shared.routeActive {
             if remainingHazards.isEmpty { remainingHazards = hazards }
         } else if !EtubuVehicleTelemetry.shared.routeActive, hazards.isEmpty {
@@ -532,6 +534,7 @@ final class EtubuDriveWarnings: ObservableObject {
             mode: .led
         )
         pool.append(contentsOf: wxLive.points)
+        pool = pool.filter { EtubuOsmHazardsMonitor.isRoadTrafficWarning($0) }
 
         // Rota polyline varsa: rota dışı hazard'ları ele.
         if routeCoords.count >= 2 {
@@ -540,7 +543,9 @@ final class EtubuDriveWarnings: ObservableObject {
                     switch h.kind {
                     case "weather": return 8_000
                     case "charge": return 450
-                    default: return 160
+                    case "radar", "corridor", "control": return 420
+                    case "tunnel", "railway", "underpass", "overpass": return 320
+                    default: return 280
                     }
                 }()
                 return Self.minDistanceToRouteM(lat: h.lat, lng: h.lng, coords: routeCoords) <= maxOff
@@ -635,7 +640,14 @@ final class EtubuDriveWarnings: ObservableObject {
             return a.dM < b.dM
         }
 
-        let nativeQueue: [EtubuWarnItem] = ranked.prefix(4).map { r in
+        let roadRanked = ranked.filter { $0.h.kind != "charge" && $0.h.kind != "weather" }
+        let chargeRanked = ranked.filter { $0.h.kind == "charge" }
+        let showCharge: Bool = {
+            guard let c = chargeRanked.first else { return false }
+            return t.needsChargeStop || c.dM <= 800
+        }()
+
+        func item(from r: Ranked) -> EtubuWarnItem {
             let lim = r.h.maxspeed.map { " · \($0)" } ?? ""
             return EtubuWarnItem(
                 id: r.h.id,
@@ -646,6 +658,15 @@ final class EtubuDriveWarnings: ObservableObject {
                 meta: r.h.maxspeed.map { "lim \($0)" } ?? ""
             )
         }
+
+        var nativeQueue: [EtubuWarnItem] = roadRanked.prefix(3).map { item(from: $0) }
+        if showCharge, let c = chargeRanked.first {
+            nativeQueue.append(item(from: c))
+        }
+        if nativeQueue.count < 4 {
+            nativeQueue.append(contentsOf: ranked.filter { $0.h.kind == "weather" }.prefix(1).map { item(from: $0) })
+        }
+        nativeQueue = Array(nativeQueue.prefix(4))
 
         if !live.corridorActive {
             let preferNative = !hazards.isEmpty || !remainingHazards.isEmpty
@@ -671,26 +692,50 @@ final class EtubuDriveWarnings: ObservableObject {
         if !fullPool.isEmpty {
             let onRoutePool: [EtubuRouteHazard] = {
                 guard routeCoords.count >= 2 else { return fullPool }
-                return fullPool.filter {
-                    Self.minDistanceToRouteM(lat: $0.lat, lng: $0.lng, coords: routeCoords) <= 160
+                return fullPool.filter { h in
+                    let maxOff: Double = {
+                        switch h.kind {
+                        case "weather": return 8_000
+                        case "charge": return 450
+                        case "radar", "corridor", "control": return 420
+                        case "tunnel", "railway", "underpass", "overpass": return 320
+                        default: return 280
+                        }
+                    }()
+                    return Self.minDistanceToRouteM(lat: h.lat, lng: h.lng, coords: routeCoords) <= maxOff
                 }
             }()
-            remainingHazards = Self.prunePassedHazards(
-                onRoutePool,
-                lat: lat,
-                lng: lng,
-                heading: heading,
-                coords: routeCoords,
-                touched: &touchedHazardIds,
-                lastDist: &lastHazardDistM
+            remainingHazards = Self.sortedForDisplay(
+                Self.prunePassedHazards(
+                    onRoutePool,
+                    lat: lat,
+                    lng: lng,
+                    heading: heading,
+                    coords: routeCoords,
+                    touched: &touchedHazardIds,
+                    lastDist: &lastHazardDistM
+                )
             )
             remainingBrief = Self.briefFromHazards(remainingHazards)
             if routeCoords.count >= 2 {
-                hazards = onRoutePool
-                brief = Self.briefFromHazards(onRoutePool)
+                hazards = Self.sortedForDisplay(onRoutePool)
+                brief = Self.briefFromHazards(hazards)
+            }
+            let extraRoad = pool.filter { $0.kind != "charge" && $0.kind != "weather" }
+            if !extraRoad.isEmpty {
+                remainingHazards = Self.sortedForDisplay(
+                    EtubuHazardMerge.dedupePreferOfficial(remainingHazards + extraRoad)
+                )
+                remainingBrief = Self.briefFromHazards(remainingHazards)
+                if routeCoords.count >= 2 {
+                    hazards = Self.sortedForDisplay(
+                        EtubuHazardMerge.dedupePreferOfficial(hazards + extraRoad)
+                    )
+                    brief = Self.briefFromHazards(hazards)
+                }
             }
         } else if !ranked.isEmpty {
-            remainingHazards = ranked.map(\.h)
+            remainingHazards = Self.sortedForDisplay(ranked.map(\.h))
             remainingBrief = Self.briefFromHazards(remainingHazards)
         } else if !live.corridorActive {
             primary = nil
@@ -914,7 +959,7 @@ final class EtubuDriveWarnings: ObservableObject {
             return false
         }
         switch item.kind {
-        case "radar", "corridor", "railway", "tunnel", "climb", "winding", "weather", "road_condition", "animal":
+        case "radar", "corridor", "railway", "tunnel", "underpass", "overpass", "climb", "winding", "weather", "road_condition", "animal":
             return item.stage == .mid || item.stage == .near || item.stage == .critical
         case "traffic_light", "crossing", "bump", "stop", "give_way":
             return item.stage == .critical || item.stage == .near
@@ -1008,15 +1053,28 @@ final class EtubuDriveWarnings: ObservableObject {
         )
     }
 
-    private static func warnPriority(_ kind: String) -> Int {
+    nonisolated private static func warnPriority(_ kind: String) -> Int {
         switch kind {
         case "corridor", "radar": return 0
         case "railway", "control": return 1
-        case "tunnel", "winding", "climb", "road_condition", "animal": return 2
+        case "tunnel", "underpass", "overpass", "winding", "climb", "road_condition", "animal": return 2
         case "traffic_light", "stop", "give_way", "crossing", "bump": return 3
-        case "charge": return 4
-        case "weather": return 5
-        default: return 6
+        case "weather": return 4
+        case "charge": return 5
+        default: return 3
+        }
+    }
+
+    /// Road warnings first, charge stations second, weather last. Then along-route order.
+    nonisolated static func sortedForDisplay(_ hazards: [EtubuRouteHazard]) -> [EtubuRouteHazard] {
+        hazards.sorted { a, b in
+            let pa = warnPriority(a.kind)
+            let pb = warnPriority(b.kind)
+            if pa != pb { return pa < pb }
+            let aa = a.alongKm ?? Double(a.routeIdx ?? 1_000_000)
+            let bb = b.alongKm ?? Double(b.routeIdx ?? 1_000_000)
+            if aa != bb { return aa < bb }
+            return a.label < b.label
         }
     }
 
@@ -1161,8 +1219,14 @@ final class EtubuDriveWarnings: ObservableObject {
 
         function warnPri(kind) {
           if (kind === 'corridor' || kind === 'radar') return 0;
-          if (kind === 'charge') return 1;
-          if (kind === 'weather') return 2;
+          if (kind === 'railway' || kind === 'control') return 1;
+          if (kind === 'tunnel' || kind === 'underpass' || kind === 'overpass'
+              || kind === 'winding' || kind === 'climb' || kind === 'road_condition'
+              || kind === 'animal') return 2;
+          if (kind === 'traffic_light' || kind === 'stop' || kind === 'give_way'
+              || kind === 'crossing' || kind === 'bump') return 3;
+          if (kind === 'weather') return 4;
+          if (kind === 'charge') return 5;
           return 3;
         }
 

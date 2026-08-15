@@ -7,8 +7,22 @@ extension Notification.Name {
 /// İlk açılışta hüküm ve koşullar — metin sonunda “Okudum, anladım” olmadan giriş yok.
 enum EtubuLegalAcceptance {
     static let acceptedKey = "etubu.legal.accepted.v1"
-    static var isAccepted: Bool { UserDefaults.standard.bool(forKey: acceptedKey) }
+
+    /// Simulator CFPreferences for this bundle id survive uninstall + Maestro `clearState`.
+    static func bootstrap() {
+        struct Once { static var done = false }
+        guard !Once.done else { return }
+        Once.done = true
+        EtubuRuntimeProfile.shadowLeakedSimulatorDefaults()
+    }
+
+    static var isAccepted: Bool {
+        bootstrap()
+        return UserDefaults.standard.bool(forKey: acceptedKey)
+    }
+
     static func accept() {
+        bootstrap()
         UserDefaults.standard.set(true, forKey: acceptedKey)
         EtubuLegalGate.shared.accepted = true
         NotificationCenter.default.post(name: .etubuLegalAccepted, object: nil)

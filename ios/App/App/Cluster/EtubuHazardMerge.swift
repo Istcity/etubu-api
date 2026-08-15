@@ -21,7 +21,11 @@ enum EtubuHazardMerge {
             return (520, 140)
         case "railway":
             return (380, 90)
-        case "tunnel", "climb":
+        case "tunnel":
+            return (450, 100)
+        case "underpass", "overpass":
+            return (220, 60)
+        case "climb":
             return (450, 100)
         case "winding", "road_condition", "animal":
             return (320, 85)
@@ -32,7 +36,7 @@ enum EtubuHazardMerge {
         case "crossing", "bump":
             return (55, 18)
         case "charge":
-            return (5_000, 400)
+            return (800, 250)
         case "weather":
             return (8_000, 1_500)
         default:
@@ -62,6 +66,8 @@ enum EtubuHazardMerge {
         // Stop / yield share family for dedupe.
         let stopFamily: Set = ["stop", "give_way"]
         if stopFamily.contains(a), stopFamily.contains(b) { return true }
+        let tunnelFamily: Set = ["tunnel", "underpass"]
+        if tunnelFamily.contains(a), tunnelFamily.contains(b) { return true }
         return false
     }
 

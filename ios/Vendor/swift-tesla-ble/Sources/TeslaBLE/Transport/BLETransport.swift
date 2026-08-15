@@ -36,6 +36,7 @@ final class BLETransport: NSObject, Sendable {
 
     private nonisolated(unsafe) var inputBuffer = Data()
     private nonisolated(unsafe) var lastRxTime: Date?
+    private nonisolated(unsafe) var writeContinuation: CheckedContinuation<Void, Error>?
 
     private nonisolated(unsafe) var connectionContinuation: CheckedContinuation<Void, Error>?
     private nonisolated(unsafe) var receiveContinuations: [CheckedContinuation<Data, Error>] = []
@@ -105,7 +106,8 @@ final class BLETransport: NSObject, Sendable {
     }
 
     /// Sends a protobuf-serialized RoutableMessage.
-    func send(_ data: Data) throws {
+    /// With `writeWithResponse`, each MTU chunk waits for `didWriteValueFor` before the next.
+    func send(_ data: Data) async throws {
         guard let peripheral, let txCharacteristic else {
             throw BLEError.notConnected
         }
@@ -113,9 +115,30 @@ final class BLETransport: NSObject, Sendable {
         guard framed.count <= Self.maxMessageSize + 2 else {
             throw BLEError.messageTooLarge
         }
-        let chunks = MessageFramer.fragment(framed, mtu: mtu)
+        let chunks = MessageFramer.fragment(framed, mtu: max(1, mtu))
         for chunk in chunks {
-            peripheral.writeValue(chunk, for: txCharacteristic, type: writeType)
+            if writeType == .withResponse {
+                try await writeChunkAndWait(chunk)
+            } else {
+                peripheral.writeValue(chunk, for: txCharacteristic, type: writeType)
+            }
+        }
+    }
+
+    private func writeChunkAndWait(_ chunk: Data) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            queue.async { [self] in
+                guard let peripheral, let txCharacteristic else {
+                    continuation.resume(throwing: BLEError.notConnected)
+                    return
+                }
+                if writeContinuation != nil {
+                    continuation.resume(throwing: BLEError.notConnected)
+                    return
+                }
+                writeContinuation = continuation
+                peripheral.writeValue(chunk, for: txCharacteristic, type: .withResponse)
+            }
         }
     }
 
@@ -146,8 +169,30 @@ final class BLETransport: NSObject, Sendable {
         peripheral = nil
         txCharacteristic = nil
         rxCharacteristic = nil
-        inputBuffer = Data()
+        inputBuffer.removeAll()
+        if let writeContinuation {
+            self.writeContinuation = nil
+            writeContinuation.resume(throwing: BLEError.disconnected)
+        }
         updateState(.disconnected)
+    }
+
+    private func tryFlush() -> Data? {
+        guard inputBuffer.count >= 2 else { return nil }
+        do {
+            let (message, consumed) = try MessageFramer.decode(inputBuffer)
+            if let message {
+                inputBuffer.removeFirst(consumed)
+                return message
+            }
+            if inputBuffer.count > MessageFramer.maxPayloadLength + 2 {
+                inputBuffer.removeAll()
+            }
+            return nil
+        } catch {
+            inputBuffer.removeAll()
+            return nil
+        }
     }
 
     private func updateState(_ newState: ConnectionState) {
@@ -157,15 +202,6 @@ final class BLETransport: NSObject, Sendable {
 
     private func assertOnTransportQueue() {
         dispatchPrecondition(condition: .onQueue(queue))
-    }
-
-    private func tryFlush() -> Data? {
-        guard inputBuffer.count >= 2 else { return nil }
-        if let (message, consumed) = try? MessageFramer.decode(inputBuffer), let message {
-            inputBuffer.removeFirst(consumed)
-            return message
-        }
-        return nil
     }
 }
 
@@ -308,6 +344,22 @@ extension BLETransport: CBPeripheralDelegate {
         while !receiveContinuations.isEmpty, let message = tryFlush() {
             let continuation = receiveContinuations.removeFirst()
             continuation.resume(returning: message)
+        }
+    }
+
+    nonisolated func peripheral(
+        _: CBPeripheral,
+        didWriteValueFor characteristic: CBCharacteristic,
+        error: Error?,
+    ) {
+        assertOnTransportQueue()
+        guard characteristic.uuid == Self.toVehicleUUID else { return }
+        guard let cont = writeContinuation else { return }
+        writeContinuation = nil
+        if let error {
+            cont.resume(throwing: error)
+        } else {
+            cont.resume()
         }
     }
 }

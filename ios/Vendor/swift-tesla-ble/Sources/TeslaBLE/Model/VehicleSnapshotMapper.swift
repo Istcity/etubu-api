@@ -55,6 +55,8 @@ enum VehicleSnapshotMapper {
             ? Double(pb.batteryRange) : nil
         let estBatteryRangeMiles: Double? = pb.optionalEstBatteryRange != nil
             ? Double(pb.estBatteryRange) : nil
+        let idealBatteryRangeMiles: Double? = pb.optionalIdealBatteryRange != nil
+            ? Double(pb.idealBatteryRange) : nil
         let homeLat: Double? = pb.optionalHomeLocation != nil
             ? Double(pb.homeLocation.latitude) : nil
         let homeLng: Double? = pb.optionalHomeLocation != nil
@@ -68,6 +70,7 @@ enum VehicleSnapshotMapper {
             batteryLevel: batteryLevel,
             batteryRangeMiles: batteryRangeMiles,
             estBatteryRangeMiles: estBatteryRangeMiles,
+            idealBatteryRangeMiles: idealBatteryRangeMiles,
             chargingStatus: mapChargingStatus(pb.chargingState),
             chargerVoltage: pb.optionalChargerVoltage != nil ? Int(pb.chargerVoltage) : nil,
             chargerCurrent: pb.optionalChargerActualCurrent != nil ? Int(pb.chargerActualCurrent) : nil,

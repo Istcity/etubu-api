@@ -47,7 +47,7 @@ struct EtubuRoutePickerView: View {
                                     .padding(.horizontal, 14)
                                     .padding(.top, 4)
                             }
-                            if routeStatus.active || !toText.isEmpty {
+                            if routeStatus.active {
                                 clearRow
                                     .padding(.horizontal, 14)
                                     .padding(.vertical, 2)
@@ -83,9 +83,6 @@ struct EtubuRoutePickerView: View {
                                 VStack(alignment: .leading, spacing: 10) {
                                     if routeStatus.active || !routeStatus.briefText.isEmpty {
                                         activeRouteCard
-                                    }
-                                    if routeStatus.active || !toText.isEmpty {
-                                        clearRow
                                     }
                                     if !suggestions.isEmpty {
                                         suggestionsList
@@ -146,7 +143,7 @@ struct EtubuRoutePickerView: View {
         .onAppear {
             EtubuClusterPresenter.shared.hideCapacitorChrome()
             EtubuRouteBridge.primeWarningAudio()
-            EtubuMapLocationHelper.shared.startIfNeeded()
+            EtubuMapLocationHelper.shared.setRoutePickerVisible(true)
             EtubuRouteBridge.pushNativeLocationToWeb()
             statusMessage = ""
             sheetDetent = .fraction(0.46)
@@ -164,6 +161,9 @@ struct EtubuRoutePickerView: View {
         }
         .onChange(of: routeStatus.active) { _, on in
             if on { sheetDetent = .medium }
+        }
+        .onDisappear {
+            EtubuMapLocationHelper.shared.setRoutePickerVisible(false)
         }
     }
 
@@ -209,30 +209,39 @@ struct EtubuRoutePickerView: View {
     }
 
     private var clearRow: some View {
-        Button {
-            EtubuRouteBridge.clear()
-            toText = ""
-            toResolved = false
-            selectedToPlace = nil
-            destinationNeedsDistrict = false
-            suggestions = []
-            routeStatus = EtubuRouteStatus(active: false, fromLabel: fromFixed, toLabel: "", statusText: "", briefText: "")
-            statusMessage = ""
-            telemetry.routeActive = false
-            EtubuDriveWarnings.shared.brief = EtubuRouteBriefSummary()
-            EtubuDriveWarnings.shared.remainingBrief = EtubuRouteBriefSummary()
-            EtubuDriveWarnings.shared.hazards = []
-            EtubuDriveWarnings.shared.remainingHazards = []
-            EtubuDriveWarnings.shared.routeCoords = []
-            EtubuDriveWarnings.shared.queue = []
-            EtubuDriveWarnings.shared.primary = nil
-            toFocused = true
+        Button(role: .destructive) {
+            deleteActiveRoute()
         } label: {
-            Text(EtubuClusterL10n.clear)
+            Label(EtubuClusterL10n.t("deleteRoute"), systemImage: "trash")
                 .font(EtubuClusterFonts.ui(13, weight: .semibold))
-                .foregroundStyle(theme.mutedText)
+                .foregroundStyle(.red.opacity(0.9))
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("etubu.route.delete")
+    }
+
+    private func deleteActiveRoute() {
+        EtubuRouteBridge.clear()
+        toText = ""
+        toResolved = false
+        selectedToPlace = nil
+        destinationNeedsDistrict = false
+        suggestions = []
+        routeStatus = EtubuRouteStatus(active: false, fromLabel: fromFixed, toLabel: "", statusText: "", briefText: "")
+        statusMessage = ""
+        telemetry.routeActive = false
+        telemetry.routeTo = ""
+        telemetry.navDestination = ""
+        EtubuDriveWarnings.shared.brief = EtubuRouteBriefSummary()
+        EtubuDriveWarnings.shared.remainingBrief = EtubuRouteBriefSummary()
+        EtubuDriveWarnings.shared.hazards = []
+        EtubuDriveWarnings.shared.remainingHazards = []
+        EtubuDriveWarnings.shared.routeCoords = []
+        EtubuDriveWarnings.shared.queue = []
+        EtubuDriveWarnings.shared.primary = nil
+        EtubuEvRoutePlanner.shared.refreshFromLiveState()
+        EtubuMapLocationHelper.shared.syncWithVehicleSession()
+        toFocused = true
     }
 
     /// Çerçevesiz alan — yatayda yazılan metin her zaman okunaklı.
@@ -426,6 +435,14 @@ struct EtubuRoutePickerView: View {
             .buttonStyle(.plain)
             .foregroundStyle(theme.accent)
             .accessibilityIdentifier("etubu.route.openMaps")
+            Button(role: .destructive) {
+                deleteActiveRoute()
+            } label: {
+                Label(EtubuClusterL10n.t("deleteRoute"), systemImage: "trash")
+                    .font(EtubuClusterFonts.ui(13, weight: .semibold))
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("etubu.route.delete")
             if routeStatus.navOnly {
                 Text(EtubuClusterL10n.t("overseasRouteNote"))
                     .font(EtubuClusterFonts.ui(12, weight: .medium))
@@ -476,7 +493,8 @@ struct EtubuRoutePickerView: View {
     }
 
     private var displayOsmHazards: [EtubuRouteHazard] {
-        Array(displayHazards.filter { $0.kind != "weather" }.prefix(40))
+        let all = displayHazards.filter { $0.kind != "weather" }
+        return Array(EtubuDriveWarnings.sortedForDisplay(all).prefix(40))
     }
 
     private var displayWeatherHazards: [EtubuRouteHazard] {
@@ -552,7 +570,7 @@ struct EtubuRoutePickerView: View {
     private func refreshDistrictRequirement(for text: String) {
         // Eski ilçe uyarısı kaldırıldı; arama OSM ile tamamlanır.
         destinationNeedsDistrict = false
-        if statusMessage.contains("ilçe seçin") {
+        if statusMessage == EtubuClusterL10n.t("routeResolvingPlaces") {
             statusMessage = ""
         }
     }
@@ -640,12 +658,14 @@ struct EtubuRoutePickerView: View {
                 isSearching = false
             }
             if places.isEmpty {
-                if statusMessage.isEmpty || statusMessage.contains("yükleniyor") {
+                if statusMessage.isEmpty
+                    || statusMessage == EtubuClusterL10n.t("searching")
+                    || statusMessage == EtubuClusterL10n.t("routeResolvingPlaces") {
                     statusMessage = EtubuClusterL10n.t("osmSearchEmpty")
                 }
-            } else if statusMessage.contains("Sonuç yok")
-                        || statusMessage.contains("yükleniyor")
-                        || statusMessage == EtubuClusterL10n.t("osmSearchEmpty") {
+            } else if statusMessage == EtubuClusterL10n.t("osmSearchEmpty")
+                        || statusMessage == EtubuClusterL10n.t("searching")
+                        || statusMessage == EtubuClusterL10n.t("routeResolvingPlaces") {
                 statusMessage = ""
             }
         }
@@ -665,7 +685,7 @@ struct EtubuRoutePickerView: View {
             return
         }
         isPlanning = true
-        statusMessage = "Yerler çözülüyor…"
+        statusMessage = EtubuClusterL10n.t("routeResolvingPlaces")
         let toRaw = toText.trimmingCharacters(in: .whitespacesAndNewlines)
 
         func fail(_ msg: String) {
@@ -678,7 +698,7 @@ struct EtubuRoutePickerView: View {
             if let sel = selectedToPlace, sel.lat != nil, sel.lng != nil {
                 toText = sel.label
                 toResolved = true
-                statusMessage = "Rotaya alınıyor: \(fromFixed) → \(sel.label)"
+                statusMessage = String(format: EtubuClusterL10n.t("routePlanningFmt"), fromFixed, sel.label)
                 EtubuRouteBridge.primeWarningAudio()
                 EtubuRouteBridge.plan(from: fromFixed, to: sel.label, toPlace: sel) { ok, msg in
                     isPlanning = false

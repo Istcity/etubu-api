@@ -50,6 +50,9 @@ actor Dispatcher {
     private var requestTable = RequestTable()
     private var inboundTask: Task<Void, Never>?
     private var started = false
+    /// One signed/unsigned BLE write at a time until response or timeout.
+    private var wireBusy = false
+    private var wireWaiters: [CheckedContinuation<Void, Never>] = []
 
     init(transport: MessageTransport, logger: (any TeslaBLELogger)? = nil) {
         self.transport = transport
@@ -72,6 +75,12 @@ actor Dispatcher {
         inboundTask?.cancel()
         inboundTask = nil
         requestTable.cancelAll(error: Error.shutdown)
+        let stranded = wireWaiters
+        wireWaiters.removeAll()
+        wireBusy = false
+        for waiter in stranded {
+            waiter.resume()
+        }
     }
 
     /// Installs or replaces a `VehicleSession` for the given domain. Typically
@@ -128,6 +137,9 @@ actor Dispatcher {
 
         // Freeze the request before capturing in the Sendable closure.
         let frozenRequest = request
+
+        await acquireWire()
+        defer { releaseWire() }
 
         // Register and transmit.
         let response: UniversalMessage_RoutableMessage
@@ -191,6 +203,9 @@ actor Dispatcher {
         let token = routeToken(forDomain: domain, uuid: requestUUID, routingAddress: fromAddress)
         let frozenRequest = request
 
+        await acquireWire()
+        defer { releaseWire() }
+
         let response: UniversalMessage_RoutableMessage
         do {
             response = try await withRegisteredRequest(token: token, timeout: timeout) { [self] in
@@ -232,6 +247,8 @@ actor Dispatcher {
         request.uuid = Self.newUUIDBytes()
         request.payload = .protobufMessageAsBytes(plaintext)
 
+        await acquireWire()
+        defer { releaseWire() }
         try await transmit(message: request)
     }
 
@@ -286,6 +303,9 @@ actor Dispatcher {
         )
         let challenge = requestUUID
         let token = routeToken(forDomain: domain, uuid: requestUUID, routingAddress: fromAddress)
+
+        await acquireWire()
+        defer { releaseWire() }
 
         let response: UniversalMessage_RoutableMessage = try await withRegisteredRequest(
             token: token,
@@ -415,6 +435,25 @@ actor Dispatcher {
             let uuid = message.requestUuid
             return uuid.isEmpty ? nil : uuid
         }
+    }
+
+    private func acquireWire() async {
+        if !wireBusy {
+            wireBusy = true
+            return
+        }
+        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+            wireWaiters.append(cont)
+        }
+    }
+
+    private func releaseWire() {
+        if wireWaiters.isEmpty {
+            wireBusy = false
+            return
+        }
+        let next = wireWaiters.removeFirst()
+        next.resume()
     }
 
     private func transmit(message: UniversalMessage_RoutableMessage) async throws {

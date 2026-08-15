@@ -3,12 +3,19 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-9FQ0VVHGYC"></script>
   <script>
     window.dataLayer = window.dataLayer || [];
     function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-    gtag('config', 'G-9FQ0VVHGYC');
+    gtag('consent', 'default', {
+      analytics_storage: 'denied',
+      ad_storage: 'denied',
+      ad_user_data: 'denied',
+      ad_personalization: 'denied',
+      functionality_storage: 'denied',
+      personalization_storage: 'denied',
+      security_storage: 'granted',
+      wait_for_update: 500
+    });
   </script>
   <title>Hakkımızda — ETUBU EV Sürüş Deneyimi</title>
   <meta name="description" content="ETUBU kimdir: elektrikli araç sürüş sesleri, GPS senkron deneyim, güvenli kullanım ilkeleri ve iletişim." />
@@ -28,6 +35,7 @@
     <a href="privacy.html">Gizlilik</a>
     <a href="terms.html">Kullanım şartları</a>
     <a href="disclaimer.html">Sorumluluk reddi</a>
+    <button type="button" class="link-btn" data-consent-open>Çerez ayarları</button>
   </nav>
 
   <header class="content-hero">
@@ -73,5 +81,6 @@
   </div>
 
   <footer class="legal-footer">© 2026 ETUBU · etubu.com · <a href="/blog/">Rehber</a></footer>
+  <script src="js/consent.js?v=20260814e"></script>
 </body>
 </html>

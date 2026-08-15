@@ -26,9 +26,21 @@ struct EtubuClusterLayoutMetrics {
 
     let isCompactHeight: Bool
     let isCompactWidth: Bool
+    /// Top icon strip uses compact glyphs + tight gaps (always on portrait phones).
+    let chromeCompact: Bool
+    let chromeGap: CGFloat
     let showSparkline: Bool
     let mapWashHeight: CGFloat
     let iconHit: CGFloat
+    /// Nose-up TPMS car + psi labels — hard box so the graphic cannot report a taller ideal size.
+    let tpmsMaxW: CGFloat
+    let tpmsMaxH: CGFloat
+    /// Portrait bottom-left cluster (TPMS) — scales SE → Max; not camera chrome.
+    let bottomClusterLead: CGFloat
+    let bottomClusterTrail: CGFloat
+    let bottomClusterPad: CGFloat
+    /// Portrait MapKit Legal inset so “Yasal” sits to the right of TPMS.
+    let mapLegalLead: CGFloat
 
     var cutoutEdge: HorizontalAlignment?
     var cutoutStyle: EtubuCameraCutout.Style
@@ -115,6 +127,24 @@ struct EtubuClusterLayoutMetrics {
         let compactH = usableH < 300 || size.height < 390
         let compactW = usableW < 560 || size.width < 700
         let fontScale = min(1.22, max(0.78, scale * 1.12))
+        var signSize = min(40, max(24, dialChrome * 0.14))
+        let middle = max(120, usableW - sideW * 2 - 10)
+        let midTotal = dialSize + boxW + signSize + 12
+        if midTotal > middle, midTotal > 1 {
+            let k = middle / midTotal
+            dialSize *= k
+            dialChrome *= k
+            boxW *= k
+            signSize *= k
+        }
+        let tpmsMaxW = max(56, sideW - 8)
+        let tpmsMaxH = min(
+            compactH ? 108 : 132,
+            max(68, min(usableH * 0.48, usableH - 92))
+        )
+        let chromeCompact = true
+        let chromeGap: CGFloat = compactW ? 3 : 5
+        let iconHit: CGFloat = compactH ? 30 : 34
 
         return EtubuClusterLayoutMetrics(
             canvas: size,
@@ -126,7 +156,7 @@ struct EtubuClusterLayoutMetrics {
             dialChrome: dialChrome.rounded(.toNearestOrAwayFromZero),
             boxW: boxW.rounded(.toNearestOrAwayFromZero),
             sideW: sideW.rounded(.toNearestOrAwayFromZero),
-            signSize: min(40, max(24, dialChrome * 0.14)),
+            signSize: signSize.rounded(.toNearestOrAwayFromZero),
             leadPad: leadPad,
             trailPad: trailPad,
             topChrome: max(topIns, 4),
@@ -134,9 +164,17 @@ struct EtubuClusterLayoutMetrics {
             contentVGap: compactH ? 2 : 4,
             isCompactHeight: compactH,
             isCompactWidth: compactW,
+            chromeCompact: chromeCompact,
+            chromeGap: chromeGap,
             showSparkline: !compactH,
             mapWashHeight: min(size.height * 0.55, usableH),
-            iconHit: compactW ? 36 : 40,
+            iconHit: iconHit.rounded(.toNearestOrAwayFromZero),
+            tpmsMaxW: tpmsMaxW.rounded(.toNearestOrAwayFromZero),
+            tpmsMaxH: tpmsMaxH.rounded(.toNearestOrAwayFromZero),
+            bottomClusterLead: 8,
+            bottomClusterTrail: 8,
+            bottomClusterPad: 4,
+            mapLegalLead: 0,
             cutoutEdge: edge,
             cutoutStyle: style
         )
@@ -155,7 +193,8 @@ struct EtubuClusterLayoutMetrics {
         let cutoutAtBottom = cutout?.anchor == .bottom
 
         let compactH = size.height < 720
-        let compactW = size.width < 390
+        // 17e (390) and 17 Pro (402) must use compact chrome — 7×40pt icons overflow.
+        let compactW = size.width < 428
 
         var scale = min(size.width / 402, size.height / 874)
         scale = min(1.10, max(0.72, scale))
@@ -193,7 +232,41 @@ struct EtubuClusterLayoutMetrics {
         if dialSize + twinShare + 20 > usableW {
             dialSize = max(120, usableW - twinShare - 20)
         }
-        let bottomReserve: CGFloat = compactH ? 210 : 280
+
+        let homeIndicator = botIns >= 20
+        let wide = size.width >= 428
+        let bottomClusterLead: CGFloat = {
+            if compactW { return homeIndicator ? 20 : 16 }
+            return wide ? 30 : 26
+        }()
+        let bottomClusterTrail: CGFloat = compactW ? 14 : 20
+        let bottomClusterPad: CGFloat = {
+            if !homeIndicator { return compactH ? 10 : 14 }
+            if compactH { return 16 }
+            return wide ? 26 : 22
+        }()
+        let clockReserve: CGFloat = compactH ? 100 : 128
+        let tpmsBudgetW = max(
+            72,
+            usableW - bottomClusterLead - bottomClusterTrail - clockReserve - 10
+        )
+        let tpmsMaxH: CGFloat = {
+            let cap: CGFloat = compactH
+                ? (size.height < 680 ? 78 : 90)
+                : (size.height >= 920 ? 120 : 108)
+            let floor: CGFloat = compactH ? 64 : 80
+            return min(cap, max(floor, usableH * (compactH ? 0.12 : 0.125)))
+        }()
+        let tpmsMaxW: CGFloat = {
+            let fromHeight = tpmsMaxH * (680.0 / 1408.0) + (compactW ? 36 : 48)
+            return min(tpmsBudgetW, fromHeight, compactW ? 110 : 132)
+        }()
+        let mapLegalLead = min(
+            usableW * 0.40,
+            max(insets.leading, 6) + bottomClusterLead + tpmsMaxW + 8
+        )
+
+        let bottomReserve: CGFloat = compactH ? (186 + tpmsMaxH) : (168 + tpmsMaxH)
         let dialHBudget = max(130, usableH - bottomReserve)
         if dialSize > dialHBudget {
             dialSize = dialHBudget
@@ -201,6 +274,22 @@ struct EtubuClusterLayoutMetrics {
 
         var boxW = min(126, usableW * 0.27) * scale
         boxW = min(boxW, max(72, usableW - dialSize - 18))
+        var signSize: CGFloat = compactH ? 28 : 32
+        let rowGaps: CGFloat = compactW ? 14 : 20
+        let rowBudget = max(200, usableW - rowGaps)
+        let rowTotal = dialSize + boxW + signSize
+        if rowTotal > rowBudget, rowTotal > 1 {
+            let k = rowBudget / rowTotal
+            dialSize *= k
+            boxW *= k
+            signSize *= k
+        }
+
+        let chromeGap: CGFloat = size.width < 400 ? 2 : 3
+        let chipReserve: CGFloat = 100
+        let chromeN: CGFloat = 7
+        let chromeBudget = max(196, usableW - chipReserve)
+        let iconHit = min(34, max(28, (chromeBudget - (chromeN - 1) * chromeGap) / chromeN))
 
         let fontScale = min(1.16, max(0.78, scale * 0.95))
         let mapWash = min(compactH ? 280 : 420, size.height * (compactH ? 0.36 : 0.42))
@@ -215,7 +304,7 @@ struct EtubuClusterLayoutMetrics {
             dialChrome: dialSize.rounded(.toNearestOrAwayFromZero),
             boxW: boxW.rounded(.toNearestOrAwayFromZero),
             sideW: 0,
-            signSize: compactH ? 28 : 34,
+            signSize: signSize.rounded(.toNearestOrAwayFromZero),
             leadPad: max(insets.leading, 6),
             trailPad: max(insets.trailing, 6),
             topChrome: topChrome,
@@ -223,9 +312,17 @@ struct EtubuClusterLayoutMetrics {
             contentVGap: compactH ? 2 : 6,
             isCompactHeight: compactH,
             isCompactWidth: compactW,
+            chromeCompact: true,
+            chromeGap: chromeGap,
             showSparkline: !compactH && size.height >= 760,
             mapWashHeight: mapWash,
-            iconHit: compactW ? 36 : 40,
+            iconHit: iconHit.rounded(.toNearestOrAwayFromZero),
+            tpmsMaxW: tpmsMaxW.rounded(.toNearestOrAwayFromZero),
+            tpmsMaxH: tpmsMaxH.rounded(.toNearestOrAwayFromZero),
+            bottomClusterLead: bottomClusterLead.rounded(.toNearestOrAwayFromZero),
+            bottomClusterTrail: bottomClusterTrail.rounded(.toNearestOrAwayFromZero),
+            bottomClusterPad: bottomClusterPad.rounded(.toNearestOrAwayFromZero),
+            mapLegalLead: mapLegalLead.rounded(.toNearestOrAwayFromZero),
             cutoutEdge: nil,
             cutoutStyle: style
         )

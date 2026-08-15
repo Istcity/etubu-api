@@ -11,7 +11,7 @@ protocol MessageTransport: Sendable {
 
 extension BLETransport: MessageTransport {
     func sendMessage(_ data: Data) async throws {
-        try send(data)
+        try await send(data)
     }
 
     func receiveMessage() async throws -> Data {

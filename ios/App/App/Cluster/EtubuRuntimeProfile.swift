@@ -50,6 +50,34 @@ enum EtubuRuntimeProfile {
     /// Prefer themed navy over pure black so empty shells never look “crashed”.
     static let canvasUIColor = UIColor(red: 0.04, green: 0.09, blue: 0.16, alpha: 1)
 
+    /// Simulator CFPreferences for this bundle id live outside the app container
+    /// and survive uninstall + Maestro `clearState`. Shadow keys that are not in
+    /// *this* container so leaked Maestro flags cannot skip legal / sim / paywall.
+    /// Process launch arguments still win via NSArgumentDomain.
+    static func shadowLeakedSimulatorDefaults() {
+        let keys = [
+            "etubu.legal.accepted.v1",
+            "etubuSkipOnboarding",
+            "etubuForcePremium",
+            "etubuForceLangEn",
+            "etubuForceLangTr",
+            "etubuForceRemotePin",
+            "etubu.cluster.simDone.v5",
+            "etubu.cluster.simDone.v4",
+            "etubu.cluster.simDone.v3",
+            "etubu.cluster.simDone",
+        ]
+        let id = Bundle.main.bundleIdentifier ?? "com.etubu.app"
+        guard let lib = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first else { return }
+        let dict = (NSDictionary(contentsOf: lib.appendingPathComponent("Preferences/\(id).plist")) as? [String: Any]) ?? [:]
+        for key in keys {
+            guard dict[key] == nil else { continue }
+            if UserDefaults.standard.object(forKey: key) != nil {
+                UserDefaults.standard.set(false, forKey: key)
+            }
+        }
+    }
+
     /// Tear down leftover Cap splash overlays that can sit above the SwiftUI cluster.
     static func hideLingeringSplashOverlays() {
         let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }

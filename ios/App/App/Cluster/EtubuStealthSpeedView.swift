@@ -16,13 +16,22 @@ enum EtubuMaestroLaunch {
 /// OLED pitch-black speed-only HUD. Tap wakes the full cluster for 10 s.
 struct EtubuStealthSpeedView: View {
     let kmh: Int
+    var kmhFine: Double? = nil
     let analog: Bool
     var onWake: () -> Void
 
-    /// İğne — ani km/h sıçramasını yumuşatır.
+    /// İğne — 30 Hz exponential chase, no spring overshoot.
     @State private var needleKmh: Double = 0
+    private let needlePulse = Timer.publish(every: 1.0 / 30.0, on: .main, in: .common).autoconnect()
 
-    private var targetKmh: Double { Double(max(0, kmh)) }
+    private var targetKmh: Double {
+        if let kmhFine, kmhFine.isFinite {
+            let v = max(0, kmhFine)
+            return v < 2.2 ? 0 : v
+        }
+        let v = Double(max(0, kmh))
+        return v < 2.2 ? 0 : v
+    }
 
     var body: some View {
         ZStack {
@@ -36,10 +45,21 @@ struct EtubuStealthSpeedView: View {
         .contentShape(Rectangle())
         .onTapGesture { onWake() }
         .onAppear { needleKmh = targetKmh }
-        .onChange(of: kmh) { _, _ in
-            withAnimation(.interpolatingSpring(stiffness: 140, damping: 18)) {
-                needleKmh = targetKmh
+        .onReceive(needlePulse) { _ in
+            let dt = 1.0 / 30.0
+            let target = targetKmh
+            if target <= 2.2 {
+                needleKmh *= 0.35
+                if needleKmh < 0.8 { needleKmh = 0 }
+                return
             }
+            let mag = abs(target - needleKmh)
+            if mag < 0.04 {
+                if needleKmh != target { needleKmh = target }
+                return
+            }
+            let tau = mag > 14 ? 0.055 : 0.10
+            needleKmh += (target - needleKmh) * (1 - exp(-dt / tau))
         }
         .accessibilityIdentifier("etubu.stealth")
         .accessibilityLabel(EtubuClusterL10n.t("stealthMode"))
@@ -50,7 +70,7 @@ struct EtubuStealthSpeedView: View {
 
     private var digitalReadout: some View {
         VStack(spacing: 6) {
-            Text("\(max(0, kmh))")
+            Text("\(Int(needleKmh.rounded()))")
                 .font(.system(size: 128, weight: .semibold, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(Color.white)
@@ -78,7 +98,7 @@ struct EtubuStealthSpeedView: View {
                 analogHub(size: side)
                 VStack(spacing: 0) {
                     Spacer()
-                    Text("\(max(0, kmh))")
+                    Text("\(Int(needleKmh.rounded()))")
                         .font(.system(size: max(22, side * 0.11), weight: .semibold, design: .rounded))
                         .monospacedDigit()
                         .foregroundStyle(Color.white.opacity(0.88))

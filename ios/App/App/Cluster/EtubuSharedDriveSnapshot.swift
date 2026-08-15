@@ -12,6 +12,8 @@ enum EtubuSharedDriveSnapshot {
     private static let rangeKey = "rangeKm"
     private static let updatedKey = "updatedAt"
     private static let warnKey = "primaryWarn"
+    private static let limitKey = "limitKmh"
+    private static let overKey = "overLimit"
 
     private static var suite: UserDefaults? { UserDefaults(suiteName: suiteName) }
 
@@ -23,7 +25,9 @@ enum EtubuSharedDriveSnapshot {
         gear: String,
         rangeKm: Int?,
         primaryWarn: String?,
-        clearWarnIfNil: Bool = false
+        clearWarnIfNil: Bool = false,
+        limitKmh: Int? = nil,
+        overLimit: Bool = false
     ) {
         guard let suite else { return }
         let now = Date()
@@ -40,6 +44,12 @@ enum EtubuSharedDriveSnapshot {
         } else if clearWarnIfNil {
             suite.set("", forKey: warnKey)
         }
+        if let limitKmh, limitKmh > 0 {
+            suite.set(limitKmh, forKey: limitKey)
+        } else {
+            suite.removeObject(forKey: limitKey)
+        }
+        suite.set(overLimit, forKey: overKey)
         #if canImport(WidgetKit)
         WidgetCenter.shared.reloadTimelines(ofKind: "EtubuStatusWidget")
         #endif
@@ -52,6 +62,8 @@ enum EtubuSharedDriveSnapshot {
         var rangeKm: Int?
         var updatedAt: Date?
         var primaryWarn: String
+        var limitKmh: Int?
+        var overLimit: Bool
         var isStale: Bool {
             guard let updatedAt else { return true }
             return Date().timeIntervalSince(updatedAt) > 180
@@ -60,7 +72,7 @@ enum EtubuSharedDriveSnapshot {
 
     static func read() -> Values {
         guard let suite else {
-            return Values(kmh: 0, soc: nil, gear: "P", rangeKm: nil, updatedAt: nil, primaryWarn: "")
+            return Values(kmh: 0, soc: nil, gear: "P", rangeKm: nil, updatedAt: nil, primaryWarn: "", limitKmh: nil, overLimit: false)
         }
         let ts = suite.double(forKey: updatedKey)
         return Values(
@@ -69,7 +81,13 @@ enum EtubuSharedDriveSnapshot {
             gear: suite.string(forKey: gearKey) ?? "P",
             rangeKm: suite.object(forKey: rangeKey) as? Int,
             updatedAt: ts > 0 ? Date(timeIntervalSince1970: ts) : nil,
-            primaryWarn: suite.string(forKey: warnKey) ?? ""
+            primaryWarn: suite.string(forKey: warnKey) ?? "",
+            limitKmh: {
+                guard suite.object(forKey: limitKey) != nil else { return nil }
+                let v = suite.integer(forKey: limitKey)
+                return v > 0 ? v : nil
+            }(),
+            overLimit: suite.bool(forKey: overKey)
         )
     }
 }

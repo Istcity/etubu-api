@@ -1,7 +1,8 @@
 import SwiftUI
 
-struct EtubuSpeedDialView: View {
+struct EtubuSpeedDialView: View, Equatable {
     let kmh: Int
+    var kmhFine: Double? = nil
     let gear: String
     let theme: ClusterTheme
     var compact: Bool = false
@@ -14,12 +15,32 @@ struct EtubuSpeedDialView: View {
     var powerHistory: [Int] = []
     /// SoC ince halka (0–100).
     var socPercent: Int? = nil
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.kmh == rhs.kmh
+            && Self.quantizeFine(lhs.kmhFine) == Self.quantizeFine(rhs.kmhFine)
+            && lhs.gear == rhs.gear
+            && lhs.theme == rhs.theme
+            && lhs.compact == rhs.compact
+            && lhs.diameter == rhs.diameter
+            && lhs.chromeDiameter == rhs.chromeDiameter
+            && lhs.powerKw == rhs.powerKw
+            && lhs.socPercent == rhs.socPercent
+            && lhs.powerHistory.last == rhs.powerHistory.last
+            && lhs.powerHistory.count == rhs.powerHistory.count
+    }
+
+    private static func quantizeFine(_ value: Double?) -> Int {
+        guard let value, value.isFinite else { return .min }
+        return Int((value * 5).rounded())
+    }
     @ObservedObject private var warnings = EtubuDriveWarnings.shared
-    /// Tesla-like display: advances ~1 km/h per tick toward vehicle speed (no spring snap).
+    @ObservedObject private var osmLimit = EtubuOsmSpeedLimit.shared
+    /// Smooth chase toward vehicle speed — no ±1 stair and no snap after BLE gaps.
     @State private var displayKmh: Double = 0
     @State private var displayPower: Double = 0
     @State private var boostPulse: CGFloat = 0
-    private let dialPulse = Timer.publish(every: 0.05, on: .main, in: .common).autoconnect()
+    private let dialPulse = Timer.publish(every: 1.0 / 30.0, on: .main, in: .common).autoconnect()
 
     private var rawKmh: Int { warnings.demoActive ? warnings.demoKmh : kmh }
     private var shownGear: String {
@@ -30,12 +51,19 @@ struct EtubuSpeedDialView: View {
         }
         return gear
     }
-    /// P/N → kadran kilitli 0; düşük hızı gizleme (yumuşak artış).
+    /// P/N veya duruş → kadran kilitli 0.
     private var isStationary: Bool {
         let g = shownGear.uppercased()
-        return g.hasPrefix("P") || g.hasPrefix("N")
+        if g.hasPrefix("P") || g.hasPrefix("N") { return true }
+        if warnings.demoActive { return warnings.demoKmh < 2 }
+        if let kmhFine, kmhFine.isFinite, kmhFine < SpeedFusion.lockKmh { return true }
+        return rawKmh < 2
     }
-    private var targetKmh: Int { isStationary ? 0 : rawKmh }
+    private var targetFine: Double {
+        if isStationary { return 0 }
+        if let kmhFine, kmhFine.isFinite, kmhFine >= 0 { return min(280, kmhFine) }
+        return Double(rawKmh)
+    }
     private var shownKmh: Int { Int(displayKmh.rounded()) }
     private var shownPowerKw: Int? {
         let raw = warnings.demoActive ? warnings.demoPowerKw : powerKw
@@ -52,8 +80,8 @@ struct EtubuSpeedDialView: View {
 
     private var speedFont: CGFloat {
         let base: CGFloat = compact
-            ? max(64, min(dialSize * 0.32, 110))
-            : max(92, min(dialSize * 0.38, 124))
+            ? max(44, min(dialSize * 0.30, 96))
+            : max(64, min(dialSize * 0.36, 112))
         return base * textBoost * min(theme.gaugeScale, 1.04) * tripleDigitFactor
     }
 
@@ -75,7 +103,7 @@ struct EtubuSpeedDialView: View {
         compact ? max(10, min(chromeSize * 0.045, 14)) : max(12, min(chromeSize * 0.048, 16))
     }
 
-    private var speedProgress: CGFloat { min(1, CGFloat(max(0, shownKmh)) / 180) }
+    private var speedProgress: CGFloat { min(1, CGFloat(max(0, displayKmh)) / 180) }
     private var power: Int { Int(displayPower.rounded()) }
     private var powerFill: CGFloat { min(1, CGFloat(abs(displayPower)) / 160) }
     private var boostStrength: CGFloat {
@@ -97,9 +125,15 @@ struct EtubuSpeedDialView: View {
         return theme.ringLineWidth(for: dialSize) * 1.8 + dialSize * 0.03
     }
 
+    private var overLimit: Bool {
+        guard let lim = osmLimit.limitKmh, lim > 0, !isStationary else { return false }
+        return displayKmh > Double(lim) + 3
+    }
+
     var body: some View {
         ZStack {
             if compact { dialRings }
+            if overLimit { isaOverspeedRing }
 
             // Soft boost wash — hızlanmada yumuşak ışık, keskin flaş değil.
             if boostStrength > 0.05 {
@@ -127,9 +161,11 @@ struct EtubuSpeedDialView: View {
                     .font(EtubuClusterFonts.gauge(speedFont))
                     .monospacedDigit()
                     .tracking(shownKmh >= 100 ? 0 : min(theme.gaugeTracking, 0.8) * 0.06)
-                    .foregroundStyle(theme.primaryText)
+                    .foregroundStyle(overLimit ? Color.orange : theme.primaryText)
                     .shadow(
-                        color: isStationary ? .clear : theme.accent.opacity(0.4),
+                        color: overLimit
+                            ? Color.orange.opacity(0.7)
+                            : (isStationary ? .clear : theme.accent.opacity(0.4)),
                         radius: compact ? 8 : 6
                     )
                     .minimumScaleFactor(0.38)
@@ -182,16 +218,11 @@ struct EtubuSpeedDialView: View {
             if isStationary { txn.animation = nil }
         }
         .onAppear {
-            displayKmh = Double(targetKmh)
+            displayKmh = targetFine
             displayPower = Double(shownPowerKw ?? 0)
         }
         .onReceive(dialPulse) { _ in
             tickDisplaySpeed()
-        }
-        .onChange(of: targetKmh) { _, new in
-            if new == 0 || isStationary {
-                displayKmh = 0
-            }
         }
         .onChange(of: shownPowerKw) { _, new in
             let v = Double(new ?? 0)
@@ -210,31 +241,30 @@ struct EtubuSpeedDialView: View {
         .animation(.easeInOut(duration: 0.22), value: displayPower)
     }
 
-    /// ~20 Hz: Tesla-like ±1 when close; proportional catch-up after BLE gaps (no sticky lag).
+    /// 30 Hz chase — large lag (hard accel/brake) catches up first, like web gps-tracker.
     private func tickDisplaySpeed() {
-        let target = Double(targetKmh)
-        if isStationary || target <= 0 {
-            if displayKmh != 0 { displayKmh = 0 }
+        let target = targetFine
+        let dt = 1.0 / 30.0
+        if target <= 2.2 {
+            displayKmh *= 0.35
+            if displayKmh < 0.8 { displayKmh = 0 }
             return
         }
-        let delta = target - displayKmh
-        let mag = abs(delta)
-        if mag < 0.05 {
+        let mag = abs(target - displayKmh)
+        if mag < 0.03 {
             if displayKmh != target { displayKmh = target }
             return
         }
-        let stepMag: Double = {
-            if mag > 40 { return min(12, mag / 3) }
-            if mag > 20 { return 5 }
-            if mag > 8 { return 2 }
-            return 1
-        }()
-        let step: Double = delta > 0 ? stepMag : -stepMag
-        var next = max(0, displayKmh + step)
-        if (step > 0 && next > target) || (step < 0 && next < target) {
-            next = target
+        let tau: Double = mag > 14 ? 0.055 : (mag > 5 ? 0.075 : 0.10)
+        let alpha = 1 - exp(-dt / tau)
+        var next = displayKmh + (target - displayKmh) * alpha
+        let maxRate = mag > 18 ? 140.0 : (mag > 8 ? 100.0 : 70.0)
+        let maxStep = maxRate * dt
+        let delta = next - displayKmh
+        if abs(delta) > maxStep {
+            next = displayKmh + (delta > 0 ? maxStep : -maxStep)
         }
-        displayKmh = next
+        displayKmh = max(0, next)
     }
 
     @ViewBuilder
@@ -271,6 +301,15 @@ struct EtubuSpeedDialView: View {
         // Don't animate every ±1 km/h tick — that stuttered the ring against digit steps.
         .animation(.easeOut(duration: 0.28), value: socProgress)
         .animation(.easeInOut(duration: 0.22), value: displayPower)
+    }
+
+    private var isaOverspeedRing: some View {
+        let lw = theme.ringLineWidth(for: dialSize)
+        return Circle()
+            .strokeBorder(Color.orange.opacity(0.92), lineWidth: lw * 1.15)
+            .shadow(color: Color.orange.opacity(0.65), radius: 10)
+            .frame(width: dialSize, height: dialSize)
+            .allowsHitTesting(false)
     }
 
     @ViewBuilder
@@ -428,6 +467,8 @@ enum EtubuHazardChrome {
         case "crossing": return "figure.walk"
         case "bump": return "arrow.up.and.down"
         case "tunnel": return "rectangle.split.1x2"
+        case "underpass": return "arrow.down.to.line"
+        case "overpass": return "arrow.up.to.line"
         case "winding": return "arrow.uturn.right"
         case "climb": return "triangle.fill"
         case "road_condition": return "exclamationmark.triangle.fill"
@@ -449,6 +490,8 @@ enum EtubuHazardChrome {
         case "crossing": return EtubuClusterL10n.t("warnKindCrossing")
         case "bump": return EtubuClusterL10n.t("warnKindBump")
         case "tunnel": return EtubuClusterL10n.t("warnKindTunnel")
+        case "underpass": return EtubuClusterL10n.t("warnKindUnderpass")
+        case "overpass": return EtubuClusterL10n.t("warnKindOverpass")
         case "winding": return EtubuClusterL10n.t("warnKindWinding")
         case "climb": return EtubuClusterL10n.t("warnKindClimb")
         case "road_condition": return EtubuClusterL10n.t("warnKindRoadCondition")
@@ -470,7 +513,9 @@ enum EtubuHazardChrome {
         case "give_way": return "yol ver"
         case "crossing": return "yaya geçidi"
         case "bump": return "tümsek"
-        case "tunnel": return "tünel"
+        case "tunnel": return "karayolu tüneli"
+        case "underpass": return "alt geçit"
+        case "overpass": return "üst geçit"
         case "winding": return "virajlı yol"
         case "climb": return "tırmanış"
         case "road_condition": return "yol şartı"
@@ -489,7 +534,7 @@ enum EtubuHazardChrome {
         case "railway": return Color(red: 0.75, green: 0.55, blue: 1.0)
         case "traffic_light", "stop", "give_way": return Color(red: 1.0, green: 0.62, blue: 0.28)
         case "crossing", "bump": return Color(red: 0.95, green: 0.72, blue: 0.35)
-        case "tunnel": return Color(red: 0.55, green: 0.72, blue: 0.95)
+        case "tunnel", "underpass", "overpass": return Color(red: 0.55, green: 0.72, blue: 0.95)
         case "winding", "climb": return Color(red: 0.95, green: 0.55, blue: 0.28)
         case "road_condition", "animal": return Color(red: 1.0, green: 0.45, blue: 0.22)
         default: return urgent ? Color(red: 1.0, green: 0.35, blue: 0.35) : theme.accent
@@ -506,7 +551,7 @@ enum EtubuHazardChrome {
         case "railway": return Color(red: 0.75, green: 0.55, blue: 1.0)
         case "traffic_light", "stop", "give_way": return Color(red: 1.0, green: 0.62, blue: 0.28)
         case "crossing", "bump": return Color(red: 0.95, green: 0.72, blue: 0.35)
-        case "tunnel": return Color(red: 0.55, green: 0.72, blue: 0.95)
+        case "tunnel", "underpass", "overpass": return Color(red: 0.55, green: 0.72, blue: 0.95)
         case "winding", "climb": return Color(red: 0.95, green: 0.55, blue: 0.28)
         case "road_condition", "animal": return Color(red: 1.0, green: 0.45, blue: 0.22)
         default: return Color(red: 1.0, green: 0.35, blue: 0.35) // #ff5a5a

@@ -202,18 +202,11 @@ public class EtubuNativePlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
         lastLiveUpdateMs = now
-
-        let voice = call.getString("voice") ?? "ETUBU"
-        let kmh = call.getInt("kmh") ?? 0
-        let gear = call.getString("gear") ?? "N"
-        let rpm = call.getInt("rpm") ?? 0
-        let source = call.getString("source") ?? "gps"
+        _ = call.getString("voice")
 
         if #available(iOS 16.2, *) {
             Task {
-                await EtubuLiveActivityController.update(
-                    kmh: kmh, gear: gear, rpm: rpm, voice: voice, source: source
-                )
+                await EtubuLiveActivityController.publishCurrent()
                 call.resolve(["ok": true])
             }
         } else {

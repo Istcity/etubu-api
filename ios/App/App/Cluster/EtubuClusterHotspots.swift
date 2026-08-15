@@ -171,25 +171,26 @@ struct EtubuPairConnectionBadge: View {
     }
 
     private var iconOnlyBadge: some View {
-        ZStack {
+        // Chrome hit is ~28–34pt; a 34pt disc + pulse/shadow in a 44pt stack gets clipped.
+        let disc: CGFloat = compact ? 26 : 30
+        return ZStack {
             if showPulse, isPairing {
                 ForEach(0..<3, id: \.self) { i in
                     Circle()
-                        .stroke(glow.opacity(0.55 - Double(i) * 0.15), lineWidth: 1.6)
-                        .frame(width: 34, height: 34)
-                        .scaleEffect(pulse ? 1.55 + CGFloat(i) * 0.28 : 1.0)
+                        .stroke(glow.opacity(0.55 - Double(i) * 0.15), lineWidth: 1.4)
+                        .frame(width: disc, height: disc)
+                        .scaleEffect(pulse ? 1.12 + CGFloat(i) * 0.08 : 1.0)
                         .opacity(pulse ? 0.05 : 0.85)
                 }
             }
             Circle()
                 .fill(isConnected ? Color.green.opacity(0.9) : (isPairing ? theme.accent.opacity(0.9) : Color.red.opacity(0.85)))
-                .frame(width: 34, height: 34)
-                .shadow(color: glow.opacity(isPairing || isConnected ? 0.75 : 0), radius: isPairing ? 14 : 6)
+                .frame(width: disc, height: disc)
             Image(systemName: iconName)
-                .font(.system(size: 13, weight: .bold))
+                .font(.system(size: compact ? 11 : 13, weight: .bold))
                 .foregroundStyle(.white)
         }
-        .frame(width: 44, height: 44)
+        .frame(width: disc, height: disc)
     }
 
     private var pulseDot: some View {

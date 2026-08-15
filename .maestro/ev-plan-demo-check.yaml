@@ -61,7 +61,8 @@ appId: com.etubu.app
     direction: DOWN
     timeout: 25000
     speed: 40
-    visibilityPercentage: 40
+    visibilityPercentage: 20
+    centerElement: true
 - assertVisible:
     id: "etubu.settings.evRoutePlan"
 - assertVisible: "Varışta en az şarj"

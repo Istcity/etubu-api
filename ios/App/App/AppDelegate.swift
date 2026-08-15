@@ -12,6 +12,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     private static var liveActivityBootstrapped = false
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+        EtubuLegalAcceptance.bootstrap()
         configureAudioSession(quality: true)
         Self.installAudioRouteObservers()
         // Paint every known window immediately — Cap shell is near-black by default.
@@ -109,19 +110,20 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         driveAudioActive = true
         alertDuckActive = true
         let overMusic = UserDefaults.standard.object(forKey: "etubu.cluster.alertOverMusic") as? Bool ?? true
+        var opts: AVAudioSession.CategoryOptions = [.duckOthers, .allowBluetoothA2DP, .allowAirPlay]
         if overMusic {
-            applyPlayback(
-                mode: .voicePrompt,
-                options: [.duckOthers, .mixWithOthers, .allowBluetoothA2DP, .allowAirPlay],
-                quality: false
-            )
+            opts.insert(.mixWithOthers)
+            if #available(iOS 14.5, *) {
+                opts.insert(.interruptSpokenAudioAndMixWithOthers)
+            }
         } else {
-            applyPlayback(
-                mode: .voicePrompt,
-                options: [.mixWithOthers, .allowBluetoothA2DP, .allowAirPlay],
-                quality: false
-            )
+            opts.insert(.mixWithOthers)
         }
+        applyPlayback(
+            mode: .voicePrompt,
+            options: opts,
+            quality: false
+        )
     }
 
     /// Restore EV mix without yielding the Bluetooth route (`setActive(false)` drops A2DP).
@@ -143,9 +145,10 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         let session = AVAudioSession.sharedInstance()
         let attempts: [AVAudioSession.CategoryOptions] = [
             options,
+            options.union([.duckOthers, .allowBluetoothA2DP]),
+            [.duckOthers, .allowBluetoothA2DP, .allowAirPlay],
             options.union([.mixWithOthers, .duckOthers]),
             [.mixWithOthers, .duckOthers, .allowBluetoothA2DP],
-            [.duckOthers, .allowBluetoothA2DP, .allowAirPlay],
             [.mixWithOthers, .allowBluetoothA2DP, .allowAirPlay],
         ]
         var lastError: Error?
@@ -255,12 +258,14 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func applicationWillResignActive(_ application: UIApplication) {
+        EtubuClusterAudioBridge.setCapacitorSuspended(true)
         if !Self.driveAudioActive {
             Self.activateSilentSafeSession()
         }
     }
 
     func applicationDidEnterBackground(_ application: UIApplication) {
+        EtubuClusterAudioBridge.setCapacitorSuspended(true)
         if Self.driveAudioActive {
             Self.activateDriveAudioSession()
         } else {
@@ -304,6 +309,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func applicationWillEnterForeground(_ application: UIApplication) {
+        EtubuClusterAudioBridge.setCapacitorSuspended(false)
         configureAudioSession(quality: true)
         if #available(iOS 16.2, *) {
             // Keepalive arka plan audio’sunu bırak; LA sürüşte devam edebilir.
@@ -313,6 +319,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func applicationDidBecomeActive(_ application: UIApplication) {
+        EtubuClusterAudioBridge.setCapacitorSuspended(false)
         configureAudioSession(quality: true)
         EtubuRuntimeProfile.hideLingeringSplashOverlays()
         EtubuClusterPresenter.shared.installOverCapacitor()

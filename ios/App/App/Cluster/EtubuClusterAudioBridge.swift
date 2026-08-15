@@ -6,6 +6,24 @@ import AVFoundation
 
 /// Bridges cluster sound controls + JS eval to the hidden Capacitor layer.
 enum EtubuClusterAudioBridge {
+    /// Cap WKWebView is frozen when backgrounded / screen locked. Native AVAudio
+    /// (Info.plist `audio` + playback session) keeps radar / overspeed / EV loops alive.
+    static func setCapacitorSuspended(_ frozen: Bool) {
+        capacitorSuspended = frozen
+        if frozen {
+            preferNativeOwner = true
+            AppDelegate.activateDriveAudioSession()
+            if isSoundWanted {
+                let voice = storedVoice == "silent-mode" ? defaultDriveVoice : storedVoice
+                if !EtubuNativeDriveAudio.shared.isEngineAlive {
+                    EtubuNativeDriveAudio.shared.start(voice: voice)
+                }
+                EtubuNativeDriveAudio.shared.setMuted(false)
+                EtubuNativeDriveAudio.shared.resumeIfNeeded()
+            }
+        }
+    }
+
     static func setMixMode(_ mode: String) {
         let safe = mode.replacingOccurrences(of: "'", with: "").lowercased()
         UserDefaults.standard.set(safe, forKey: "etubu.cluster.mixMode")
@@ -82,6 +100,8 @@ enum EtubuClusterAudioBridge {
 
     /// Fast on/off — prefers `AudioEngine.setMuted` so the icon responds immediately.
     private static let soundOnKey = "etubu.cluster.evSoundOn"
+    /// WKWebView / Cap JS is frozen in background — native AVAudio* owns alerts + EV.
+    private static var capacitorSuspended = false
     /// Tema = ses paketi; sessizden çıkınca mevcut temanın driveVoiceKey.
     static var defaultDriveVoice: String {
         ClusterTheme.stored.driveVoiceKey
@@ -548,6 +568,7 @@ enum EtubuClusterAudioBridge {
         lastWarnCueAt = now
 
         let urgent = (stage == "critical" || stage == "near") && (kind == "corridor" || kind == "control" || kind == "radar")
+        AppDelegate.activateAlertDuckSession()
         EtubuWarnVoice.playKindCue(kind: kind, urgent: urgent || stage == "critical")
     }
 
@@ -629,6 +650,7 @@ enum EtubuClusterAudioBridge {
     }
 
     static func evalJS(_ js: String) {
+        guard !capacitorSuspended else { return }
         DispatchQueue.main.async {
             guard let bridge = findBridge() else { return }
             bridge.eval(js: js)
@@ -636,6 +658,10 @@ enum EtubuClusterAudioBridge {
     }
 
     static func evalJSReturning(_ js: String, timeout: TimeInterval = 22, completion: @escaping (String?) -> Void) {
+        if capacitorSuspended {
+            completion(nil)
+            return
+        }
         DispatchQueue.main.async {
             var finished = false
             let finish: (String?) -> Void = { value in

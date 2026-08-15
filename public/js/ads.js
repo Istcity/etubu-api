@@ -113,12 +113,18 @@ const Ads = (() => {
   function hideAll() {
     document.body.classList.remove("ads-ready");
     setRailsVisible(false);
+    document.querySelectorAll(".intro-ad").forEach((el) => {
+      el.hidden = true;
+    });
     if (window.EtubuNative?.hideAds) window.EtubuNative.hideAds();
   }
 
   function showRails() {
     document.body.classList.add("ads-ready");
     setRailsVisible(true);
+    document.querySelectorAll(".intro-ad").forEach((el) => {
+      el.hidden = false;
+    });
     if (window.EtubuNative?.showBannerAds) window.EtubuNative.showBannerAds();
   }
 
@@ -145,6 +151,20 @@ const Ads = (() => {
       }
     } catch (_) {}
 
+    if (typeof Consent !== "undefined") {
+      if (!init._consentBound) {
+        init._consentBound = true;
+        Consent.onChange(() => {
+          if (Consent.allows("marketing")) init();
+          else hideAll();
+        });
+      }
+      if (!Consent.hasChoice() || !Consent.allows("marketing")) {
+        hideAll();
+        return;
+      }
+    }
+
     showRails();
 
     // Sol rail her zaman kapalı
@@ -154,7 +174,9 @@ const Ads = (() => {
     const useYandex = cfg.YANDEX_RTB_ENABLED !== false && (
       cfg.YANDEX_RTB_BLOCK_TOP ||
       cfg.YANDEX_RTB_BLOCK_MIDDLE ||
-      cfg.YANDEX_RTB_BLOCK_RIGHT
+      cfg.YANDEX_RTB_BLOCK_RIGHT ||
+      cfg.YANDEX_RTB_BLOCK_LEFT ||
+      cfg.YANDEX_RTB_BLOCK_BOTTOM
     );
 
     if (useYandex) {
@@ -163,6 +185,7 @@ const Ads = (() => {
         renderYandexSlot("adTopInner", cfg.YANDEX_RTB_BLOCK_TOP);
         renderYandexSlot("adMiddleInner", cfg.YANDEX_RTB_BLOCK_MIDDLE);
         renderYandexSlot("adRightInner", cfg.YANDEX_RTB_BLOCK_RIGHT);
+        renderIntroSlots();
       } catch (e) {
         console.warn("Yandex RTB yüklenemedi", e);
       }
@@ -177,10 +200,37 @@ const Ads = (() => {
       renderAdSenseSlot("adTopInner", c, cfg.ADSENSE_SLOT_TOP, "horizontal");
       renderAdSenseSlot("adRightInner", c, cfg.ADSENSE_SLOT_RIGHT, "vertical");
       renderAdSenseSlot("adMiddleInner", c, cfg.ADSENSE_SLOT_MIDDLE, "horizontal");
+      renderIntroSlots();
     } catch (e) {
       console.warn("AdSense yüklenemedi", e);
     }
   }
 
-  return { init, hideAll, showRails };
+  function renderIntroSlots() {
+    if (typeof Paywall !== "undefined" && Paywall.isAdFree()) return;
+    if (typeof Consent !== "undefined" && !Consent.allows("marketing")) return;
+    const cfg = window.ETUBU_CONFIG || {};
+    if (!cfg.ADS_ENABLED) return;
+    const top = cfg.YANDEX_RTB_BLOCK_TOP || cfg.YANDEX_RTB_BLOCK_MIDDLE;
+    const side = cfg.YANDEX_RTB_BLOCK_RIGHT || cfg.YANDEX_RTB_BLOCK_LEFT || top;
+    const bottom = cfg.YANDEX_RTB_BLOCK_BOTTOM || cfg.YANDEX_RTB_BLOCK_MIDDLE || top;
+    const left = cfg.YANDEX_RTB_BLOCK_LEFT || side;
+    if (cfg.YANDEX_RTB_ENABLED !== false && top) {
+      ensureYandexLoader();
+      renderYandexSlot("adIntroTopInner", top);
+      renderYandexSlot("adIntroBottomInner", bottom);
+      renderYandexSlot("adIntroLeftInner", left);
+      renderYandexSlot("adIntroRightInner", side);
+      return;
+    }
+    if (cfg.ADSENSE_CLIENT) {
+      const c = cfg.ADSENSE_CLIENT;
+      renderAdSenseSlot("adIntroTopInner", c, cfg.ADSENSE_SLOT_TOP, "horizontal");
+      renderAdSenseSlot("adIntroBottomInner", c, cfg.ADSENSE_SLOT_BOTTOM || cfg.ADSENSE_SLOT_MIDDLE, "horizontal");
+      renderAdSenseSlot("adIntroLeftInner", c, cfg.ADSENSE_SLOT_LEFT || cfg.ADSENSE_SLOT_RIGHT, "vertical");
+      renderAdSenseSlot("adIntroRightInner", c, cfg.ADSENSE_SLOT_RIGHT, "vertical");
+    }
+  }
+
+  return { init, hideAll, showRails, renderIntroSlots };
 })();

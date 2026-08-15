@@ -36,6 +36,22 @@ public struct EtubuDriveAttributes: ActivityAttributes {
         /// Pre-localized Island captions (set by app from EtubuClusterL10n).
         public var islandEtaLabel: String
         public var islandKmRemainLabel: String
+        /// ISA / OSM speed limit (km/h). Nil when unknown.
+        public var limitKmh: Int?
+        public var overLimit: Bool?
+        /// Cluster theme accent / canvas (0…1) so Island matches the app.
+        public var accentR: Double?
+        public var accentG: Double?
+        public var accentB: Double?
+        public var canvasR: Double?
+        public var canvasG: Double?
+        public var canvasB: Double?
+        public var outsideC: Int?
+        public var powerKw: Int?
+        public var planSummary: String?
+        public var planStop1: String?
+        public var planStop2: String?
+        public var planWhPerKm: Int?
 
         public init(
             kmh: Int,
@@ -64,7 +80,21 @@ public struct EtubuDriveAttributes: ActivityAttributes {
             etaMinutes: Int? = nil,
             arrivalSocPercent: Int? = nil,
             islandEtaLabel: String = "",
-            islandKmRemainLabel: String = ""
+            islandKmRemainLabel: String = "",
+            limitKmh: Int? = nil,
+            overLimit: Bool? = nil,
+            accentR: Double? = nil,
+            accentG: Double? = nil,
+            accentB: Double? = nil,
+            canvasR: Double? = nil,
+            canvasG: Double? = nil,
+            canvasB: Double? = nil,
+            outsideC: Int? = nil,
+            powerKw: Int? = nil,
+            planSummary: String? = nil,
+            planStop1: String? = nil,
+            planStop2: String? = nil,
+            planWhPerKm: Int? = nil
         ) {
             self.kmh = kmh
             self.gear = gear
@@ -93,6 +123,20 @@ public struct EtubuDriveAttributes: ActivityAttributes {
             self.arrivalSocPercent = arrivalSocPercent
             self.islandEtaLabel = islandEtaLabel
             self.islandKmRemainLabel = islandKmRemainLabel
+            self.limitKmh = limitKmh
+            self.overLimit = overLimit
+            self.accentR = accentR
+            self.accentG = accentG
+            self.accentB = accentB
+            self.canvasR = canvasR
+            self.canvasG = canvasG
+            self.canvasB = canvasB
+            self.outsideC = outsideC
+            self.powerKw = powerKw
+            self.planSummary = planSummary
+            self.planStop1 = planStop1
+            self.planStop2 = planStop2
+            self.planWhPerKm = planWhPerKm
         }
 
         public var routeSummaryLine: String {

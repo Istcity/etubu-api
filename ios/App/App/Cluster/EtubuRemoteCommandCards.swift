@@ -127,6 +127,56 @@ struct EtubuRemoteCommandCards: View {
                 ) {
                     await tesla.flashLights()
                 }
+                cmd(
+                    "forward.end.fill",
+                    EtubuClusterL10n.t("cmdMediaNext"),
+                    parkOnly: false,
+                    active: false
+                ) {
+                    await tesla.mediaNext()
+                }
+                cmd(
+                    "backward.end.fill",
+                    EtubuClusterL10n.t("cmdMediaPrev"),
+                    parkOnly: false,
+                    active: false
+                ) {
+                    await tesla.mediaPrevious()
+                }
+                cmd(
+                    "playpause.fill",
+                    EtubuClusterL10n.t("cmdMediaPlay"),
+                    parkOnly: false,
+                    active: false
+                ) {
+                    await tesla.mediaTogglePlayback()
+                }
+                cmd(
+                    "eye.fill",
+                    telemetry.sentryActive == true
+                        ? EtubuClusterL10n.t("cmdSentryOff")
+                        : EtubuClusterL10n.t("cmdSentryOn"),
+                    parkOnly: true,
+                    active: telemetry.sentryActive == true
+                ) {
+                    await tesla.setSentryMode(!(telemetry.sentryActive == true))
+                }
+                cmd(
+                    "pawprint.fill",
+                    EtubuClusterL10n.t("cmdDogMode"),
+                    parkOnly: true,
+                    active: false
+                ) {
+                    await tesla.setDogMode(true)
+                }
+                cmd(
+                    "thermometer.sun.fill",
+                    EtubuClusterL10n.t("cmdCabinOverheat"),
+                    parkOnly: true,
+                    active: false
+                ) {
+                    await tesla.setCabinOverheatProtection(true)
+                }
             }
 
             VStack(alignment: .leading, spacing: 8) {

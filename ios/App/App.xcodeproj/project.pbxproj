@@ -33,6 +33,10 @@
 		12C3BE89B36CCB83DCE07087 /* EtubuDriveWarnings.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA92EF270AF486BADBF59F74 /* EtubuDriveWarnings.swift */; };
 		14F5D310989E7490549C7562 /* EtubuDriveAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = A26E8DFAD008A380B6D2208A /* EtubuDriveAttributes.swift */; };
 		1CAE0DA0AD531B02378F8EF2 /* EtubuVehicleTelemetry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FD1243C4DAFB08855FADECF /* EtubuVehicleTelemetry.swift */; };
+		C4ESTIMATORBLD000000001 /* EtubuChargeEstimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4ESTIMATORREF000000001 /* EtubuChargeEstimator.swift */; };
+		C4SPEEDFUSIONBLD00000001 /* EtubuSpeedFusion.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4SPEEDFUSIONREF00000001 /* EtubuSpeedFusion.swift */; };
+		C4MAPBACKDROPBLD0000001 /* EtubuClusterMapBackdrop.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4MAPBACKDROPREF0000001 /* EtubuClusterMapBackdrop.swift */; };
+		C4HUDISOLATEBLD00000001 /* EtubuClusterHudIsolators.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4HUDISOLATEREF00000001 /* EtubuClusterHudIsolators.swift */; };
 		202905760920C9BF32321F10 /* EtubuDashboardPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = D66681DBAD3733A1F5CA3D81 /* EtubuDashboardPresenter.swift */; };
 		2885E5BB2F560C13FF43DD09 /* EtubuCutoutFX.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F2C919C429E14B2D036FD26 /* EtubuCutoutFX.swift */; };
 		2EA4BBC27E63F294BDCE2B08 /* EtubuRoutePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3955F2D29BAD338D48999866 /* EtubuRoutePickerView.swift */; };
@@ -164,6 +168,10 @@ A1STATUSWIDGETBUILD001 /* EtubuStatusWidget.swift in Sources */ = {isa = PBXBuil
 		3955F2D29BAD338D48999866 /* EtubuRoutePickerView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuRoutePickerView.swift; sourceTree = "<group>"; };
 		3C0F64A6AECB4896D7141F16 /* ActivityKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ActivityKit.framework; path = System/Library/Frameworks/ActivityKit.framework; sourceTree = SDKROOT; };
 		3FD1243C4DAFB08855FADECF /* EtubuVehicleTelemetry.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuVehicleTelemetry.swift; sourceTree = "<group>"; };
+		C4ESTIMATORREF000000001 /* EtubuChargeEstimator.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuChargeEstimator.swift; sourceTree = "<group>"; };
+		C4SPEEDFUSIONREF00000001 /* EtubuSpeedFusion.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuSpeedFusion.swift; sourceTree = "<group>"; };
+		C4MAPBACKDROPREF0000001 /* EtubuClusterMapBackdrop.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuClusterMapBackdrop.swift; sourceTree = "<group>"; };
+		C4HUDISOLATEREF00000001 /* EtubuClusterHudIsolators.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuClusterHudIsolators.swift; sourceTree = "<group>"; };
 		47705A4793E0FA886AAF9058 /* EtubuRouteBriefChipsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EtubuRouteBriefChipsView.swift; sourceTree = "<group>"; };
 		4A0983ECD63D87CFE04478C1 /* Pods-Etubu.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Etubu.release.xcconfig"; path = "Pods/Target Support Files/Pods-Etubu/Pods-Etubu.release.xcconfig"; sourceTree = "<group>"; };
 		4AEC2FA37CE9FDA9C610DF0B /* App.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = App.entitlements; sourceTree = "<group>"; };
@@ -306,6 +314,8 @@ A1STATUSWIDGETFILEREF01 /* EtubuStatusWidget.swift */ = {isa = PBXFileReference;
 				E9F5B02A3D8C4F1B0A42D7E3 /* EtubuNativeDriveAudio.swift */,
 				FE46C929135374CA2FCB40FF /* EtubuClusterAudioBridge.swift */,
 				FF992E9F8FF9FD1410C7C698 /* EtubuClusterComponents.swift */,
+				C4MAPBACKDROPREF0000001 /* EtubuClusterMapBackdrop.swift */,
+				C4HUDISOLATEREF00000001 /* EtubuClusterHudIsolators.swift */,
 				A1B2C3D4E5F60718293A4B5C /* EtubuAppExit.swift */,
 				A4B5C6D7E8F9012345678902 /* EtubuStealthSpeedView.swift */,
 				626F3BFA180A5A546CC8690F /* EtubuClusterFonts.swift */,
@@ -459,6 +469,8 @@ A1STATUSWIDGETFILEREF01 /* EtubuStatusWidget.swift */ = {isa = PBXFileReference;
 				CF7B17E283CD4709A2743A80 /* EtubuVehicleLaunchNotifier.swift */,
 				F90DB12D21940C953B91600B /* EtubuTeslaVinStore.swift */,
 				3FD1243C4DAFB08855FADECF /* EtubuVehicleTelemetry.swift */,
+				C4ESTIMATORREF000000001 /* EtubuChargeEstimator.swift */,
+				C4SPEEDFUSIONREF00000001 /* EtubuSpeedFusion.swift */,
 			);
 			path = Tesla;
 			sourceTree = "<group>";
@@ -695,6 +707,10 @@ A1STATUSWIDGETFILEREF01 /* EtubuStatusWidget.swift */ = {isa = PBXFileReference;
 				DE768F04AC1AC9EBFC570E96 /* EtubuTeslaBleSession.swift in Sources */,
 				FD8738279E416DE25E228862 /* EtubuTeslaVinStore.swift in Sources */,
 				1CAE0DA0AD531B02378F8EF2 /* EtubuVehicleTelemetry.swift in Sources */,
+				C4ESTIMATORBLD000000001 /* EtubuChargeEstimator.swift in Sources */,
+				C4SPEEDFUSIONBLD00000001 /* EtubuSpeedFusion.swift in Sources */,
+				C4MAPBACKDROPBLD0000001 /* EtubuClusterMapBackdrop.swift in Sources */,
+				C4HUDISOLATEBLD00000001 /* EtubuClusterHudIsolators.swift in Sources */,
 				008E63FE607E62C933A5B49C /* EtubuDriveAttributes.swift in Sources */,
 				D391C31389F8921FE348BF4F /* EtubuLiveActivityController.swift in Sources */,
 				92FE540BC1DF29272E54660A /* EtubuNativePlugin.swift in Sources */,

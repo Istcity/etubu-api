@@ -26,11 +26,13 @@ private struct EtubuStatusEntry: TimelineEntry {
     let rangeKm: Int?
     let warn: String
     let stale: Bool
+    let limitKmh: Int?
+    let overLimit: Bool
 }
 
 private struct EtubuStatusProvider: TimelineProvider {
     func placeholder(in context: Context) -> EtubuStatusEntry {
-        EtubuStatusEntry(date: Date(), kmh: 72, soc: 64, gear: "D", rangeKm: 280, warn: "", stale: false)
+        EtubuStatusEntry(date: Date(), kmh: 72, soc: 64, gear: "D", rangeKm: 280, warn: "", stale: false, limitKmh: 50, overLimit: true)
     }
 
     func getSnapshot(in context: Context, completion: @escaping (EtubuStatusEntry) -> Void) {
@@ -55,6 +57,8 @@ private struct EtubuStatusProvider: TimelineProvider {
         let gear = suite?.string(forKey: "gear") ?? "P"
         let rangeKm = suite?.object(forKey: "rangeKm") as? Int
         let warn = suite?.string(forKey: "primaryWarn") ?? ""
+        let limitRaw = suite?.object(forKey: "limitKmh") as? Int
+        let over = suite?.bool(forKey: "overLimit") ?? false
         return EtubuStatusEntry(
             date: Date(),
             kmh: stale ? 0 : kmh,
@@ -62,7 +66,9 @@ private struct EtubuStatusProvider: TimelineProvider {
             gear: stale ? "—" : gear,
             rangeKm: stale ? nil : rangeKm,
             warn: stale ? "" : warn,
-            stale: stale
+            stale: stale,
+            limitKmh: stale ? nil : limitRaw,
+            overLimit: stale ? false : over
         )
     }
 }
@@ -78,12 +84,14 @@ private struct EtubuStatusEntryView: View {
                 AccessoryWidgetBackground()
                 Text(entry.stale ? "—" : "\(entry.kmh)")
                     .font(.system(.title3, design: .rounded).weight(.bold))
+                    .foregroundStyle(entry.overLimit ? .orange : .primary)
                     .minimumScaleFactor(0.6)
             }
         case .accessoryRectangular:
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.stale ? "Etubu" : "\(entry.kmh) km/h · \(entry.gear)")
                     .font(.caption.weight(.bold))
+                    .foregroundStyle(entry.overLimit ? .orange : .primary)
                 Text(socLine)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -103,9 +111,9 @@ private struct EtubuStatusEntryView: View {
                 }
                 Text(entry.stale ? "—" : "\(entry.kmh)")
                     .font(.system(size: 34, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(entry.overLimit ? .orange : .white)
                     .minimumScaleFactor(0.5)
-                Text(entry.stale ? "Veri yok" : "km/h")
+                Text(entry.stale ? "Veri yok" : speedUnitLine)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                 Text(socLine)
@@ -121,6 +129,13 @@ private struct EtubuStatusEntryView: View {
             }
             .padding(4)
         }
+    }
+
+    private var speedUnitLine: String {
+        if let lim = entry.limitKmh, lim > 0 {
+            return entry.overLimit ? "km/h · lim \(lim)" : "km/h · \(lim)"
+        }
+        return "km/h"
     }
 
     private var socLine: String {

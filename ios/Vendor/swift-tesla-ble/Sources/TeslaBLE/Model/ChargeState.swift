@@ -8,6 +8,8 @@ public struct ChargeState: Sendable, Equatable {
     public var batteryRangeMiles: Double?
     /// Estimated remaining range in miles based on recent driving. Nil if the vehicle did not report this field.
     public var estBatteryRangeMiles: Double?
+    /// Ideal remaining range in miles (`ideal_battery_range`). Nil if unset.
+    public var idealBatteryRangeMiles: Double?
     /// Current charging session status. Nil if the vehicle did not report this field.
     public var chargingStatus: ChargingStatus?
     /// Charger voltage in volts. Nil if the vehicle did not report this field.
@@ -53,6 +55,7 @@ public struct ChargeState: Sendable, Equatable {
         batteryLevel: Int? = nil,
         batteryRangeMiles: Double? = nil,
         estBatteryRangeMiles: Double? = nil,
+        idealBatteryRangeMiles: Double? = nil,
         chargingStatus: ChargingStatus? = nil,
         chargerVoltage: Int? = nil,
         chargerCurrent: Int? = nil,
@@ -70,6 +73,7 @@ public struct ChargeState: Sendable, Equatable {
         self.batteryLevel = batteryLevel
         self.batteryRangeMiles = batteryRangeMiles
         self.estBatteryRangeMiles = estBatteryRangeMiles
+        self.idealBatteryRangeMiles = idealBatteryRangeMiles
         self.chargingStatus = chargingStatus
         self.chargerVoltage = chargerVoltage
         self.chargerCurrent = chargerCurrent

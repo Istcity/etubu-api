@@ -151,6 +151,13 @@ struct EtubuTripAnalyticsView: View {
             }
             .font(EtubuClusterFonts.ui(11, weight: .medium))
             .foregroundStyle(theme.mutedText)
+            if !trip.track.isEmpty, let gpx = store.exportGPX(tripId: trip.id) {
+                ShareLink(item: gpx) {
+                    Text(EtubuClusterL10n.t("tripShareGpx"))
+                        .font(EtubuClusterFonts.ui(11, weight: .semibold))
+                        .foregroundStyle(accent)
+                }
+            }
         }
     }
 }

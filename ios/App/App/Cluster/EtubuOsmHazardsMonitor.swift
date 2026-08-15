@@ -51,6 +51,7 @@ final class EtubuOsmHazardsMonitor: ObservableObject {
     ) -> [(h: EtubuRouteHazard, dM: Double, stage: EtubuWarnStage)] {
         var scored: [(h: EtubuRouteHazard, dM: Double, stage: EtubuWarnStage)] = []
         for h in points {
+            guard Self.isRoadTrafficWarning(h) else { continue }
             let dM = EtubuTrafikAPI.haversineKm(lat, lng, h.lat, h.lng) * 1000
             let t = EtubuHazardMerge.thresholds(for: h.kind)
             guard dM <= t.warn * 1.4 else { continue }
@@ -106,7 +107,7 @@ final class EtubuOsmHazardsMonitor: ObservableObject {
           node["enforcement"="average_speed"](around:\(r),\(lat),\(lng));
           node["camera:type"="section"](around:\(r),\(lat),\(lng));
           node["railway"="level_crossing"](around:\(r),\(lat),\(lng));
-          node["railway"="crossing"](around:\(r),\(lat),\(lng));
+          node["railway"="tram_level_crossing"](around:\(r),\(lat),\(lng));
           node["highway"="traffic_signals"](around:\(r),\(lat),\(lng));
           node["highway"="stop"](around:\(r),\(lat),\(lng));
           node["highway"="give_way"](around:\(r),\(lat),\(lng));
@@ -118,11 +119,12 @@ final class EtubuOsmHazardsMonitor: ObservableObject {
           node["highway"="traffic_signals"]["crossing"="traffic_signals"](around:\(r),\(lat),\(lng));
           node["hazard"](around:\(r),\(lat),\(lng));
           node["mountain_pass"="yes"](around:\(r),\(lat),\(lng));
-          node["natural"="saddle"](around:\(r),\(lat),\(lng));
-          way["tunnel"="yes"](around:\(r),\(lat),\(lng));
-          way["highway"="motorway"]["tunnel"="yes"](around:\(r),\(lat),\(lng));
-          way["hazard"](around:\(r),\(lat),\(lng));
-          way["mountain_pass"="yes"](around:\(r),\(lat),\(lng));
+          way["highway"~"\(Self.overpassDrivableHighways)"]["tunnel"~"^(yes|covered)$"](around:\(r),\(lat),\(lng));
+          way["highway"~"\(Self.overpassDrivableHighways)"]["covered"="yes"](around:\(r),\(lat),\(lng));
+          way["highway"~"\(Self.overpassPedestrianWays)"]["tunnel"="yes"](around:\(r),\(lat),\(lng));
+          way["highway"~"\(Self.overpassPedestrianWays)"]["bridge"~"^(yes|viaduct)$"](around:\(r),\(lat),\(lng));
+          way["highway"~"\(Self.overpassDrivableHighways)"]["hazard"](around:\(r),\(lat),\(lng));
+          way["highway"~"\(Self.overpassDrivableHighways)"]["mountain_pass"="yes"](around:\(r),\(lat),\(lng));
         );out body center;
         """
         for urlStr in endpoints {
@@ -156,7 +158,12 @@ final class EtubuOsmHazardsMonitor: ObservableObject {
             let lon = (el["lon"] as? NSNumber)?.doubleValue ?? (el["lon"] as? Double)
                 ?? (center?["lon"] as? NSNumber)?.doubleValue ?? (center?["lon"] as? Double)
             guard let lat, let lon else { continue }
-            let tags = el["tags"] as? [String: String] ?? [:]
+            let rawTags = el["tags"] as? [String: Any] ?? [:]
+            let tags: [String: String] = Dictionary(uniqueKeysWithValues: rawTags.compactMap { k, v in
+                if let s = v as? String { return (k, s) }
+                if let n = v as? NSNumber { return (k, n.stringValue) }
+                return nil
+            })
             guard let kind = classify(tags) else { continue }
             let maxspeed = Int(tags["maxspeed"] ?? "")
             let oid: String = {
@@ -180,8 +187,68 @@ final class EtubuOsmHazardsMonitor: ObservableObject {
         return EtubuHazardMerge.dedupePreferOfficial(out)
     }
 
+    /// Overpass `highway~` for roads a car actually drives.
+    nonisolated static let overpassDrivableHighways =
+        "^(motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|unclassified|residential|living_street|service)$"
+    nonisolated static let overpassPedestrianWays = "^(footway|path|steps|pedestrian)$"
+
+    nonisolated private static let drivableHighways: Set<String> = [
+        "motorway", "motorway_link", "trunk", "trunk_link",
+        "primary", "primary_link", "secondary", "secondary_link",
+        "tertiary", "tertiary_link", "unclassified", "residential",
+        "living_street", "service",
+    ]
+    nonisolated private static let pedestrianWays: Set<String> = [
+        "footway", "path", "steps", "pedestrian",
+    ]
+    nonisolated private static let nonRoadRail: Set<String> = [
+        "subway", "light_rail", "tram", "rail", "narrow_gauge",
+        "monorail", "funicular", "construction", "disused", "abandoned",
+        "subway_entrance", "platform", "halt", "station",
+    ]
+
+    /// Drop leftover metro/rail labels already in the HUD cache.
+    nonisolated static func isRoadTrafficWarning(_ h: EtubuRouteHazard) -> Bool {
+        if looksLikeMetroOrRailLabel(h.label), h.kind == "tunnel" || h.kind == "railway" {
+            return false
+        }
+        return true
+    }
+
+    nonisolated static func looksLikeMetroOrRailLabel(_ raw: String) -> Bool {
+        let blob = raw.lowercased()
+        guard !blob.isEmpty else { return false }
+        let needles = ["metro", "subway", "marmaray", "hafif metro", "underground"]
+        return needles.contains { blob.contains($0) }
+    }
+
+    nonisolated static func looksLikeMetroOrRailTunnel(_ tags: [String: String]) -> Bool {
+        let railway = (tags["railway"] ?? "").lowercased()
+        if nonRoadRail.contains(railway) { return true }
+        let route = (tags["route"] ?? "").lowercased()
+        if ["subway", "train", "light_rail", "tram", "ferry"].contains(route) { return true }
+        if (tags["station"] ?? "") == "subway" { return true }
+        let blob = [tags["name"], tags["name:tr"], tags["name:en"], tags["ref"], tags["network"], tags["operator"]]
+            .compactMap { $0 }
+            .joined(separator: " ")
+        return looksLikeMetroOrRailLabel(blob)
+    }
+
+    nonisolated private static func isCoveredRoad(_ tags: [String: String]) -> Bool {
+        let tunnel = (tags["tunnel"] ?? "").lowercased()
+        if ["culvert", "building_passage"].contains(tunnel) { return false }
+        if tunnel == "yes" || tunnel == "covered" { return true }
+        if (tags["covered"] ?? "") == "yes" { return true }
+        if tags["highway"] == "tunnel" { return true }
+        return false
+    }
+
     /// Shared OSM tag → hazard kind (live 900 m + along-route Overpass).
+    /// Only features that affect motor traffic on the carriageway.
     nonisolated static func classify(_ tags: [String: String]) -> String? {
+        if looksLikeMetroOrRailTunnel(tags), pedestrianWays.contains(tags["highway"] ?? "") == false {
+            return nil
+        }
         if tags["amenity"] == "charging_station" { return "charge" }
         if tags["highway"] == "speed_camera"
             || tags["enforcement"] == "maxspeed"
@@ -193,13 +260,25 @@ final class EtubuOsmHazardsMonitor: ObservableObject {
             || tags["traffic_sign"] == "average_speed" {
             return "corridor"
         }
+        // Car/tram at-grade crossing only — not metro pedestrian `railway=crossing`.
         if tags["railway"] == "level_crossing"
-            || tags["railway"] == "crossing"
+            || tags["railway"] == "tram_level_crossing"
             || tags["crossing:barrier"] != nil {
             return "railway"
         }
-        if tags["tunnel"] == "yes" || tags["highway"] == "tunnel" {
-            return "tunnel"
+        let hw = tags["highway"] ?? ""
+        let isParkingService = tags["service"] == "parking_aisle" || tags["service"] == "driveway"
+        if !isParkingService, (drivableHighways.contains(hw) || hw == "tunnel"), isCoveredRoad(tags) {
+            if ["motorway", "motorway_link", "trunk", "trunk_link"].contains(hw) {
+                return "tunnel"
+            }
+            return "underpass"
+        }
+        if pedestrianWays.contains(hw) {
+            let tunnel = (tags["tunnel"] ?? "").lowercased()
+            let bridge = (tags["bridge"] ?? "").lowercased()
+            if tunnel == "yes" || tunnel == "covered" { return "underpass" }
+            if bridge == "yes" || bridge == "viaduct" { return "overpass" }
         }
         let hazard = (tags["hazard"] ?? "").lowercased()
         if ["curve", "curves", "winding_road", "bend"].contains(hazard) {
@@ -211,10 +290,14 @@ final class EtubuOsmHazardsMonitor: ObservableObject {
         if hazard == "animal_crossing" || tags["hazard"] == "animal" {
             return "animal"
         }
-        if tags["mountain_pass"] == "yes" || tags["natural"] == "saddle" {
+        if tags["mountain_pass"] == "yes" {
             return "climb"
         }
-        if let inc = tags["incline"], inc.contains("%"),
+        if drivableHighways.contains(hw), tags["natural"] == "saddle" {
+            return "climb"
+        }
+        if drivableHighways.contains(hw),
+           let inc = tags["incline"], inc.contains("%"),
            let n = Double(inc.replacingOccurrences(of: "%", with: "")), abs(n) >= 8 {
             return "climb"
         }

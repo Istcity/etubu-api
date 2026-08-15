@@ -448,6 +448,7 @@ enum EtubuTrafikAPI {
         case "corridor": return 3500
         case "radar": return 2800
         case "tunnel": return 900
+        case "underpass", "overpass": return 600
         default: return 500
         }
     }
@@ -465,13 +466,15 @@ enum EtubuTrafikAPI {
           node["enforcement"="average_speed"](around:\(r),\(lat),\(lng));
           node["camera:type"="section"](around:\(r),\(lat),\(lng));
           node["railway"="level_crossing"](around:\(r),\(lat),\(lng));
-          node["railway"="crossing"](around:\(r),\(lat),\(lng));
+          node["railway"="tram_level_crossing"](around:\(r),\(lat),\(lng));
           node["hazard"](around:\(r),\(lat),\(lng));
           node["mountain_pass"="yes"](around:\(r),\(lat),\(lng));
-          node["natural"="saddle"](around:\(r),\(lat),\(lng));
-          way["tunnel"="yes"](around:\(r),\(lat),\(lng));
-          way["hazard"](around:\(r),\(lat),\(lng));
-          way["mountain_pass"="yes"](around:\(r),\(lat),\(lng));
+          way["highway"~"\(EtubuOsmHazardsMonitor.overpassDrivableHighways)"]["tunnel"~"^(yes|covered)$"](around:\(r),\(lat),\(lng));
+          way["highway"~"\(EtubuOsmHazardsMonitor.overpassDrivableHighways)"]["covered"="yes"](around:\(r),\(lat),\(lng));
+          way["highway"~"\(EtubuOsmHazardsMonitor.overpassPedestrianWays)"]["tunnel"="yes"](around:\(r),\(lat),\(lng));
+          way["highway"~"\(EtubuOsmHazardsMonitor.overpassPedestrianWays)"]["bridge"~"^(yes|viaduct)$"](around:\(r),\(lat),\(lng));
+          way["highway"~"\(EtubuOsmHazardsMonitor.overpassDrivableHighways)"]["hazard"](around:\(r),\(lat),\(lng));
+          way["highway"~"\(EtubuOsmHazardsMonitor.overpassDrivableHighways)"]["mountain_pass"="yes"](around:\(r),\(lat),\(lng));
         );out body center;
         """
         for urlStr in endpoints {

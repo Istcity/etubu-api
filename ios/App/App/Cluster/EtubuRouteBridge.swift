@@ -653,7 +653,7 @@ enum EtubuRouteBridge {
         let work = DispatchWorkItem {
             lastVehicleNavDestKey = key
             if let place = coordPlace {
-                plan(from: "Konumum", to: dest, toPlace: place, fromVehicleNav: true) { ok, _ in
+                plan(from: EtubuClusterL10n.t("fromHere"), to: dest, toPlace: place, fromVehicleNav: true) { ok, _ in
                     if ok {
                         Task { @MainActor in
                             EtubuVehicleTelemetry.shared.routeActive = true
@@ -674,7 +674,7 @@ enum EtubuRouteBridge {
                 guard let place, place.lat != nil, place.lng != nil else { return }
                 // Reject geocode that looks like a wrong Home/Work substitute.
                 if isAmbiguousVehicleDest(dest) { return }
-                plan(from: "Konumum", to: dest, toPlace: place, fromVehicleNav: true) { ok, _ in
+                plan(from: EtubuClusterL10n.t("fromHere"), to: dest, toPlace: place, fromVehicleNav: true) { ok, _ in
                     if ok {
                         Task { @MainActor in
                             EtubuVehicleTelemetry.shared.routeActive = true
@@ -754,7 +754,7 @@ enum EtubuRouteBridge {
             merged.append(contentsOf: chargeHaz)
             merged.append(contentsOf: wxHaz)
             merged = EtubuHazardMerge.dedupePreferOfficial(merged)
-            merged.sort { ($0.routeIdx ?? 0) < ($1.routeIdx ?? 0) }
+            merged = EtubuDriveWarnings.sortedForDisplay(merged)
             guard merged.count > existing.count || !merged.isEmpty else { return }
 
             let brief = EtubuRouteBriefSummary.from(hazards: merged)
@@ -976,6 +976,7 @@ enum EtubuRouteBridge {
                 t.routeDestLng = toLng
                 t.applyCapRouteRemain(active: true, remainKm: remainKm > 0 ? remainKm : nil)
                 EtubuEvRoutePlanner.shared.refreshFromLiveState()
+                EtubuMapLocationHelper.shared.syncWithVehicleSession()
 
                 let w = EtubuDriveWarnings.shared
                 w.hazards = hazards
@@ -1370,6 +1371,7 @@ enum EtubuRouteBridge {
             t.refreshEnergyPlan()
             EtubuDriveWarnings.shared.clearCriticalAlerts()
             EtubuMapLocationHelper.shared.disableBackgroundUpdates()
+            EtubuMapLocationHelper.shared.syncWithVehicleSession()
         }
     }
 
@@ -1561,7 +1563,7 @@ enum EtubuRouteBridge {
               return Math.round(sum / 100) / 10;
             }
             if ((!brief.radar && !brief.corridor && !brief.charge && !brief.weather && !brief.osmCritical) && hazards.length) {
-              var crit = {railway:1,tunnel:1,winding:1,climb:1,road_condition:1,animal:1,stop:1,give_way:1};
+              var crit = {railway:1,tunnel:1,underpass:1,overpass:1,winding:1,climb:1,road_condition:1,animal:1,stop:1,give_way:1};
               hazards.forEach(function(h){
                 if (h.kind === 'corridor') brief.corridor++;
                 else if (h.kind === 'charge') { brief.charge++; if (h.label && brief.chargeNames.length < 4) brief.chargeNames.push(h.label); }

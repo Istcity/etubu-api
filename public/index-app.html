@@ -3,20 +3,27 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
-  <!-- Google tag (gtag.js) -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-9FQ0VVHGYC"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-    gtag('config', 'G-9FQ0VVHGYC');
-  </script>
+  <!-- Google tag loaded only after cookie consent (js/consent.js) -->
   <title>ETUBU — EV Driving Sounds | GPS-Synced Electric Car Sound</title>
   <meta name="description" content="ETUBU: free GPS-synced EV driving sounds and soft visual themes. All voices and themes unlocked — supported by ads on etubu.com." />
   <meta name="keywords" content="EV sound, electric car sound, ASD, GPS driving sounds, EV driving experience, synthetic engine sound, etubu" />
   <meta name="author" content="ETUBU" />
   <meta name="robots" content="index, follow, max-image-preview:large" />
   <meta name="theme-color" content="#02040a" />
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('consent', 'default', {
+      analytics_storage: 'denied',
+      ad_storage: 'denied',
+      ad_user_data: 'denied',
+      ad_personalization: 'denied',
+      functionality_storage: 'denied',
+      personalization_storage: 'denied',
+      security_storage: 'granted',
+      wait_for_update: 500
+    });
+  </script>
   <meta name="application-name" content="ETUBU" />
   <meta name="apple-mobile-web-app-title" content="ETUBU" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -84,14 +91,149 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Orbitron:wght@600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css?v=20260810a" />
+  <link rel="stylesheet" href="css/style.css?v=20260814e" />
+  <script>
+    (function () {
+      try {
+        if (window.__ETUBU_NATIVE_CLUSTER__) return;
+        if (window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform()) return;
+        var q = location.search || "";
+        if (/skipIntro=1|intro=0/.test(q)) return;
+        try { if (sessionStorage.getItem("etubu_intro_seen") === "1") return; } catch (eS) {}
+        var consent = null;
+        try {
+          var raw = localStorage.getItem("etubu_consent");
+          if (raw) consent = JSON.parse(raw);
+        } catch (eC) {}
+        if (!consent) {
+          try {
+            var m = document.cookie.match(/(?:^|; )etubu_consent=([^;]*)/);
+            if (m) consent = JSON.parse(decodeURIComponent(m[1]));
+          } catch (eC2) {}
+        }
+        if (!consent) return;
+        var seen = false;
+        if (consent.preferences) {
+          try { seen = localStorage.getItem("etubu_intro_seen") === "1"; } catch (e0) {}
+          if (!seen) {
+            try { seen = document.cookie.indexOf("etubu_intro_seen=1") !== -1; } catch (e1) {}
+          }
+        }
+        if (seen) return;
+        document.documentElement.classList.add("etubu-intro");
+      } catch (e) {}
+    })();
+  </script>
   <script src="js/etubu-native-shim.js?v=20260728a"></script>
-  <script src="js/config.js?v=20260727e"></script>
-  <!-- Yandex.RTB -->
-  <script>window.yaContextCb = window.yaContextCb || [];</script>
-  <script src="https://yandex.ru/ads/system/context.js" async></script>
+  <script src="js/config.js?v=20260814a"></script>
+  <script src="js/consent.js?v=20260814e"></script>
+  <!-- Yandex.RTB: loaded after advertising consent in ads.js -->
 </head>
 <body>
+  <div id="siteIntro" class="site-intro" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="introTitle">
+    <aside class="intro-ad intro-ad--top" aria-label="Ad">
+      <div class="ad-slot ad-slot--leader" id="adIntroTop">
+        <span class="ad-label" data-i18n="adLabel">Ad</span>
+        <div id="adIntroTopInner" class="ad-inner"></div>
+      </div>
+    </aside>
+    <aside class="intro-ad intro-ad--left" aria-label="Ad">
+      <div class="ad-slot ad-slot--skyscraper" id="adIntroLeft">
+        <span class="ad-label" data-i18n="adLabel">Ad</span>
+        <div id="adIntroLeftInner" class="ad-inner"></div>
+      </div>
+    </aside>
+    <aside class="intro-ad intro-ad--right" aria-label="Ad">
+      <div class="ad-slot ad-slot--skyscraper" id="adIntroRight">
+        <span class="ad-label" data-i18n="adLabel">Ad</span>
+        <div id="adIntroRightInner" class="ad-inner"></div>
+      </div>
+    </aside>
+    <aside class="intro-ad intro-ad--bottom" aria-label="Ad">
+      <div class="ad-slot ad-slot--leader" id="adIntroBottom">
+        <span class="ad-label" data-i18n="adLabel">Ad</span>
+        <div id="adIntroBottomInner" class="ad-inner"></div>
+      </div>
+    </aside>
+
+    <div class="intro-stage">
+      <header class="intro-head">
+        <img class="brand-logo brand-logo--sm" src="assets/brand/logo-dark.png" alt="ETUBU" height="28" />
+        <span class="intro-kicker" id="introStepLabel">1 / 4</span>
+        <button type="button" class="intro-skip" id="introSkipBtn" data-i18n="introSkip">Atla</button>
+      </header>
+
+      <div class="intro-slides">
+        <article class="intro-slide is-active" data-intro="0">
+          <div class="intro-shot intro-shot--sound" aria-hidden="true">
+            <div class="intro-phone">
+              <div class="intro-phone-bar"></div>
+              <div class="intro-dial">
+                <span class="intro-dial-num">86</span>
+                <span class="intro-dial-unit">km/h</span>
+              </div>
+              <div class="intro-waves"></div>
+            </div>
+          </div>
+          <h2 id="introTitle" data-i18n="intro1Title">GPS hızına senkron EV sesi</h2>
+          <p data-i18n="intro1Body">Araç hızlandıkça ve yavaşladıkça motor sesi anında değişir. Tesla tarayıcısında ve telefonda çalışır.</p>
+        </article>
+        <article class="intro-slide" data-intro="1" hidden>
+          <div class="intro-shot intro-shot--start" aria-hidden="true">
+            <div class="intro-phone">
+              <div class="intro-phone-bar"></div>
+              <div class="intro-start-btn">BAŞLAT</div>
+              <div class="intro-gps-row">📍 GPS</div>
+            </div>
+          </div>
+          <h2 data-i18n="intro2Title">Nasıl kullanılır</h2>
+          <p data-i18n="intro2Body">Soldan ses ve temayı seçin, Başlat’a dokunun, konum iznini verin. Sürüşe çıkın — ses GPS hızını takip eder.</p>
+        </article>
+        <article class="intro-slide" data-intro="2" hidden>
+          <div class="intro-shot intro-shot--alerts" aria-hidden="true">
+            <div class="intro-phone">
+              <div class="intro-phone-bar"></div>
+              <div class="intro-warn-strip">⚡ Radar 180 m</div>
+              <div class="intro-dial intro-dial--sm">
+                <span class="intro-limit">120</span>
+                <span class="intro-dial-num">118</span>
+              </div>
+            </div>
+          </div>
+          <h2 data-i18n="intro3Title">Yol uyarıları</h2>
+          <p data-i18n="intro3Body">OSM’den radar, hız limiti levhası ve kritik noktalar. Limit aşımında levha parlar; üst şerit uyarır.</p>
+        </article>
+        <article class="intro-slide" data-intro="3" hidden>
+          <div class="intro-shot intro-shot--panel" aria-hidden="true">
+            <div class="intro-phone intro-phone--wide">
+              <div class="intro-phone-bar"></div>
+              <div class="intro-panel-mock">
+                <span>Ses · Tema</span>
+                <span class="intro-panel-pill">Calm EV</span>
+              </div>
+              <div class="intro-dial intro-dial--sm"><span class="intro-dial-num">64</span></div>
+            </div>
+          </div>
+          <h2 data-i18n="intro4Title">Kadran ve panel</h2>
+          <p data-i18n="intro4Body">Kadrana dokunarak görünümü değiştirin. Soldaki ok paneli açar veya kapatır. Hazırsanız sürüşe geçin.</p>
+        </article>
+      </div>
+
+      <div class="intro-dots" role="tablist" aria-label="Intro">
+        <button type="button" class="intro-dot is-active" data-intro-dot="0" aria-label="1"></button>
+        <button type="button" class="intro-dot" data-intro-dot="1" aria-label="2"></button>
+        <button type="button" class="intro-dot" data-intro-dot="2" aria-label="3"></button>
+        <button type="button" class="intro-dot" data-intro-dot="3" aria-label="4"></button>
+      </div>
+
+      <div class="intro-actions">
+        <button type="button" class="btn-ghost intro-back" id="introBackBtn" hidden data-i18n="introBack">Geri</button>
+        <button type="button" class="link-btn" id="introStartSkipBtn" data-i18n="introSkip">Atla</button>
+        <button type="button" class="btn-primary intro-next" id="introNextBtn" data-i18n="introNext">İleri</button>
+      </div>
+    </div>
+  </div>
+
   <aside class="ad-rail ad-rail--top" aria-label="Ad">
     <div class="ad-slot ad-slot--leader" id="adTop">
       <span class="ad-label" data-i18n="adLabel">Ad</span>
@@ -140,7 +282,8 @@
         <a href="about.html" data-i18n="about">Hakkımızda</a> ·
         <a href="contact.html" data-i18n="contact">İletişim</a> ·
         <a href="privacy.html" data-i18n="privacy">Privacy</a> ·
-        <a href="terms.html" data-i18n="terms">Terms</a>
+        <a href="terms.html" data-i18n="terms">Terms</a> ·
+        <button type="button" class="link-btn" data-consent-open data-i18n="consentReopen">Çerez ayarları</button>
       </p>
     </div>
   </div>
@@ -468,12 +611,15 @@
       <a href="about.html">Hakkımızda</a> ·
       <a href="contact.html">İletişim</a> ·
       <a href="privacy.html">Gizlilik</a> ·
-      <a href="disclaimer.html">Sorumluluk</a>
+      <a href="disclaimer.html">Sorumluluk</a> ·
+      <button type="button" class="link-btn" data-consent-open data-i18n="consentReopen">Çerez ayarları</button>
     </p>
 
     <div class="dock-guide" id="dockGuide">
       <p class="dock-guide-title">Sürüş rehberi</p>
       <ul>
+        <li><button type="button" class="link-btn" data-consent-open data-i18n="consentReopen">Çerez ayarları</button></li>
+        <li><button type="button" class="link-btn" id="introReopenBtn" data-i18n="introReopen">Nasıl kullanılır</button></li>
         <li><a href="blog/avas-nedir.html">AVAS nedir?</a></li>
         <li><a href="blog/etubu-nasil-kullanilir.html">ETUBU nasıl kullanılır?</a></li>
         <li><a href="blog/guvenli-telefon-kullanimi.html">Güvenli telefon kullanımı</a></li>
@@ -505,17 +651,18 @@
         <a href="/about.html">Hakkımızda</a> ·
         <a href="/contact.html">İletişim</a> ·
         <a href="/privacy.html">Gizlilik</a> ·
-        <a href="/disclaimer.html">Sorumluluk</a>
+        <a href="/disclaimer.html">Sorumluluk</a> ·
+        <button type="button" class="link-btn" data-consent-open data-i18n="consentReopen">Çerez ayarları</button>
       </p>
       <p class="site-credit">Sinan Nergiz tarafından yapılmıştır</p>
     </div>
   </section>
 
-  <script src="js/car-browser.js?v=20260810a"></script>
-  <script src="js/i18n.js?v=20260810a"></script>
-  <script src="js/gps-tracker.js?v=20260729r"></script>
+  <script src="js/car-browser.js?v=20260814d"></script>
+  <script src="js/i18n.js?v=20260814d"></script>
+  <script src="js/gps-tracker.js?v=20260813a"></script>
   <script src="js/identity.js?v=20260724w"></script>
-  <script src="js/audio-engine.js?v=20260730v"></script>
+  <script src="js/audio-engine.js?v=20260813a"></script>
   <script src="js/warn-voice.js?v=20260801a"></script>
   <script src="js/obd.js?v=20260728a"></script>
   <script src="js/music-hub.js?v=20260724av"></script>
@@ -524,10 +671,11 @@
   <script src="js/radar-alert.js?v=20260729r"></script>
   <script src="js/osm-hazards.js?v=20260810a"></script>
   <script src="js/route-guard.js?v=20260730u"></script>
-  <script src="js/ads.js?v=20260727e"></script>
+  <script src="js/ads.js?v=20260814d"></script>
+  <script src="js/intro.js?v=20260814e"></script>
   <script src="js/paddle-checkout.js?v=20260717s"></script>
   <script src="js/paywall.js?v=20260724w"></script>
   <script src="js/picker.js?v=20260727g"></script>
-  <script src="js/app.js?v=20260810a"></script>
+  <script src="js/app.js?v=20260814a"></script>
 </body>
 </html>

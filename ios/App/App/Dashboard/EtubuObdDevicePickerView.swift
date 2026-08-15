@@ -10,9 +10,13 @@ struct EtubuObdDevicePickerView: View {
             List {
                 if telemetry.discovered.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(telemetry.isScanning ? "Looking for OBD adapters…" : "No devices yet")
-                            .foregroundStyle(.secondary)
-                        Text("Turn on your ELM327 / OBD BLE adapter and keep the phone nearby.")
+                        Text(
+                            telemetry.isScanning
+                                ? EtubuClusterL10n.t("obdScanning")
+                                : EtubuClusterL10n.t("obdEmpty")
+                        )
+                        .foregroundStyle(.secondary)
+                        Text(EtubuClusterL10n.t("obdEmptyHint"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -39,17 +43,23 @@ struct EtubuObdDevicePickerView: View {
                     }
                 }
             }
-            .navigationTitle("OBD Devices")
+            .navigationTitle(EtubuClusterL10n.t("obdPickTitle"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { onClose() }
+                    Button(EtubuClusterL10n.close) { onClose() }
                 }
                 ToolbarItem(placement: .primaryAction) {
-                    Button(telemetry.isScanning ? "Scanning…" : "Rescan") {
+                    Button(telemetry.isScanning ? EtubuClusterL10n.t("obdScanning") : EtubuClusterL10n.t("obdRescan")) {
                         EtubuObdBleManager.shared.startScanForPicker()
                     }
                     .disabled(telemetry.isScanning)
+                }
+                ToolbarItem(placement: .bottomBar) {
+                    Button(EtubuClusterL10n.t("obdDisconnect"), role: .destructive) {
+                        EtubuObdBleManager.shared.disconnect()
+                        onClose()
+                    }
                 }
             }
             .onAppear {

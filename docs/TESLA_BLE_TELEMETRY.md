@@ -6,13 +6,17 @@ Etubu uses a **vendored** `swift-tesla-ble` (`ios/Vendor/swift-tesla-ble`) Infot
 
 | Loop | Rate (moving) | Query | Fields |
 |------|---------------|-------|--------|
-| Drive | ~10–12 Hz (`85 ms` sleep) | `fetchDrive()` / `.driveOnly` | speed, gear, power, odo, active route (+ coords / energy@arrival) |
-| Extras | **1 Hz** | `.categories([.charge,.climate,.tirePressure,…])` | SoC, range, temps, TPMS, closures, media |
-| VCSEC | **1 Hz** | `InformationRequest.GET_STATUS` (`VehicleQuery.bodyControllerState`) | lock, user presence, sleep — handshake unchanged |
+| Drive | **~3 Hz** (`280 ms`) | `fetchDrive()` / `.driveOnly` | speed, gear, power, odo, active route |
+| Extras | **~1 Hz sequential** | `.charge` every tick; climate / TPMS / location rotate | SoC, temps, TPMS, vehicle GPS |
+| VCSEC | **~0.4 Hz** | `GET_STATUS` | lock, presence |
 
 Handshake / NFC pair / lock-unlock commands are untouched. After session is up, VCSEC GET_STATUS runs on the existing signed counter path.
 
-Speed: `speedFloat` (mph) with integer `speed` fallback → × 1.60934. Dial still steps **±1 km/h @ 20 Hz**.
+12 Hz drive polling starved extras and dropped Infotainment. Tesla BLE is one in-flight signed request; extras are sequential so a TPMS hit cannot mask frozen SoC.
+
+**Reconnect:** after first successful pair, never mint a new key / never ask for NFC card.
+
+Speed: BLE `speedFloat` (mph) while fresh; else GPS (3-of-4 confirm × ~1.264). Dial still steps **±1 km/h @ 20 Hz**.
 
 TPMS: bar/kPa/psi normalize; warning if **< 2.5 bar**.
 
@@ -22,17 +26,17 @@ OLED stealth: pitch-black speed-only HUD; tap wakes 10 s; analog/digital in Sett
 
 Extras failures **never** cancel the drive loop.
 
-**Boot:** tire + charge/climate fire as **parallel** requests with up to **3 retries** (wake between attempts).
+**Boot:** sequential charge → climate → tires → location (up to 3 retries).
 
-**Drive:** charge + climate + tires + **location** on **every** extras tick. Closures/media/software/schedule stay lower cadence.
+**Drive:** SoC every extras tick; climate / TPMS / location rotate. Closures/media stay lower cadence.
 
-Infotainment asleep → empty charge/climate/TPMS: `wakeVehicle` on connect and after **~4 missing extras ticks** (also capped ~12 s). Background healer re-bootstraps extras every ~12 s as if newly connected.
+Infotainment asleep → empty charge/climate: `wakeVehicle` on connect and after **~4 missing charge ticks** (capped ~16 s). Healer does **not** treat TPMS-only extras as healthy SoC.
 
 ## Field map (protobuf → UI)
 
 | UI | Source | Notes |
 |----|--------|-------|
-| Speed km/h | `DriveState.speedMph` × 1.60934 | **Nil mph keeps prior km/h** (never publish 0). Dial steps **±1 km/h @ 20 Hz** toward vehicle target |
+| Speed km/h | BLE drive while fresh (&lt;2.2 s); else confirmed GPS | GPS = reported + haversine; 3 of last 4 agree; × ~1.264 (web 22%) |
 | Gear | `shiftState` | Unset + moving ≥3 → treat as `D`; P/N + &lt;3 → park-gate 0 |
 | Power kW | `powerKW` | Reject \|kw\| &gt; 800 |
 | SoC % | `usableBatteryLevel` ?? `batteryLevel` | Mapper preserves optionals (unset ≠ 0). Live only after BLE confirm — disk cache never shown as live |
@@ -68,7 +72,5 @@ Display:
 
 ## Audio duck (alerts over car BT)
 
-`AppDelegate.activateAlertDuckSession()` → `.playback` + `.duckOthers` + `.allowBluetoothA2DP`  
-`deactivateAlertDuckSession()` → `setActive(false, .notifyOthersOnDeactivation)` then restore drive mix.
-
-All warn beeps go through this path so YouTube Music / other A2DP apps duck briefly. TTS is disabled.
+`AppDelegate.activateAlertDuckSession()` → `.playback` + `.voicePrompt` + `.duckOthers` + `.allowBluetoothA2DP`  
+Duck stays ~1.2 s after the last beep so A2DP actually carries the tone over YouTube/Apple Music. Beeps use in-memory WAV `AVAudioPlayer` (not `AVAudioEngine`).

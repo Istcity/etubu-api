@@ -27,13 +27,15 @@ final class EtubuTeslaBleSession: ObservableObject {
     private var extrasTick = 0
     /// Consecutive extras polls still missing SoC/climate/TPMS — wake after ~8.
     private var extrasMissingStreak = 0
-    private var lastLiveActivityPush = Date.distantPast
     private var lastExtrasWakeAt = Date.distantPast
     private var activePairVIN: String?
     /// Ignore brief BLE disconnect flickers right after a successful connect.
     private var connectedAt: Date?
     private var ignoreDisconnectUntil: Date?
     @Published private(set) var pairStep: PairFlowStep = .none
+    /// ECDH / MAC / counter-window desync — UI should ask for NFC re-pair.
+    @Published private(set) var needsRePairing = false
+    private var cryptoFaultStreak = 0
 
     private var telemetry: EtubuVehicleTelemetry { .shared }
     /// Demo sürerken BLE poll yazmasın.
@@ -48,6 +50,7 @@ final class EtubuTeslaBleSession: ObservableObject {
     private var pollGeneration = 0
     private var driveWatchTask: Task<Void, Never>?
     private var liveHealTask: Task<Void, Never>?
+    private var keepAliveTask: Task<Void, Never>?
     private var emptyDriveStreak = 0
     private var lastForcedReconnectAt = Date.distantPast
     private var lastFreshExtrasAt = Date.distantPast
@@ -88,20 +91,15 @@ final class EtubuTeslaBleSession: ObservableObject {
             return
         }
         userStopped = false
-        Task { await connectNormal(vin: vin) }
+        Task { await connectNormal(vin: vin, allowPairFallback: false) }
     }
 
     private var isSessionHealthy: Bool {
         guard client != nil, telemetry.connectionState == .connected else { return false }
-        // Yalnız gerçek drive değeri — boş paket lastDriveAt’i şişirmesin.
         if let valueAt = telemetry.lastDriveValueAt {
             return Date().timeIntervalSince(valueAt) < 6
         }
-        if let driveAt = telemetry.lastDriveAt {
-            return Date().timeIntervalSince(driveAt) < 3
-        }
-        guard let last = telemetry.lastUpdateAt else { return false }
-        return Date().timeIntervalSince(last) < 4
+        return false
     }
 
     /// Power-save: keep drive speed; pause extras / VCSEC / heavy UI feeds.
@@ -111,8 +109,10 @@ final class EtubuTeslaBleSession: ObservableObject {
         if on {
             extrasTask?.cancel()
             vcsecTask?.cancel()
+            keepAliveTask?.cancel()
             extrasTask = nil
             vcsecTask = nil
+            keepAliveTask = nil
         } else if let client, telemetry.connectionState == .connected || telemetry.connectionState == .reconnecting {
             // Restart side loops without tearing down drive poll.
             if extrasTask == nil || vcsecTask == nil {
@@ -151,6 +151,7 @@ final class EtubuTeslaBleSession: ObservableObject {
         telemetry.vin = vin
         telemetry.deviceLabel = "Tesla \(String(vin.suffix(6)))"
         userStopped = false
+        clearRePairingLock()
         await pair(vin: vin)
     }
 
@@ -161,7 +162,32 @@ final class EtubuTeslaBleSession: ObservableObject {
         }
         userStopped = false
         didAutoBootstrapThisProcess = true
-        await connectNormal(vin: vin)
+        await connectNormal(vin: vin, allowPairFallback: false)
+    }
+
+    /// Switch to a previously used VIN without wiping its pairing flag.
+    func switchToVIN(_ raw: String) async {
+        let vin = EtubuTeslaVinStore.normalize(raw)
+        guard EtubuTeslaVinStore.isValidVIN(vin) else {
+            telemetry.statusMessage = EtubuClusterL10n.t("bleVinLen")
+            return
+        }
+        userStopped = false
+        if client != nil {
+            cancelJobs()
+            await client?.disconnect()
+            client = nil
+        }
+        EtubuTeslaVinStore.vin = vin
+        telemetry.vin = vin
+        telemetry.deviceLabel = "Tesla \(String(vin.suffix(6)))"
+        userStopped = false
+        if EtubuTeslaVinStore.pairedConfirmed(for: vin) {
+            didAutoBootstrapThisProcess = true
+            await connectNormal(vin: vin, allowPairFallback: false)
+        } else {
+            await pair(vin: vin)
+        }
     }
 
     func disconnect() async {
@@ -241,7 +267,15 @@ final class EtubuTeslaBleSession: ObservableObject {
             return
         }
         userStopped = false
+        clearRePairingLock()
         await pair(vin: vin)
+    }
+
+    /// Crypto desync CTA — stop reconnect loop and start a fresh NFC pair.
+    func beginRePairing() async {
+        userStopped = false
+        clearRePairingLock()
+        await retryPair()
     }
 
     // MARK: - Pairing
@@ -255,6 +289,7 @@ final class EtubuTeslaBleSession: ObservableObject {
         pairStep = .sendingRequest
         telemetry.connectionState = .pairing
         telemetry.statusMessage = EtubuClusterL10n.t("bleSendingKey")
+        clearRePairingLock()
 
         do {
             let privateKey: P256.KeyAgreement.PrivateKey
@@ -292,7 +327,7 @@ final class EtubuTeslaBleSession: ObservableObject {
 
     // MARK: - Connect + poll
 
-    private func connectNormal(vin: String, allowPairFallback: Bool = true, maxRetries: Int = 1) async {
+    private func connectNormal(vin: String, allowPairFallback: Bool = false, maxRetries: Int = 1) async {
         guard !demoSuspended else { return }
         if isSessionHealthy {
             if pollTask == nil, let client { startPolling(client) }
@@ -319,16 +354,16 @@ final class EtubuTeslaBleSession: ObservableObject {
         }
         telemetry.connectionState = .connecting
         telemetry.statusMessage = EtubuClusterL10n.t("bleConnecting")
+        pairStep = .none
 
+        // Never mint a new key on reconnect — that forces another NFC card tap.
         if (try? keyStore.loadPrivateKey(forVIN: vin)) == nil {
+            telemetry.connectionState = .failed
+            telemetry.statusMessage = EtubuClusterL10n.t("bleKeyMissing")
             if allowPairFallback {
-                let key = KeyPairFactory.generateKeyPair()
-                try? keyStore.savePrivateKey(key, forVIN: vin)
                 await pair(vin: vin)
-            } else {
-                pairStep = .failed
-                telemetry.connectionState = .failed
-                telemetry.statusMessage = EtubuClusterL10n.t("bleKeyMissing")
+            } else if shouldAutoReconnect {
+                scheduleReconnect(vin: vin, debounce: 3.0)
             }
             return
         }
@@ -346,6 +381,7 @@ final class EtubuTeslaBleSession: ObservableObject {
                 reconnectAttempt = 0
                 connectedAt = Date()
                 ignoreDisconnectUntil = Date().addingTimeInterval(5)
+                clearRePairingLock()
                 telemetry.connectionState = .connected
                 telemetry.lockToTeslaSource()
                 telemetry.statusMessage = EtubuClusterL10n.t("bleConnected")
@@ -359,13 +395,14 @@ final class EtubuTeslaBleSession: ObservableObject {
                 EtubuVehicleLaunchNotifier.shared.notifyVehicleConnected(source: "tesla")
                 return
             } catch {
+                if notePossibleDesync(error, threshold: 2) { return }
                 if attempt < maxRetries {
                     telemetry.connectionState = .reconnecting
                     telemetry.statusMessage = String(format: EtubuClusterL10n.t("bleRetryFmt"), attempt + 1, maxRetries)
                     try? await Task.sleep(nanoseconds: UInt64(attempt) * 1_000_000_000)
                     continue
                 }
-                pairStep = allowPairFallback ? .none : .failed
+                pairStep = .none
                 telemetry.connectionState = .failed
                 telemetry.statusMessage = error.localizedDescription
                 if self.shouldAutoReconnect {
@@ -375,14 +412,13 @@ final class EtubuTeslaBleSession: ObservableObject {
         }
     }
 
-    /// Dual-loop Infotainment telemetry + 1 Hz VCSEC GET_STATUS (see docs/TESLA_BLE_TELEMETRY.md):
-    /// - Drive ~10–12 Hz: speed / gear / power only (`fetchDrive`) — never blocked by extras.
-    /// - Extras ~1 Hz: charge / climate / TPMS / closures / media — failures never poison drive.
-    /// - VCSEC 1 Hz: `InformationRequest.GET_STATUS` (lock / presence / sleep) — handshake untouched.
+    /// Dual-loop Infotainment: drive HUD ~1 Hz when moving; GPS fills BLE gaps.
+    /// Charge/climate/TPMS ~60 s. Keepalive wake while moving. Failures never poison other loops.
     private func startPolling(_ client: TeslaVehicleClient) {
         pollTask?.cancel()
         extrasTask?.cancel()
         vcsecTask?.cancel()
+        keepAliveTask?.cancel()
         driveWatchTask?.cancel()
         pollGeneration &+= 1
         let gen = pollGeneration
@@ -398,34 +434,39 @@ final class EtubuTeslaBleSession: ObservableObject {
                 let suspended = await MainActor.run { self.demoSuspended }
                 if suspended { return }
                 do {
-                    let drive = try await client.fetchDrive(timeout: .milliseconds(1800))
+                    let drive = try await client.fetchDrive(timeout: .seconds(2))
                     failStreak = 0
                     await MainActor.run { self.applyDrive(drive) }
                 } catch {
+                    if await MainActor.run(body: { self.notePossibleDesync(error, threshold: 3) }) {
+                        return
+                    }
                     failStreak += 1
-                    if failStreak < 8 {
+                    if failStreak < 10 {
                         await MainActor.run {
                             self.telemetry.statusMessage = String(format: EtubuClusterL10n.t("bleWeakSignalFmt"), failStreak)
                         }
-                        try? await Task.sleep(nanoseconds: UInt64(min(900, 250 + failStreak * 80)) * 1_000_000)
+                        try? await Task.sleep(nanoseconds: UInt64(min(1200, 280 + failStreak * 90)) * 1_000_000)
                         continue
                     }
-                    // Soft recover — do NOT exit the drive loop (that froze the dial).
                     await MainActor.run {
                         self.telemetry.statusMessage = error.localizedDescription
                         self.telemetry.connectionState = .reconnecting
-                        let vin = EtubuTeslaVinStore.vin
-                        if self.shouldAutoReconnect, let vin {
-                            self.scheduleReconnect(vin: vin, debounce: 1.2)
+                        if self.shouldAutoReconnect, let vin = EtubuTeslaVinStore.vin {
+                            self.scheduleReconnect(vin: vin, debounce: 1.5)
                         }
                     }
-                    failStreak = 3
-                    try? await Task.sleep(nanoseconds: 1_200_000_000)
+                    failStreak = 4
+                    try? await Task.sleep(nanoseconds: 1_500_000_000)
                     continue
                 }
-                // ~10–12 Hz when moving; slower when parked so Infotainment can sleep.
+                // Drive HUD: ~0.7 s gap when moving → ~1 Hz with BLE RTT.
+                // Parked stays slower so extras/VCSEC keep the wire.
+                // Timeout is 2 s. Never 3 Hz (would starve charge/climate).
                 let sleepNs: UInt64 = await MainActor.run {
-                    self.telemetry.kmh < 3 ? 700_000_000 : 85_000_000
+                    let moving = self.telemetry.kmh >= 3 || self.telemetry.kmhFine >= 3
+                    if moving { return 700_000_000 }
+                    return 2_200_000_000
                 }
                 try? await Task.sleep(nanoseconds: sleepNs)
             }
@@ -436,19 +477,20 @@ final class EtubuTeslaBleSession: ObservableObject {
             while !Task.isCancelled {
                 let suspended = await MainActor.run { self.demoSuspended }
                 if suspended { return }
-                await self.pollExtrasOnce(client)
-                let sleepNs: UInt64 = await MainActor.run {
-                    let parked = self.telemetry.kmh < 3
-                    let missing = self.telemetry.needsVehicleExtrasRefresh
-                    // While moving: extras must not starve the drive Infotainment queue.
-                    if !parked { return missing ? 800_000_000 : 1_000_000_000 }
-                    if missing { return 700_000_000 }
-                    return 1_000_000_000
+                let (due, missing) = await MainActor.run { () -> (Bool, Bool) in
+                    let missing = !self.telemetry.liveChargeConfirmed
+                    let age = self.telemetry.lastChargeAt.map { Date().timeIntervalSince($0) } ?? 99
+                    return (missing || age > 58, missing)
                 }
-                try? await Task.sleep(nanoseconds: sleepNs)
+                if due {
+                    await self.pollExtrasOnce(client)
+                    await MainActor.run { self.lastFreshExtrasAt = Date() }
+                }
+                try? await Task.sleep(nanoseconds: missing ? 8_000_000_000 : 60_000_000_000)
             }
         }
         startVcsecStatusLoop(client)
+        startKeepAliveWake(client)
         startLiveHeal(client)
         driveWatchTask = Task { [weak self] in
             guard let self else { return }
@@ -460,13 +502,15 @@ final class EtubuTeslaBleSession: ObservableObject {
                     guard self.telemetry.connectionState == .connected
                         || self.telemetry.connectionState == .reconnecting else { return "wait" }
                     if self.pollTask == nil { return "restart" }
+                    let gpsOk = self.telemetry.lastGpsSampleFresh || self.telemetry.hudUsesGpsSpeed
+                    if gpsOk { return "ok" }
                     if let last = self.telemetry.lastDriveValueAt,
-                       Date().timeIntervalSince(last) > 4.5 {
+                       Date().timeIntervalSince(last) > 5.5 {
                         return "restart"
                     }
                     if self.telemetry.lastDriveValueAt == nil,
                        let last = self.telemetry.lastDriveAt,
-                       Date().timeIntervalSince(last) > 4.5 {
+                       Date().timeIntervalSince(last) > 5.5 {
                         return "restart"
                     }
                     return "ok"
@@ -482,13 +526,13 @@ final class EtubuTeslaBleSession: ObservableObject {
         }
     }
 
-    /// Yedek 3: arka planda “yeni bağlanmış gibi” extras + donmuş değerde tam yeniden el sıkışma.
+    /// Charge/climate health is independent of TPMS — tires must not mask a frozen SoC.
     private func startLiveHeal(_ client: TeslaVehicleClient) {
         liveHealTask?.cancel()
         liveHealTask = Task { [weak self] in
             guard let self else { return }
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 12_000_000_000)
+                try? await Task.sleep(nanoseconds: 30_000_000_000)
                 let action = await MainActor.run { () -> String in
                     guard !self.demoSuspended, !self.userStopped else { return "stop" }
                     guard self.client === client else { return "stop" }
@@ -496,16 +540,11 @@ final class EtubuTeslaBleSession: ObservableObject {
                         || self.telemetry.connectionState == .reconnecting
                     guard connected else { return "wait" }
                     let driveAge = self.telemetry.lastDriveValueAt.map { Date().timeIntervalSince($0) } ?? 99
-                    let extrasAge = self.telemetry.lastExtrasAt.map { Date().timeIntervalSince($0) } ?? 99
-                    if driveAge > 22, Date().timeIntervalSince(self.lastForcedReconnectAt) > 18 {
+                    let gpsOk = self.telemetry.lastGpsSampleFresh || self.telemetry.hudUsesGpsSpeed
+                    if driveAge > 40, !gpsOk, Date().timeIntervalSince(self.lastForcedReconnectAt) > 20 {
                         return "rehandshake"
                     }
-                    if driveAge > 8 || extrasAge > 10 || self.telemetry.needsVehicleExtrasRefresh {
-                        return "fresh"
-                    }
-                    if Date().timeIntervalSince(self.lastFreshExtrasAt) > 14 {
-                        return "fresh"
-                    }
+                    if self.telemetry.needsVehicleExtrasRefresh { return "fresh" }
                     return "ok"
                 }
                 if action == "stop" { return }
@@ -514,17 +553,48 @@ final class EtubuTeslaBleSession: ObservableObject {
                     await MainActor.run {
                         self.lastForcedReconnectAt = Date()
                         if let vin = EtubuTeslaVinStore.vin, self.shouldAutoReconnect {
-                            self.scheduleReconnect(vin: vin, debounce: 0.2)
+                            self.scheduleReconnect(vin: vin, debounce: 0.4)
                         }
                     }
                     continue
                 }
                 if action == "fresh" {
-                    try? await client.send(.security(.wakeVehicle))
-                    await MainActor.run { self.lastExtrasWakeAt = Date() }
-                    try? await Task.sleep(nanoseconds: 350_000_000)
+                    let shouldWake = await MainActor.run {
+                        Date().timeIntervalSince(self.lastExtrasWakeAt) > 14
+                    }
+                    if shouldWake {
+                        try? await client.send(.security(.wakeVehicle))
+                        await MainActor.run { self.lastExtrasWakeAt = Date() }
+                        try? await Task.sleep(nanoseconds: 400_000_000)
+                    }
                     await self.bootstrapExtras(client)
                     await MainActor.run { self.lastFreshExtrasAt = Date() }
+                }
+            }
+        }
+    }
+
+    /// Keep Infotainment from napping while the cluster is live. Moving: ~25 s. Parked: before the 60 s extras sync.
+    private func startKeepAliveWake(_ client: TeslaVehicleClient) {
+        keepAliveTask?.cancel()
+        keepAliveTask = Task { [weak self] in
+            guard let self else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 12_000_000_000)
+                let shouldWake = await MainActor.run { () -> Bool in
+                    guard !self.demoSuspended, !self.userStopped else { return false }
+                    guard self.client === client else { return false }
+                    let connected = self.telemetry.connectionState == .connected
+                        || self.telemetry.connectionState == .reconnecting
+                    guard connected else { return false }
+                    if Date().timeIntervalSince(self.lastExtrasWakeAt) < 22 { return false }
+                    let moving = self.telemetry.kmh >= 3
+                    let chargeDue = self.telemetry.needsVehicleExtrasRefresh
+                    return moving || chargeDue
+                }
+                if shouldWake {
+                    try? await client.send(.security(.wakeVehicle))
+                    await MainActor.run { self.lastExtrasWakeAt = Date() }
                 }
             }
         }
@@ -545,9 +615,10 @@ final class EtubuTeslaBleSession: ObservableObject {
                         await MainActor.run { self.applyVcsecStatus(status) }
                     }
                 } catch {
+                    await MainActor.run { _ = self.notePossibleDesync(error, threshold: 4) }
                     // VCSEC miss must never cancel drive/extras.
                 }
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                try? await Task.sleep(nanoseconds: 2_500_000_000)
             }
         }
     }
@@ -577,29 +648,20 @@ final class EtubuTeslaBleSession: ObservableObject {
         }
     }
 
-    /// Boot: tire + charge + climate in parallel, up to 3 retries (closures best-effort).
+    /// Boot: sequential category fetches so one timeout cannot drop SoC/climate.
     private func bootstrapExtras(_ client: TeslaVehicleClient) async {
         for attempt in 1...3 {
-            async let tiresTask = try? client.fetch(.categories([.tirePressure]), timeout: .seconds(5))
-            async let chargeClimateTask = try? client.fetch(
-                .categories([.charge, .climate]),
-                timeout: .seconds(6)
-            )
-            async let locTask = try? client.fetch(.categories([.location]), timeout: .seconds(4))
-            async let closTask: TeslaVehicleSnapshot? = attempt == 1
-                ? try? client.fetch(.categories([.closures]), timeout: .seconds(4))
-                : nil
-            let (tires, chargeClimate, loc, clos) = await (tiresTask, chargeClimateTask, locTask, closTask)
-            if let tires {
-                await MainActor.run { self.applySnapshot(tires) }
+            for cats in [
+                Set<StateCategory>([.charge]),
+                Set<StateCategory>([.climate]),
+                Set<StateCategory>([.tirePressure]),
+                Set<StateCategory>([.location]),
+            ] {
+                if let snap = try? await client.fetch(.categories(cats), timeout: .seconds(5)) {
+                    await MainActor.run { self.applySnapshot(snap) }
+                }
             }
-            if let chargeClimate {
-                await MainActor.run { self.applySnapshot(chargeClimate) }
-            }
-            if let loc {
-                await MainActor.run { self.applySnapshot(loc) }
-            }
-            if let clos {
+            if attempt == 1, let clos = try? await client.fetch(.categories([.closures]), timeout: .seconds(4)) {
                 await MainActor.run { self.applySnapshot(clos) }
             }
             let stillMissing = await MainActor.run { self.telemetry.needsVehicleExtrasRefresh }
@@ -607,7 +669,7 @@ final class EtubuTeslaBleSession: ObservableObject {
             if attempt < 3 {
                 try? await client.send(.security(.wakeVehicle))
                 await MainActor.run { self.lastExtrasWakeAt = Date() }
-                try? await Task.sleep(nanoseconds: UInt64(attempt) * 450_000_000)
+                try? await Task.sleep(nanoseconds: UInt64(attempt) * 500_000_000)
             }
         }
     }
@@ -615,38 +677,26 @@ final class EtubuTeslaBleSession: ObservableObject {
     private func pollExtrasOnce(_ client: TeslaVehicleClient) async {
         extrasTick += 1
         let tick = extrasTick
-        let (parked, missing, staleExtras) = await MainActor.run { () -> (Bool, Bool, Bool) in
+        let (parked, missing) = await MainActor.run { () -> (Bool, Bool) in
             let t = self.telemetry
-            let parked = t.kmh < 3
-            let missing = t.needsVehicleExtrasRefresh
-            let stale: Bool = {
-                guard let at = t.lastExtrasAt else { return true }
-                return Date().timeIntervalSince(at) > (parked ? 8 : 5)
-            }()
-            return (parked, missing, stale)
+            return (t.kmh < 3, !t.liveChargeConfirmed || t.needsVehicleExtrasRefresh)
         }
 
-        // Infotainment asleep → empty SoC/climate/TPMS; wake after ~4 missing ticks.
-        if missing {
-            extrasMissingStreak += 1
-            let shouldWake = extrasMissingStreak >= 4 || Date().timeIntervalSince(lastExtrasWakeAt) > 12
-            if shouldWake {
-                extrasMissingStreak = 0
-                await MainActor.run { self.lastExtrasWakeAt = Date() }
-                try? await client.send(.security(.wakeVehicle))
-                try? await Task.sleep(nanoseconds: 400_000_000)
-            }
-        } else {
+        if missing, Date().timeIntervalSince(lastExtrasWakeAt) > 20 {
+            extrasMissingStreak = 0
+            await MainActor.run { self.lastExtrasWakeAt = Date() }
+            try? await client.send(.security(.wakeVehicle))
+            try? await Task.sleep(nanoseconds: 400_000_000)
+        } else if !missing {
             extrasMissingStreak = 0
         }
 
-        // Prefer smaller payloads so one bad category does not block the rest.
-        func fetchCats(_ cats: Set<StateCategory>, timeoutSec: Int = 6) async {
+        func fetchCats(_ cats: Set<StateCategory>, timeoutSec: Int = 5) async {
             do {
                 let snap = try await client.fetch(.categories(cats), timeout: .seconds(timeoutSec))
                 await MainActor.run { self.applySnapshot(snap) }
             } catch {
-                // Extras never kill the drive loop — try singles on hard miss.
+                await MainActor.run { _ = self.notePossibleDesync(error, threshold: 3) }
                 if missing {
                     for cat in cats {
                         if let one = try? await client.fetch(.categories([cat]), timeout: .seconds(3)) {
@@ -657,31 +707,13 @@ final class EtubuTeslaBleSession: ObservableObject {
             }
         }
 
-        let extrasTimeout = parked ? 6 : 3
-        if !parked {
-            await fetchCats([.charge, .climate, .tirePressure, .location], timeoutSec: extrasTimeout)
-            if tick % 3 == 0 {
-                await fetchCats([.closures], timeoutSec: extrasTimeout)
-            }
-            if tick % 8 == 0 {
-                await fetchCats([.media, .mediaDetail], timeoutSec: extrasTimeout)
-            }
-            if tick % 16 == 0 {
-                await fetchCats([.softwareUpdate, .chargeSchedule], timeoutSec: extrasTimeout)
-            }
-            return
-        }
-        if missing || staleExtras || tick % 2 == 0 {
-            await fetchCats([.charge, .climate, .tirePressure, .location], timeoutSec: extrasTimeout)
-        }
-        if tick % 3 == 0 {
+        let extrasTimeout = parked ? 8 : 5
+        await fetchCats([.charge], timeoutSec: extrasTimeout)
+        await fetchCats([.climate], timeoutSec: extrasTimeout)
+        await fetchCats([.tirePressure], timeoutSec: extrasTimeout)
+        await fetchCats([.location], timeoutSec: extrasTimeout)
+        if tick % 2 == 0 {
             await fetchCats([.closures], timeoutSec: extrasTimeout)
-        }
-        if tick % 8 == 0 {
-            await fetchCats([.media, .mediaDetail], timeoutSec: extrasTimeout)
-        }
-        if tick % 12 == 0 {
-            await fetchCats([.softwareUpdate, .chargeSchedule, .preconditioningSchedule], timeoutSec: extrasTimeout)
         }
     }
 
@@ -698,7 +730,9 @@ final class EtubuTeslaBleSession: ObservableObject {
         if kmh == nil, drive.shiftState == nil, drive.powerKW == nil,
            drive.activeRouteDestination == nil {
             emptyDriveStreak += 1
-            if emptyDriveStreak >= 10, Date().timeIntervalSince(lastForcedReconnectAt) > 12 {
+            telemetry.publishFusedHudSpeed()
+            let gpsOk = telemetry.lastGpsSampleFresh || telemetry.hudUsesGpsSpeed
+            if !gpsOk, emptyDriveStreak >= 10, Date().timeIntervalSince(lastForcedReconnectAt) > 12 {
                 lastForcedReconnectAt = Date()
                 emptyDriveStreak = 0
                 if let vin = EtubuTeslaVinStore.vin, shouldAutoReconnect {
@@ -779,11 +813,8 @@ final class EtubuTeslaBleSession: ObservableObject {
             destLat: destLat,
             destLng: destLng
         )
-        // Live Activity: max ~2 Hz so faster drive poll doesn't spam
-        if Date().timeIntervalSince(lastLiveActivityPush) >= 0.5 {
-            lastLiveActivityPush = Date()
-            pushLiveActivity()
-        }
+        // Live Activity: gear / SoC / warn / nav — not live speed (ActivityKit budget).
+        pushLiveActivity()
     }
 
     private func applySnapshot(_ snap: TeslaVehicleSnapshot) {
@@ -792,6 +823,10 @@ final class EtubuTeslaBleSession: ObservableObject {
             let rangeKm: Int? = {
                 let mi = charge.estBatteryRangeMiles ?? charge.batteryRangeMiles
                 guard let mi, mi.isFinite, mi > 0.5, mi < 800 else { return nil }
+                return Int((mi * 1.60934).rounded())
+            }()
+            let rangeIdealKm: Int? = {
+                guard let mi = charge.idealBatteryRangeMiles, mi.isFinite, mi > 0.5, mi < 800 else { return nil }
                 return Int((mi * 1.60934).rounded())
             }()
             let charging = charge.chargingStatus == .charging || charge.chargingStatus == .starting
@@ -807,6 +842,7 @@ final class EtubuTeslaBleSession: ObservableObject {
             telemetry.applyTeslaCharge(
                 soc: soc,
                 rangeKm: rangeKm,
+                rangeIdealKm: rangeIdealKm,
                 chargeKw: charge.chargerPower.flatMap { $0 == 0 && !charging ? nil : $0 },
                 charging: charging,
                 limitPercent: limit,
@@ -876,6 +912,7 @@ final class EtubuTeslaBleSession: ObservableObject {
                 heading: loc.headingDeg
             )
         }
+        pushLiveActivity()
     }
 
     private func observeState(_ client: TeslaVehicleClient) {
@@ -927,6 +964,7 @@ final class EtubuTeslaBleSession: ObservableObject {
 
     /// Sürüş / aktif rota / eşleşmiş VIN varken kopunca yeniden dene.
     private var shouldAutoReconnect: Bool {
+        guard !needsRePairing else { return false }
         guard !userStopped, !demoSuspended else { return false }
         guard let vin = EtubuTeslaVinStore.vin,
               EtubuTeslaVinStore.pairedConfirmed(for: vin) else { return false }
@@ -947,8 +985,13 @@ final class EtubuTeslaBleSession: ObservableObject {
             guard let self, !self.userStopped, !self.demoSuspended else { return }
             guard self.shouldAutoReconnect else {
                 await MainActor.run {
-                    self.telemetry.connectionState = .idle
-                    self.telemetry.statusMessage = EtubuClusterL10n.t("bleDisconnected")
+                    if self.needsRePairing {
+                        self.telemetry.connectionState = .failed
+                        self.telemetry.statusMessage = EtubuClusterL10n.t("bleNeedsRePair")
+                    } else {
+                        self.telemetry.connectionState = .idle
+                        self.telemetry.statusMessage = EtubuClusterL10n.t("bleDisconnected")
+                    }
                 }
                 return
             }
@@ -992,6 +1035,7 @@ final class EtubuTeslaBleSession: ObservableObject {
         reconnectTask?.cancel()
         driveWatchTask?.cancel()
         liveHealTask?.cancel()
+        keepAliveTask?.cancel()
         pollTask = nil
         extrasTask = nil
         vcsecTask = nil
@@ -999,21 +1043,85 @@ final class EtubuTeslaBleSession: ObservableObject {
         reconnectTask = nil
         driveWatchTask = nil
         liveHealTask = nil
+        keepAliveTask = nil
     }
 
     private func pushLiveActivity() {
         guard #available(iOS 16.2, *) else { return }
-        let t = telemetry
         Task {
             EtubuLiveActivityController.ensureAudioSession(mixWithOthers: true)
-            await EtubuLiveActivityController.update(
-                kmh: t.kmh,
-                gear: t.gear,
-                rpm: t.rpm,
-                voice: "ETUBU",
-                source: "tesla"
-            )
+            await EtubuLiveActivityController.publishCurrent()
         }
+    }
+
+    private func clearRePairingLock() {
+        if needsRePairing { needsRePairing = false }
+        cryptoFaultStreak = 0
+    }
+
+    /// MESSAGEFAULT_ERROR_INVALID_SIGNATURE (MAC) and sibling ECDH/counter faults.
+    @discardableResult
+    private func notePossibleDesync(_ error: Error, threshold: Int) -> Bool {
+        guard Self.isCryptoDesync(error) else {
+            cryptoFaultStreak = 0
+            return false
+        }
+        cryptoFaultStreak += 1
+        guard cryptoFaultStreak >= threshold else { return false }
+        raiseNeedsRePairing()
+        return true
+    }
+
+    private func raiseNeedsRePairing() {
+        needsRePairing = true
+        cryptoFaultStreak = 0
+        reconnectTask?.cancel()
+        reconnectTask = nil
+        cancelJobs()
+        telemetry.connectionState = .failed
+        telemetry.statusMessage = EtubuClusterL10n.t("bleNeedsRePair")
+        pairStep = .failed
+    }
+
+    private static func isCryptoDesync(_ error: Error) -> Bool {
+        if let tesla = error as? TeslaBLEError {
+            switch tesla {
+            case .handshakeFailed(let s), .fetchFailed(let s), .addKeyFailed(let s):
+                if isCryptoDesyncText(s) { return true }
+            default:
+                break
+            }
+        }
+        return isCryptoDesyncText(
+            [String(describing: error), error.localizedDescription].joined(separator: " ")
+        )
+    }
+
+    private static func isCryptoDesyncText(_ raw: String) -> Bool {
+        let blob = raw.lowercased()
+        let needles = [
+            "rrorinvalidsignature",
+            "messagefault_error_invalid_signature",
+            "rrorinvalidtokenorcounter",
+            "invalid_token_or_counter",
+            "invalidtokenorcounter",
+            "rrorunknownkeyid",
+            "unknown_key_id",
+            "unknownkeyid",
+            "rrorinactivekey",
+            "inactive_key",
+            "inactivekey",
+            "rrorincorrectepoch",
+            "incorrect_epoch",
+            "incorrectepoch",
+            "rrornotprovisioned",
+            "not_provisioned",
+            "hmacmismatch",
+            "hmac mismatch",
+            "aesdecryptauth",
+            "tokenandcounterinvalid"
+        ]
+        return needles.contains { blob.contains($0) }
     }
 
     // MARK: - Remote commands (BLE write)
@@ -1140,6 +1248,39 @@ final class EtubuTeslaBleSession: ObservableObject {
         await sendCommand(.actions(.flashLights), label: EtubuClusterL10n.t("cmdOkFlash"))
     }
 
+    func mediaNext() async {
+        await sendCommand(.media(.nextTrack), label: EtubuClusterL10n.t("cmdOkMediaNext"))
+    }
+
+    func mediaPrevious() async {
+        await sendCommand(.media(.previousTrack), label: EtubuClusterL10n.t("cmdOkMediaPrev"))
+    }
+
+    func mediaTogglePlayback() async {
+        await sendCommand(.media(.togglePlayback), label: EtubuClusterL10n.t("cmdOkMediaPlay"))
+    }
+
+    func setSentryMode(_ on: Bool) async {
+        await sendCommand(
+            .security(.setSentryMode(on)),
+            label: EtubuClusterL10n.t(on ? "cmdOkSentryOn" : "cmdOkSentryOff")
+        )
+    }
+
+    func setDogMode(_ on: Bool) async {
+        await sendCommand(
+            .climate(.setKeeperMode(on ? .dog : .off)),
+            label: EtubuClusterL10n.t(on ? "cmdOkDog" : "cmdOkDogOff")
+        )
+    }
+
+    func setCabinOverheatProtection(_ on: Bool) async {
+        await sendCommand(
+            .climate(.setCabinOverheatProtection(enabled: on, fanOnly: false)),
+            label: EtubuClusterL10n.t(on ? "cmdOkCabinOverheat" : "cmdOkCabinOverheatOff")
+        )
+    }
+
     private func refreshClosuresSoon() async {
         guard let client else { return }
         try? await Task.sleep(nanoseconds: 450_000_000)
@@ -1194,6 +1335,7 @@ final class EtubuTeslaBleSession: ObservableObject {
             lastCommandMessage = label
             telemetry.statusMessage = label
         } catch {
+            _ = notePossibleDesync(error, threshold: 3)
             lastCommandMessage = String(
                 format: EtubuClusterL10n.t("commandFailedFmt"),
                 error.localizedDescription
