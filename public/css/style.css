@@ -120,11 +120,7 @@ html, body {
 
 .ad-rail--top { top: 0; padding-top: var(--safe-top); height: calc(var(--ad-top-h) + var(--safe-top)); }
 .ad-rail--bottom { display: none !important; }
-
-/* Sol reklam kaldırıldı — boşluk (--ad-side-w) aynı kalsın, layout kaymasın */
-.ad-rail--left {
-  display: none !important;
-}
+.ad-rail--left { display: none !important; visibility: hidden !important; pointer-events: none !important; width: 0 !important; height: 0 !important; }
 
 .ad-rail--right {
   top: calc(var(--ad-top-h) + var(--safe-top) + 56px);
@@ -367,6 +363,48 @@ body.drive-focus .panel-toggle {
   z-index: 40;
 }
 
+/* Tam ekran pulse: üst + sağ (sol banner tamamen kapalı) */
+body.drive-focus.ads-pulse .ad-rail--top,
+body.drive-focus.ads-pulse .ad-rail--right,
+body.tesla-browser.ads-pulse .ad-rail--top,
+body.tesla-browser.ads-pulse .ad-rail--right,
+body.ephemeral-browser.ads-pulse .ad-rail--top,
+body.ephemeral-browser.ads-pulse .ad-rail--right {
+  display: flex !important;
+  pointer-events: auto !important;
+  z-index: 55;
+  opacity: 1;
+  animation: etubu-ad-pulse-in 0.35s ease;
+}
+body.drive-focus.ads-pulse .ad-rail--middle,
+body.tesla-browser.ads-pulse .ad-rail--middle,
+body.ephemeral-browser.ads-pulse .ad-rail--middle {
+  display: none !important;
+}
+body.drive-focus.ads-pulse .ad-rail--top,
+body.tesla-browser.ads-pulse .ad-rail--top,
+body.ephemeral-browser.ads-pulse .ad-rail--top {
+  height: calc(50px + var(--safe-top));
+  background: rgba(2, 4, 10, 0.55);
+}
+body.drive-focus.ads-pulse .ad-rail--right,
+body.tesla-browser.ads-pulse .ad-rail--right,
+body.ephemeral-browser.ads-pulse .ad-rail--right {
+  width: 100px;
+  top: calc(50px + var(--safe-top) + 6px);
+  bottom: calc(var(--safe-bottom) + 6px);
+  background: rgba(2, 4, 10, 0.4);
+}
+@keyframes etubu-ad-pulse-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@media (max-width: 900px) {
+  body.drive-focus.ads-pulse .ad-rail--right {
+    width: 72px;
+  }
+}
+
 .invite-box {
   margin: 16px 0 8px;
   padding: 14px;
@@ -530,7 +568,17 @@ body.drive-focus .panel-toggle {
   color: var(--text-dim);
   line-height: 1.7;
 }
-.legal-links a { color: var(--cyan); text-decoration: none; }
+.legal-links a,
+.legal-links .link-btn {
+  color: var(--cyan);
+  text-decoration: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  cursor: pointer;
+}
 
 .payment-badges {
   display: flex;
@@ -565,9 +613,16 @@ body.drive-focus .panel-toggle {
   line-height: 1.45;
   color: var(--text-dim);
 }
-.dock-legal a {
+.dock-legal a,
+.dock-legal .link-btn {
   color: var(--cyan);
   text-decoration: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  cursor: pointer;
 }
 .dock-guide {
   margin: 0 0 10px;
@@ -590,11 +645,18 @@ body.drive-focus .panel-toggle {
   line-height: 1.55;
   color: var(--text);
 }
-.dock-guide a {
+.dock-guide a,
+.dock-guide .link-btn {
   color: #d7e8f5;
   text-decoration: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
 }
-.dock-guide a:hover {
+.dock-guide a:hover,
+.dock-guide .link-btn:hover {
   color: var(--cyan);
   text-decoration: underline;
 }
@@ -642,12 +704,20 @@ body.drive-focus .panel-toggle {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.site-editorial a {
+.site-editorial a,
+.site-editorial .link-btn {
   color: #7ddcf0;
   text-decoration: none;
   font-weight: 500;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  cursor: pointer;
 }
-.site-editorial a:hover {
+.site-editorial a:hover,
+.site-editorial .link-btn:hover {
   text-decoration: underline;
 }
 .site-credit {
@@ -4927,4 +4997,396 @@ body.ephemeral-browser[data-tesla-layout="half"] .avg-speed-label {
 body.tesla-browser[data-tesla-density="compact"] .hud-side--avg,
 body.ephemeral-browser[data-tesla-density="compact"] .hud-side--avg {
   max-width: 140px;
+}
+
+/* ── Açılış turu (4 kenar banner + slayt) ── */
+html.etubu-intro,
+html.etubu-intro body {
+  overflow: hidden;
+}
+html.etubu-intro .speed-stage,
+html.etubu-intro .top-bar,
+html.etubu-intro .control-dock,
+html.etubu-intro .panel-toggle,
+html.etubu-intro .site-editorial,
+html.etubu-intro .ad-rail {
+  visibility: hidden;
+}
+
+.site-intro {
+  position: fixed;
+  inset: 0;
+  z-index: 14000;
+  display: none;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% 0%, rgba(0, 180, 220, 0.16), transparent 55%),
+    #02040a;
+  pointer-events: auto;
+}
+html.etubu-intro .site-intro,
+body.intro-open .site-intro {
+  display: flex !important;
+}
+.site-intro.is-leaving {
+  opacity: 0;
+  transition: opacity 0.26s ease;
+  pointer-events: none;
+}
+.site-intro[hidden] {
+  display: none !important;
+}
+
+.intro-ad {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  pointer-events: none !important;
+  overflow: hidden;
+}
+.intro-ad .ad-slot {
+  pointer-events: none !important;
+}
+.intro-ad--top {
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 54px;
+  justify-content: center;
+}
+.intro-ad--bottom {
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 54px;
+  justify-content: center;
+}
+.intro-ad--left,
+.intro-ad--right {
+  top: 54px;
+  bottom: 54px;
+  width: 100px;
+  flex-direction: column;
+}
+.intro-ad--left { left: 0; }
+.intro-ad--right { right: 0; left: auto; }
+.intro-ad--left .ad-slot,
+.intro-ad--right .ad-slot {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+}
+
+.intro-stage {
+  position: relative;
+  z-index: 3;
+  margin: 58px 108px;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 8px 12px 10px;
+  overflow: auto;
+}
+.intro-head {
+  width: min(560px, 100%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: #02040a;
+}
+.intro-kicker {
+  margin-left: auto;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--text-dim);
+}
+.intro-skip {
+  appearance: none;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid var(--glass-border);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 8px 14px;
+  min-height: 44px;
+  min-width: 72px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  pointer-events: auto;
+  position: relative;
+  z-index: 30;
+  touch-action: manipulation;
+}
+.intro-skip:hover { background: rgba(0, 240, 255, 0.12); }
+
+.intro-slides {
+  width: min(560px, 100%);
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+.intro-slide {
+  display: none;
+  width: 100%;
+  text-align: center;
+  animation: introIn 0.28s ease;
+}
+.intro-slide.is-active { display: block; }
+.intro-slide h2 {
+  margin: 12px 0 6px;
+  font-size: clamp(18px, 3.2vw, 26px);
+  font-weight: 700;
+  color: var(--text);
+}
+.intro-slide p {
+  margin: 0 auto;
+  max-width: 42ch;
+  font-size: clamp(13px, 2.2vw, 15px);
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+@keyframes introIn {
+  from { opacity: 0; transform: translateX(18px); }
+  to { opacity: 1; transform: none; }
+}
+
+.intro-shot { display: flex; justify-content: center; margin-bottom: 4px; }
+.intro-phone {
+  width: min(220px, 46vw);
+  aspect-ratio: 4 / 3.1;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.16);
+  background:
+    radial-gradient(circle at 50% 70%, rgba(0, 200, 255, 0.18), transparent 55%),
+    #071018;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.intro-phone-bar {
+  position: absolute;
+  top: 8px;
+  width: 42px;
+  height: 5px;
+  border-radius: 99px;
+  background: rgba(255,255,255,0.22);
+}
+.intro-dial {
+  width: 108px;
+  height: 108px;
+  border-radius: 50%;
+  border: 3px solid #00e8ff;
+  box-shadow: 0 0 22px rgba(0, 232, 255, 0.35);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin-top: 10px;
+}
+.intro-dial--sm { width: 88px; height: 88px; }
+.intro-dial-num {
+  font-family: Orbitron, sans-serif;
+  font-size: 28px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1;
+}
+.intro-dial-unit { font-size: 10px; color: var(--text-dim); letter-spacing: 0.08em; }
+.intro-waves {
+  width: 70%;
+  height: 18px;
+  background: repeating-linear-gradient(90deg, transparent, transparent 6px, rgba(0,232,255,0.55) 6px, rgba(0,232,255,0.55) 8px);
+  mask-image: linear-gradient(90deg, transparent, #000 20%, #000 80%, transparent);
+  opacity: 0.7;
+}
+.intro-start-btn {
+  margin-top: 16px;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: #00c8e0;
+  color: #021018;
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 24px rgba(0, 200, 224, 0.45);
+}
+.intro-gps-row { font-size: 12px; color: #7dffb0; }
+.intro-warn-strip {
+  position: absolute;
+  top: 18px;
+  left: 0;
+  right: 0;
+  height: 28px;
+  background: linear-gradient(90deg, #c40, #a20);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.intro-limit {
+  position: absolute;
+  left: 18%;
+  bottom: 18%;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #fff;
+  border: 4px solid #d40000;
+  color: #111;
+  font-weight: 800;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.intro-panel-mock {
+  position: absolute;
+  left: 0;
+  top: 22px;
+  bottom: 10px;
+  width: 38%;
+  background: rgba(8, 16, 28, 0.85);
+  border-right: 1px solid rgba(255,255,255,0.1);
+  padding: 10px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 10px;
+  color: var(--text-dim);
+  text-align: left;
+}
+.intro-panel-pill {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: rgba(0, 232, 255, 0.15);
+  color: var(--cyan);
+  font-weight: 700;
+}
+.intro-phone--wide .intro-dial--sm { margin-left: 18%; }
+
+.intro-dots {
+  display: flex;
+  gap: 8px;
+}
+.intro-dot {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.22);
+  cursor: pointer;
+  min-width: 8px;
+  min-height: 8px;
+}
+.intro-dot.is-active { background: var(--cyan); transform: scale(1.2); }
+
+.intro-actions {
+  width: min(560px, 100%);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-shrink: 0;
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  background: #02040a;
+  padding-top: 6px;
+}
+.intro-actions .btn-primary {
+  min-height: 48px;
+  width: auto;
+  margin-bottom: 0;
+  padding: 0 22px;
+  border-radius: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  pointer-events: auto;
+  position: relative;
+  z-index: 30;
+  touch-action: manipulation;
+}
+.intro-back {
+  margin-right: auto;
+  min-height: 44px;
+}
+
+@media (max-width: 900px) {
+  .intro-ad--left,
+  .intro-ad--right {
+    width: 48px;
+  }
+  .intro-stage {
+    margin: 56px 52px;
+  }
+}
+@media (max-width: 560px) {
+  .intro-ad--left,
+  .intro-ad--right {
+    display: none;
+  }
+  .intro-stage {
+    margin: 56px 10px;
+  }
+  .intro-phone {
+    width: min(200px, 70vw);
+  }
+}
+
+html.etubu-intro body.tesla-browser:not(.ads-hidden) .intro-ad,
+body.intro-open.tesla-browser:not(.ads-hidden) .intro-ad,
+html.etubu-intro body.ephemeral-browser:not(.ads-hidden) .intro-ad,
+body.intro-open.ephemeral-browser:not(.ads-hidden) .intro-ad {
+  display: flex !important;
+}
+
+html.etubu-intro body.tesla-browser .intro-stage,
+body.intro-open.tesla-browser .intro-stage,
+html.etubu-intro body.ephemeral-browser .intro-stage,
+body.intro-open.ephemeral-browser .intro-stage {
+  margin: 64px 108px 72px;
+  gap: 6px;
+}
+html.etubu-intro body.tesla-browser .intro-phone,
+body.intro-open.tesla-browser .intro-phone {
+  width: min(180px, 28vw);
+  aspect-ratio: 4 / 2.6;
+}
+html.etubu-intro body.tesla-browser .intro-slide h2,
+body.intro-open.tesla-browser .intro-slide h2 {
+  font-size: clamp(16px, 2.4vh, 22px);
+  margin: 6px 0 4px;
+}
+html.etubu-intro body.tesla-browser .intro-slide p,
+body.intro-open.tesla-browser .intro-slide p {
+  font-size: clamp(12px, 1.8vh, 14px);
+}
+
+body.ads-hidden .intro-ad {
+  display: none !important;
+}
+body.ads-hidden .intro-stage {
+  margin: 12px 16px;
 }
