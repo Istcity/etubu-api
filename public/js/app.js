@@ -357,15 +357,12 @@
     if (Paywall.isAdFree()) {
       document.body.classList.add("ads-hidden");
       Ads.hideAll?.();
-    } else if (tesla || ephemeral) {
-      document.body.classList.add("ads-hidden", "drive-focus");
-      try {
-        Ads.setDriveFocus?.(true);
-      } catch (_) {}
-      CarBrowser.forceCompactChrome?.();
     } else {
-      document.body.classList.remove("ads-hidden");
+      document.body.classList.remove("ads-hidden", "drive-focus");
       Ads.showRails?.();
+      if (tesla || ephemeral) {
+        CarBrowser.forceCompactChrome?.();
+      }
     }
     syncDriveFocus(document.body.classList.contains("panel-hidden"));
   }
@@ -2459,10 +2456,10 @@
     step("panel", () => {
       if (CarBrowser.isTesla?.() || CarBrowser.isEphemeral?.()) {
         setPanelHidden(true, false);
-        document.body.classList.add("ads-hidden", "drive-focus");
-        try {
-          Ads.setDriveFocus?.(true);
-        } catch (_) {}
+        if (!isPremiumUser()) {
+          document.body.classList.remove("ads-hidden", "drive-focus");
+          Ads.showRails?.();
+        }
         CarBrowser.forceCompactChrome?.();
         CarBrowser.syncViewportHeight?.();
       } else {
