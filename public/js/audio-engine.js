@@ -8,71 +8,94 @@
  */
 class EtubuAudioEngine {
   constructor() {
-    this.DEFAULT_VOICE = "calm-ev";
-    this.VOICE_GROUP_ORDER = ["theme", "ev", "exhaust", "race", "fx"];
-    /** ClusterTheme.rawValue / webKey → base pack (ClusterTheme.driveBasePack) */
+    this.DEFAULT_VOICE = "tesla";
+    this.VOICE_GROUP_ORDER = ["ev", "exhaust", "race", "fx"];
+    /** ClusterTheme.rawValue / webKey → base pack */
     this.THEME_PACK_MAP = {
-      tesla: "calm-ev",
-      midnight: "calm-ev",
-      deepOcean: "calm-ev",
-      "deep-ocean": "calm-ev",
-      tunnel: "calm-ev",
-      aurora: "ion-whisper",
-      electricIce: "ion-whisper",
-      "electric-ice": "ion-whisper",
-      cyberLime: "ion-whisper",
-      "cyber-lime": "ion-whisper",
+      tesla: "tesla",
+      "calm-ev": "tesla",
+      "sport-ev": "sport-ev",
+      "ion-whisper": "ion-whisper",
+      "boost-launch": "sport-ev",
+      "exhaust-v8": "exhaust-v8",
+      "exhaust-turbo": "exhaust-turbo",
+      "asphalt-roar": "exhaust-v8",
+      "cruiser-vtwin": "cruiser-vtwin",
+      "exhaust-diesel": "exhaust-diesel",
+      "formula-scream": "formula-scream",
+      "sportbike-rr": "sportbike-rr",
+      "jet-hum": "jet-hum",
+      "pulse-drive": "sport-ev",
+      "grain-stage": "jet-hum",
+      "silent-mode": "silent-mode",
+      aurora: "tesla",
       plasma: "sport-ev",
+      redline: "exhaust-v8",
       neon: "sport-ev",
+      warp: "jet-hum",
+      tunnel: "formula-scream",
+      cyberLime: "ion-whisper",
+      electricIce: "tesla",
+      solarFlare: "sport-ev",
       violetStorm: "sport-ev",
-      "violet-storm": "sport-ev",
-      warp: "sport-ev",
-      redline: "boost-launch",
-      solarFlare: "boost-launch",
-      "solar-flare": "boost-launch",
-      plaidBoost: "boost-launch",
-      "plaid-boost": "boost-launch",
+      deepOcean: "tesla",
+      midnight: "exhaust-diesel",
+      plaidBoost: "tesla",
     };
-    this.BASE_PACKS = ["calm-ev", "ion-whisper", "sport-ev", "boost-launch"];
+    this.BASE_PACKS = [
+      "tesla",
+      "sport-ev",
+      "ion-whisper",
+      "exhaust-v8",
+      "formula-scream",
+      "sportbike-rr",
+      "exhaust-turbo",
+      "cruiser-vtwin",
+      "exhaust-diesel",
+      "jet-hum",
+    ];
     this.VOICES = [
-      { key: "silent-mode", label: "Sessiz", theme: "glow", group: "theme" },
-      { key: "tesla", label: "Tesla EV", theme: "tesla", group: "theme" },
-      { key: "aurora", label: "Aurora", theme: "glow", group: "theme" },
-      { key: "plasma", label: "Plasma", theme: "plasma", group: "theme" },
-      { key: "redline", label: "Redline", theme: "redline", group: "theme" },
-      { key: "cyberLime", label: "Cyber Lime", theme: "cyber-lime", group: "theme" },
-      { key: "electricIce", label: "Electric Ice", theme: "electric-ice", group: "theme" },
-      { key: "solarFlare", label: "Solar Flare", theme: "solar-flare", group: "theme" },
-      { key: "neon", label: "Neon", theme: "neon", group: "theme" },
-      { key: "violetStorm", label: "Violet Storm", theme: "violet-storm", group: "theme" },
-      { key: "deepOcean", label: "Deep Ocean", theme: "deep-ocean", group: "theme" },
-      { key: "midnight", label: "Midnight", theme: "midnight", group: "theme" },
-      { key: "tunnel", label: "Tunnel", theme: "tunnel", group: "theme" },
-      { key: "warp", label: "Warp", theme: "warp", group: "theme" },
-      { key: "plaidBoost", label: "Plaid Boost", theme: "plaid-boost", group: "theme" },
-      { key: "calm-ev", label: "Yumuşak EV", theme: "glow", group: "ev" },
-      { key: "ion-whisper", label: "İyon", theme: "neon", group: "ev" },
-      { key: "sport-ev", label: "Dinamik EV", theme: "plasma", group: "ev" },
-      { key: "boost-launch", label: "Fırlatma", theme: "plasma", group: "ev" },
-      /* V8 / combustion — Drive.app-style theme packs */
-      { key: "exhaust-v8", label: "V8 Egzoz", theme: "redline", group: "exhaust" },
-      { key: "exhaust-turbo", label: "Turbo", theme: "redline", group: "exhaust" },
-      { key: "asphalt-roar", label: "Asfalt", theme: "redline", group: "exhaust" },
-      { key: "cruiser-vtwin", label: "V-Twin", theme: "redline", group: "exhaust" },
-      { key: "exhaust-diesel", label: "Dizel", theme: "midnight", group: "exhaust" },
-      { key: "formula-scream", label: "Formula", theme: "plasma", group: "race" },
-      { key: "sportbike-rr", label: "Sportbike", theme: "plasma", group: "race" },
-      /* Sci-fi / futuristic */
-      { key: "jet-hum", label: "Jet Hum", theme: "warp", group: "fx" },
-      { key: "pulse-drive", label: "Pulse Drive", theme: "neon", group: "fx" },
-      { key: "grain-stage", label: "Sci-Fi Stage", theme: "warp", group: "fx" },
+      // Elektrikli Araçlar (EV)
+      { key: "tesla", label: "⚡ Tesla Model S Plaid", theme: "glow", group: "ev" },
+      { key: "sport-ev", label: "🔋 Porsche Taycan Sport", theme: "plasma", group: "ev" },
+      { key: "ion-whisper", label: "✨ İyon Fısıltısı (Yumuşak EV)", theme: "glow", group: "ev" },
+
+      // Kaslı & Klasik Egzoz (Muscle & Exhaust)
+      { key: "exhaust-v8", label: "🔥 American V8 Muscle", theme: "redline", group: "exhaust" },
+      { key: "exhaust-turbo", label: "💨 Twin-Turbo Boxer", theme: "redline", group: "exhaust" },
+      { key: "cruiser-vtwin", label: "🦅 V-Twin Chopper", theme: "redline", group: "exhaust" },
+      { key: "exhaust-diesel", label: "🚛 Heavy Torque Diesel", theme: "midnight", group: "exhaust" },
+
+      // Yarış & Yüksek Devir (Race & Motorsport)
+      { key: "formula-scream", label: "🏁 Formula 1 V10", theme: "plasma", group: "race" },
+      { key: "sportbike-rr", label: "🏍️ Superbike 1200 RR", theme: "plasma", group: "race" },
+
+      // Fütüristik & Warp (Sci-Fi)
+      { key: "jet-hum", label: "🛸 Sci-Fi Warp Drive", theme: "warp", group: "fx" },
+
+      // Sessiz Mod
+      { key: "silent-mode", label: "🔇 Sessiz Mod (Yalnızca Gösterge)", theme: "glow", group: "ev" },
     ];
 
     /**
      * Karakter profili — WAV baskın (gerçekçi loop), prosedürel destek.
-     * Islık/EMF sine katmanı YOK. Multi-tone AVAS ıslıkları kullanılmaz.
      */
     this.PROFILES = {
+      tesla: {
+        idleHz: 40, midHz: 85, midSpan: 140, idleGain: 0.04, midGain: 0.22,
+        windGain: 0, filterHz: 900, filterQ: 0.55, master: 1.35,
+        drive: "ev_modely_body_loop.wav", driveGain: 0.76,
+        drive2: "ev_hum_soft_loop.wav", drive2Gain: 0.28,
+        regen: "ev_modely_rev_body_loop.wav", regenGain: 0.65,
+        loops: {
+          idle: "bands/ev_idle_v2.wav",
+          mid: "bands/ev_mid_v2.wav",
+          high: "bands/ev_high_v2.wav",
+        },
+        bandEdges: { midStart: 12, highStart: 70 },
+        gears: 1, waveIdle: "sine", waveMid: "sine", bodyMul: 0.3,
+        harmMul: 0.04, subMul: 0.12, sampleLed: true,
+      },
       /* EV — body-EQ’lu Chalmers + yumuşak hum (ıslık bandı kesik) */
       "calm-ev": {
         idleHz: 40, midHz: 85, midSpan: 140, idleGain: 0.04, midGain: 0.22,
@@ -168,8 +191,8 @@ class EtubuAudioEngine {
       "exhaust-turbo": {
         idleHz: 48, midHz: 115, midSpan: 260, idleGain: 0.04, midGain: 0.26,
         windGain: 0, filterHz: 1200, filterQ: 0.75, master: 1.46,
-        drive: "v8_exhaust_loop.wav", driveGain: 0.7,
-        drive2: "v8_exhaust_loop.wav", drive2Gain: 0.2,
+        drive: "combustion_rich_loop.wav", driveGain: 0.84,
+        drive2: "ref_sim_load_throttle.wav", drive2Gain: 0.22,
         loops: {
           idle: "bands/turbo_idle_v2.wav",
           mid: "bands/turbo_mid_v2.wav",
