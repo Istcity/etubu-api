@@ -69,6 +69,7 @@ class EtubuAudioEngine {
       // Yarış & Yüksek Devir (Race & Motorsport)
       { key: "formula-scream", label: "🏁 Formula 1 V10", theme: "plasma", group: "race" },
       { key: "sportbike-rr", label: "🏍️ Superbike 1200 RR", theme: "plasma", group: "race" },
+      { key: "shift-cage", label: "🏆 Seq-Shift Track GT (N e-Shift)", theme: "redline", group: "race" },
 
       // Fütüristik & Warp (Sci-Fi)
       { key: "jet-hum", label: "🛸 Sci-Fi Warp Drive", theme: "warp", group: "fx" },
