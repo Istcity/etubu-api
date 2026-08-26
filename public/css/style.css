@@ -5068,9 +5068,11 @@ body.ephemeral-browser.panel-hidden .control-dock {
 
 body.tesla-browser .control-dock .start-circle,
 body.ephemeral-browser .control-dock .start-circle {
-  width: clamp(72px, 14vh, 96px);
-  height: clamp(72px, 14vh, 96px);
-  font-size: clamp(11px, 2vh, 14px);
+  width: 100%;
+  max-width: 220px;
+  height: 48px;
+  border-radius: 24px;
+  font-size: 13px;
 }
 
 /* Yoğunluk: kısa ekran (16:9 QHD + chrome / yarım tarayıcı) */
