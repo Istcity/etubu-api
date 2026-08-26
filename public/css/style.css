@@ -3561,36 +3561,76 @@ body.panel-hidden .control-dock {
 
 .panel-toggle {
   position: fixed;
-  top: calc(var(--ad-top-h) + var(--safe-top) + 58px);
-  left: calc(var(--panel-w) + var(--safe-left) - 1px);
-  z-index: 41;
-  width: 28px;
-  height: 56px;
-  padding: 0;
-  border: 1px solid var(--glass-border);
-  border-left: none;
-  border-radius: 0 12px 12px 0;
-  background: rgba(8, 14, 28, 0.92);
-  color: var(--cyan);
-  font-size: 18px;
-  line-height: 1;
+  top: calc(var(--ad-top-h) + var(--safe-top) + 16px);
+  left: calc(var(--panel-w) + var(--safe-left) + 12px);
+  z-index: 60;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 100px;
+  height: 42px;
+  padding: 0 16px;
+  border: 1.5px solid rgba(0, 240, 255, 0.5);
+  border-radius: 21px;
+  background: rgba(8, 16, 32, 0.95);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: #00f0ff;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
   cursor: pointer;
-  box-shadow: 4px 0 18px rgba(0, 0, 0, 0.35);
-  transition: left 0.28s ease, bottom 0.28s ease, background 0.2s ease, transform 0.28s ease;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), 0 0 16px rgba(0, 240, 255, 0.28);
+  transition: left 0.28s cubic-bezier(0.2, 0.8, 0.2, 1),
+              top 0.28s cubic-bezier(0.2, 0.8, 0.2, 1),
+              bottom 0.28s cubic-bezier(0.2, 0.8, 0.2, 1),
+              background 0.2s ease,
+              border-color 0.2s ease,
+              box-shadow 0.2s ease,
+              transform 0.15s ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 body.panel-hidden .panel-toggle {
-  left: var(--safe-left);
-  border-left: 1px solid var(--glass-border);
-  border-radius: 0 12px 12px 0;
+  left: calc(var(--safe-left) + 18px);
+  top: calc(var(--safe-top) + 16px);
+  min-width: 112px;
+  border-color: rgba(0, 240, 255, 0.75);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.6), 0 0 22px rgba(0, 240, 255, 0.4);
 }
 
 .panel-toggle:hover {
-  background: rgba(0, 240, 255, 0.12);
+  background: rgba(0, 240, 255, 0.18);
+  border-color: #00f0ff;
+  box-shadow: 0 6px 26px rgba(0, 0, 0, 0.55), 0 0 24px rgba(0, 240, 255, 0.5);
+  transform: translateY(-1px);
 }
 
 .panel-toggle:active {
-  transform: scale(0.96);
+  transform: scale(0.95);
+}
+
+.panel-toggle-icon {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  flex-shrink: 0;
+  transition: transform 0.35s ease;
+}
+
+.panel-toggle:hover .panel-toggle-icon {
+  transform: rotate(45deg);
+}
+
+.panel-toggle.is-open .panel-toggle-icon {
+  transform: rotate(90deg);
+}
+
+.panel-toggle-text {
+  white-space: nowrap;
 }
 
 .control-dock .field {
@@ -4518,22 +4558,25 @@ body.picker-open {
   .panel-toggle {
     top: auto;
     left: 50%;
-    bottom: calc(var(--ad-bottom-h) + var(--safe-bottom) + var(--dock-sheet-h) - 1px);
-    width: 64px;
-    height: 28px;
-    border-radius: 12px 12px 0 0;
-    border: 1px solid var(--glass-border);
-    border-bottom: none;
+    bottom: calc(var(--ad-bottom-h) + var(--safe-bottom) + var(--dock-sheet-h) + 10px);
+    width: auto;
+    min-width: 110px;
+    height: 40px;
+    border-radius: 20px;
+    border: 1.5px solid rgba(0, 240, 255, 0.55);
     transform: translateX(-50%);
-    box-shadow: 0 -4px 18px rgba(0, 0, 0, 0.35);
-    font-size: 14px;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5), 0 0 16px rgba(0, 240, 255, 0.3);
+    font-size: 13px;
+    padding: 0 16px;
   }
 
   body.panel-hidden .panel-toggle {
-    bottom: calc(var(--ad-bottom-h) + var(--safe-bottom));
+    bottom: calc(var(--ad-bottom-h) + var(--safe-bottom) + 16px);
     left: 50%;
-    border-radius: 12px 12px 0 0;
-    border-left: 1px solid var(--glass-border);
+    transform: translateX(-50%);
+    min-width: 120px;
+    border-radius: 20px;
+    border: 1.5px solid rgba(0, 240, 255, 0.7);
   }
 
   .control-dock .start-circle {
@@ -4880,20 +4923,23 @@ body.ephemeral-browser .route-brief-top {
 
 body.tesla-browser .panel-toggle,
 body.ephemeral-browser .panel-toggle {
-  top: var(--tesla-pad);
-  left: var(--tesla-pad);
+  top: max(var(--tesla-pad), 14px);
+  left: max(var(--tesla-pad), 14px);
   bottom: auto;
-  width: clamp(32px, 5vh, 40px);
-  height: clamp(32px, 5vh, 40px);
-  border-radius: 10px;
-  border: 1px solid var(--glass-border);
-  font-size: 15px;
-  z-index: 50;
+  min-width: 105px;
+  height: 42px;
+  border-radius: 21px;
+  border: 1.5px solid rgba(0, 240, 255, 0.6);
+  font-size: 13px;
+  font-weight: 600;
+  z-index: 60;
+  padding: 0 14px;
 }
 
 body.tesla-browser.panel-hidden .panel-toggle,
 body.ephemeral-browser.panel-hidden .panel-toggle {
-  left: var(--tesla-pad);
+  left: max(var(--tesla-pad), 14px);
+  top: max(var(--tesla-pad), 14px);
   bottom: auto;
 }
 
