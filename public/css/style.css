@@ -1489,38 +1489,50 @@ body.audio-muted .mode-chip {
   50% { transform: scale(1.22); }
 }
 
-/* Üst uyarı şeridi */
+/* Üst uyarı şeridi — Temayı ve çerçeveyi kesmeyen yüzen uyarı kapsülü */
 .hud-warn-band {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 12;
-  height: 44px;
-  min-height: 44px;
-  padding: 0 14px;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 25;
+  height: 36px;
+  min-height: 36px;
+  width: auto;
+  max-width: min(480px, 88%);
+  padding: 0 18px;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 10px;
   box-sizing: border-box;
-  background: linear-gradient(90deg, rgba(180, 110, 0, 0.92), rgba(140, 80, 0, 0.88));
+  background: rgba(14, 18, 28, 0.84);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1.5px solid rgba(255, 155, 20, 0.75);
+  border-radius: 18px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.65), 0 0 18px rgba(255, 155, 20, 0.35);
   color: #fff;
   font-family: "DM Sans", system-ui, sans-serif;
   font-weight: 700;
-  font-size: clamp(13px, 2.4vw, 16px);
-  letter-spacing: 0.01em;
+  font-size: clamp(12px, 2.2vw, 15px);
+  letter-spacing: 0.02em;
   pointer-events: none;
   overflow: hidden;
+  white-space: nowrap;
 }
 .hud-warn-band[hidden] {
   display: none !important;
 }
 .hud-warn-band.is-urgent {
-  background: linear-gradient(90deg, rgba(190, 20, 30, 0.95), rgba(140, 10, 20, 0.92));
+  background: rgba(180, 15, 25, 0.88);
+  border-color: #ff3344;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.75), 0 0 24px rgba(255, 50, 60, 0.45);
   animation: warnBandPulse 0.85s ease-in-out infinite;
 }
 .hud-warn-band.is-overspeed {
-  background: linear-gradient(90deg, rgba(210, 0, 40, 0.97), rgba(160, 0, 20, 0.94));
+  background: rgba(200, 0, 30, 0.92);
+  border-color: #ff2233;
 }
 @keyframes warnBandPulse {
   0%, 100% { filter: brightness(1); }
@@ -1544,7 +1556,8 @@ body.audio-muted .mode-chip {
   opacity: 0.95;
 }
 .speed-hud.has-warn-band .speed-hud-content {
-  padding-top: calc(44px + 8px);
+  /* Temayı ve kadranı aşağı itme / kesme */
+  padding-top: 34px;
 }
 
 /* Yakın kritik noktalar listesi */
@@ -1687,83 +1700,98 @@ body.audio-muted .mode-chip {
 }
 
 /* ==========================================================================
-   Farklı Geometrilere Sahip Kadran Formları (Temaya Özel 3D Form Mimarisi)
+   Gerçeğe Yakın Otomobil Dashboard Formları (Real Automotive Cockpit Geometries)
    ========================================================================== */
 
-/* 1. Siber / Fütüristik Geometrik Kadran (Altıgen / Octagon Bezel) —— Night City, Plasma, Warp */
+/* 1. Gerçekçi Spor Altıgen Dashboard (Audi RS / Lamborghini Cockpit Binnacle) —— Night City, Plasma, Warp */
 .speed-gauge-wrap[data-visual="night-city"],
 .speed-gauge-wrap[data-visual="plasma"],
 .speed-gauge-wrap[data-visual="warp"] {
-  border-radius: 0 !important;
-  clip-path: polygon(24% 2%, 76% 2%, 98% 24%, 98% 76%, 76% 98%, 24% 98%, 2% 76%, 2% 24%);
-  background: radial-gradient(circle at 50% 50%, rgba(20, 14, 38, 0.75) 0%, rgba(8, 6, 16, 0.94) 80%);
+  border-radius: 20px !important;
+  aspect-ratio: 1.14;
+  clip-path: polygon(10% 0%, 90% 0%, 100% 20%, 100% 80%, 90% 100%, 10% 100%, 0% 80%, 0% 20%);
+  background: radial-gradient(circle at 50% 50%, rgba(18, 14, 32, 0.85) 0%, rgba(8, 6, 16, 0.96) 85%);
+  box-shadow:
+    0 32px 64px -10px rgba(0, 0, 0, 0.95),
+    0 0 0 2px hsla(var(--gauge-hue), 90%, 65%, 0.45),
+    0 0 35px hsla(var(--gauge-hue), 95%, 55%, 0.28);
 }
 
 .speed-gauge-wrap[data-visual="night-city"]::before,
 .speed-gauge-wrap[data-visual="plasma"]::before,
 .speed-gauge-wrap[data-visual="warp"]::before {
-  border-radius: 0 !important;
-  clip-path: polygon(24% 2%, 76% 2%, 98% 24%, 98% 76%, 76% 98%, 24% 98%, 2% 76%, 2% 24%);
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.32) 0%, transparent 40%, rgba(0, 240, 255, 0.22) 100%);
+  border-radius: 20px !important;
+  clip-path: polygon(10% 0%, 90% 0%, 100% 20%, 100% 80%, 90% 100%, 10% 100%, 0% 80%, 0% 20%);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.26) 0%, transparent 42%, rgba(0, 240, 255, 0.18) 100%);
   border: 2px solid hsla(var(--gauge-hue), 95%, 65%, 0.65);
-  inset: -4px;
+  inset: -6px;
 }
 
-/* 2. GT3 / F1 Yarış Kapsülü (Cockpit Curved Capsule) —— Redline, Mini-Gokart */
-.speed-gauge-wrap[data-visual="redline"],
-.speed-gauge-wrap[data-visual="mini-gokart"] {
-  border-radius: 46px 46px 28px 28px !important;
-  background: radial-gradient(circle at 50% 40%, rgba(48, 10, 18, 0.70) 0%, rgba(14, 5, 8, 0.94) 85%);
-  border-top: 3px solid #ff2b43;
-}
-
-.speed-gauge-wrap[data-visual="redline"]::before,
-.speed-gauge-wrap[data-visual="mini-gokart"]::before {
-  border-radius: 48px 48px 30px 30px !important;
-  background: linear-gradient(180deg, rgba(255, 50, 60, 0.28) 0%, transparent 45%, rgba(0, 0, 0, 0.85) 100%);
-  border: 1.5px solid rgba(255, 40, 50, 0.48);
-}
-
-/* 3. Süpersonik Kalkan / Jet Nozzle (Aerodynamic Shield) —— Alev, Bayrak */
-.speed-gauge-wrap[data-visual="alev"],
-.speed-gauge-wrap[data-visual="bayrak"] {
-  border-radius: 48% 48% 32% 32% / 54% 54% 36% 36% !important;
-  background: radial-gradient(circle at 50% 35%, rgba(44, 22, 8, 0.68) 0%, rgba(12, 6, 4, 0.94) 80%);
-}
-
-.speed-gauge-wrap[data-visual="alev"]::before,
-.speed-gauge-wrap[data-visual="bayrak"]::before {
-  border-radius: 48% 48% 32% 32% / 54% 54% 36% 36% !important;
-  background: radial-gradient(circle at 35% 20%, rgba(255, 140, 40, 0.32) 0%, transparent 50%, rgba(0, 0, 0, 0.85) 90%);
-  border: 1.5px solid hsla(var(--gauge-hue), 95%, 60%, 0.48);
-}
-
-/* 4. Lüks EV Squircle (Porsche-Lotus Kavisli Kare) —— Mini-Vibrant, Neon, Matrix */
+/* 2. Gerçekçi Yuvarlak Hatlı Dikdörtgen Dashboard (BMW Curved Display / Mercedes MBUX / Tesla Screen) —— Canlı, Neon, Matrix, Redline, Gokart */
 .speed-gauge-wrap[data-visual="mini-vibrant"],
 .speed-gauge-wrap[data-visual="neon"],
-.speed-gauge-wrap[data-visual="matrix"] {
-  border-radius: 28% !important;
-  background: radial-gradient(circle at 50% 50%, rgba(28, 10, 34, 0.68) 0%, rgba(8, 6, 12, 0.92) 80%);
+.speed-gauge-wrap[data-visual="matrix"],
+.speed-gauge-wrap[data-visual="redline"],
+.speed-gauge-wrap[data-visual="mini-gokart"] {
+  border-radius: 28px !important;
+  aspect-ratio: 1.15;
+  clip-path: none !important;
+  background: radial-gradient(circle at 50% 45%, rgba(18, 22, 34, 0.82) 0%, rgba(6, 8, 14, 0.96) 85%);
+  border: 1.5px solid hsla(var(--gauge-hue), 85%, 60%, 0.45);
+  box-shadow:
+    0 32px 64px -10px rgba(0, 0, 0, 0.95),
+    inset 0 3px 6px rgba(255, 255, 255, 0.22),
+    inset 0 -8px 20px rgba(0, 0, 0, 0.85),
+    0 0 0 2px hsla(var(--gauge-hue), 90%, 65%, 0.35),
+    0 0 40px hsla(var(--gauge-hue), 95%, 55%, 0.25);
 }
 
 .speed-gauge-wrap[data-visual="mini-vibrant"]::before,
 .speed-gauge-wrap[data-visual="neon"]::before,
-.speed-gauge-wrap[data-visual="matrix"]::before {
-  border-radius: 28% !important;
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.28) 0%, transparent 45%, rgba(255, 0, 128, 0.22) 100%);
-  border: 1.5px solid hsla(var(--gauge-hue), 90%, 65%, 0.48);
+.speed-gauge-wrap[data-visual="matrix"]::before,
+.speed-gauge-wrap[data-visual="redline"]::before,
+.speed-gauge-wrap[data-visual="mini-gokart"]::before {
+  border-radius: 30px !important;
+  clip-path: none !important;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.20) 0%, transparent 45%, rgba(0, 0, 0, 0.75) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  inset: -6px;
 }
 
-/* 5. Klasik Kronometre Yuvarlak (Swiss Circle) —— Mini-Timeless, Mini-Green, Deep Ocean, Yildiz, Glow */
+/* Redline ve Gokart için üst spor yarış çizgisi */
+.speed-gauge-wrap[data-visual="redline"],
+.speed-gauge-wrap[data-visual="mini-gokart"] {
+  border-top: 3px solid #ff2b43 !important;
+}
+
+/* 3. Klasik Yuvarlak Otomobil Göstergesi (Porsche 911 / Swiss Chrono Pod) —— Zamansız, Yeşil, Deep Ocean, Yıldız, Alev, Bayrak, Denge, Kişisel, Glow */
 .speed-gauge-wrap[data-visual="mini-timeless"],
 .speed-gauge-wrap[data-visual="mini-green"],
 .speed-gauge-wrap[data-visual="deep-ocean"],
 .speed-gauge-wrap[data-visual="yildiz"],
 .speed-gauge-wrap[data-visual="mini-personal"],
 .speed-gauge-wrap[data-visual="mini-balance"],
-.speed-gauge-wrap[data-visual="glow"] {
+.speed-gauge-wrap[data-visual="glow"],
+.speed-gauge-wrap[data-visual="alev"],
+.speed-gauge-wrap[data-visual="bayrak"] {
   border-radius: 50% !important;
-  background: radial-gradient(circle at 50% 45%, rgba(16, 24, 38, 0.62) 0%, rgba(6, 10, 18, 0.94) 80%);
+  aspect-ratio: 1 !important;
+  clip-path: none !important;
+  background: radial-gradient(circle at 50% 45%, rgba(16, 24, 38, 0.65) 0%, rgba(6, 10, 18, 0.94) 80%);
+}
+
+.speed-gauge-wrap[data-visual="mini-timeless"]::before,
+.speed-gauge-wrap[data-visual="mini-green"]::before,
+.speed-gauge-wrap[data-visual="deep-ocean"]::before,
+.speed-gauge-wrap[data-visual="yildiz"]::before,
+.speed-gauge-wrap[data-visual="mini-personal"]::before,
+.speed-gauge-wrap[data-visual="mini-balance"]::before,
+.speed-gauge-wrap[data-visual="glow"]::before,
+.speed-gauge-wrap[data-visual="alev"]::before,
+.speed-gauge-wrap[data-visual="bayrak"]::before {
+  border-radius: 50% !important;
+  clip-path: none !important;
+  inset: -10px;
 }
 
 .gauge-screen {
@@ -5255,7 +5283,7 @@ body.ephemeral-browser .hud-warn-band {
 }
 body.tesla-browser .speed-hud.has-warn-band .speed-hud-content,
 body.ephemeral-browser .speed-hud.has-warn-band .speed-hud-content {
-  padding-top: calc(36px + 4px);
+  padding-top: 14px !important;
 }
 
 body.tesla-browser .crit-near,
