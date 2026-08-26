@@ -42,23 +42,23 @@ const GpsTracker = (() => {
   let smoothAx = 0, smoothAy = 0, smoothAz = 0;
   let lastMotionMs = 0;
 
-  // Simetrik yumuşatma: hızlanma = yavaşlama (ses anında takip)
-  const EMA_UP = 0.05;
-  const EMA_DOWN = 0.05;
+  // Hızlı ve pürüzsüz takip: hızlanma ve yavaşlama anında göstergeye ve sese yansır
+  const EMA_UP = 0.35;
+  const EMA_DOWN = 0.28;
   const TREND_ALPHA = 0.28;
   const PREDICT_MAX_SEC = 1.25;
   const ACCEL_TO_KMH = 3.6;
   const ACCEL_DECAY = 0.7;
   /** Durma eşiği (histerezis: gir / çık ayrı) */
-  const STOP_ENTER_KMH = 2.4;
-  const STOP_EXIT_KMH = 4.0;
-  const MOTION_GATE_KMH = 3.2;
-  const MAX_RISE_KMH_S = 70;
-  const MAX_FALL_KMH_S = 70;
+  const STOP_ENTER_KMH = 0.8;
+  const STOP_EXIT_KMH = 1.2;
+  const MOTION_GATE_KMH = 1.0;
+  const MAX_RISE_KMH_S = 120;
+  const MAX_FALL_KMH_S = 120;
   /** Kısa GPS sıçraması durmayı bozmasın */
-  const EXIT_HOLD_MS = 520;
+  const EXIT_HOLD_MS = 100;
   /** Bu altında gösterge ve ses 0 */
-  const HARD_ZERO_KMH = 2.4;
+  const HARD_ZERO_KMH = 0.5;
 
   let speedSource = "gps"; // gps | obd
   let obdRpm = null;
@@ -150,21 +150,14 @@ const GpsTracker = (() => {
 
   function isLikelyStationary() {
     if (speedSource === "obd") return false;
-    const now = Date.now();
-    const signal = Math.max(gpsKmh, deriveKmh * 0.85);
+    const signal = Math.max(gpsKmh, deriveKmh);
     if (stationaryLatch) {
-      if (signal >= STOP_EXIT_KMH || trendKmhPerSec > 2.2) {
-        if (!exitHoldUntil) exitHoldUntil = now + EXIT_HOLD_MS;
-        if (now >= exitHoldUntil) {
-          stationaryLatch = false;
-          exitHoldUntil = 0;
-        }
-      } else {
+      if (signal >= STOP_EXIT_KMH || trendKmhPerSec > 0.8) {
+        stationaryLatch = false;
         exitHoldUntil = 0;
       }
-    } else if (signal < STOP_ENTER_KMH && Math.abs(trendKmhPerSec) < 1.0) {
+    } else if (signal < STOP_ENTER_KMH && Math.abs(trendKmhPerSec) < 0.5) {
       stationaryLatch = true;
-      exitHoldUntil = 0;
     }
     return stationaryLatch;
   }
@@ -198,7 +191,7 @@ const GpsTracker = (() => {
       if (Math.abs(dv) >= 0.12 || dt >= 0.2) a = dv / dt;
       else a = 0;
     }
-    const alpha = Math.abs(a) < 0.35 ? 0.5 : 0.38;
+    const alpha = Math.abs(a) < 0.35 ? 0.42 : 0.32;
     accelKmhS = alpha * accelKmhS + (1 - alpha) * a;
     trendKmhPerSec = accelKmhS;
   }
@@ -212,24 +205,20 @@ const GpsTracker = (() => {
   function smoothToward(current, target, dtSec) {
     const rising = target > current;
     const alpha = rising ? EMA_UP : EMA_DOWN;
-    let next = alpha * current + (1 - alpha) * target;
+    let next = current + (target - current) * alpha;
     const maxStep = (rising ? MAX_RISE_KMH_S : MAX_FALL_KMH_S) * Math.max(0.016, dtSec);
     const delta = next - current;
     if (Math.abs(delta) > maxStep) next = current + Math.sign(delta) * maxStep;
+    if (target === 0 && next < HARD_ZERO_KMH) next = 0;
     return Math.max(0, next);
   }
 
   function clampStationaryDisplay() {
     if (!isLikelyStationary()) return;
-    accelBoostKmh *= 0.35;
-    if (accelBoostKmh < 0.2) accelBoostKmh = 0;
-    trendKmhPerSec *= 0.4;
-    // Hızlı sönüm + sert sıfır — düşük hızda titreme / crawl yok
-    displayKmh *= 0.48;
-    if (displayKmh < HARD_ZERO_KMH) displayKmh = 0;
-    fusedKmh = displayKmh;
-    gpsKmh = Math.min(gpsKmh, displayKmh);
-    deriveKmh = Math.min(deriveKmh, displayKmh);
+    accelBoostKmh = 0;
+    trendKmhPerSec = 0;
+    displayKmh = 0;
+    fusedKmh = 0;
   }
 
   function fuseAndEmit(now) {
@@ -257,32 +246,16 @@ const GpsTracker = (() => {
       return;
     }
 
-    // Ağırlıklı füzyon: ivme boost hızlanmada öne çıkar
-    const accelAbs = Math.abs(accelBoostKmh);
-    const wGps = 0.34;
-    const wDer = deriveKmh > 1 ? 0.28 : 0.16;
-    const wAcc = Math.min(0.55, 0.22 + accelAbs / 28);
-    const wSum = wGps + wDer + wAcc;
-
-    let blend =
-      (gpsKmh * wGps + deriveKmh * wDer + Math.max(0, gpsKmh + accelBoostKmh) * wAcc) /
-      wSum;
-
-    // Hızlanırken üst değeri tercih et — gaz ile ses/gösterge aynı anda
-    if (trendKmhPerSec > 0.8 || accelBoostKmh > 0.5) {
-      blend = Math.max(
-        blend,
-        gpsKmh,
-        deriveKmh,
-        gpsKmh + accelBoostKmh * 1.05
-      );
+    const activeSpeed = Math.max(gpsKmh, deriveKmh);
+    let blend = activeSpeed;
+    if (accelBoostKmh > 0.4) {
+      blend = Math.max(blend, activeSpeed + accelBoostKmh * 0.4);
     }
 
     blend = Math.max(0, blend * sensitivity);
     fusedKmh = blend;
     displayKmh = smoothToward(displayKmh, fusedKmh, dtSec);
-    // Crawl bölgesi: göstergeyi 0'a kilitle
-    if (fusedKmh < HARD_ZERO_KMH && displayKmh < HARD_ZERO_KMH + 0.8) {
+    if (fusedKmh < HARD_ZERO_KMH && displayKmh < HARD_ZERO_KMH + 0.3) {
       displayKmh = 0;
       fusedKmh = 0;
     }
@@ -327,12 +300,13 @@ const GpsTracker = (() => {
 
   function applyGpsReading(speedMps, coords, timestamp, source) {
     const now = timestamp || Date.now();
-    let reported = Math.max(0, (speedMps == null || speedMps < 0 ? 0 : speedMps) * MPS_TO_KMH);
+    const hasReported = speedMps != null && Number.isFinite(speedMps) && speedMps >= 0;
+    let reported = hasReported ? speedMps * MPS_TO_KMH : 0;
     let derived = 0;
 
     if (coords && coords.prevLat != null && lastFixMs) {
       const dt = (now - lastFixMs) / 1000;
-      if (dt > 0.04 && dt < 6) {
+      if (dt > 0.05 && dt < 8) {
         const dist = haversineM(
           coords.lat,
           coords.lng,
@@ -340,42 +314,32 @@ const GpsTracker = (() => {
           coords.prevLng
         );
         derived = (dist / dt) * MPS_TO_KMH;
-        // Anlık türevi kaydet
-        if (derived > 0.3) deriveKmh = derived;
+        if (derived > 0.2) deriveKmh = derived;
       }
     }
 
-    // Düşük hız + kötü fix: GPS raporunu bastır (park/trafikte hayalet hız)
     const accuracy = coords?.accuracy != null ? Number(coords.accuracy) : 25;
-    const poorFix = accuracy > 28;
-    if (poorFix && reported < 4.5) {
-      reported *= Math.max(0.15, 1 - (accuracy - 28) / 80);
+    const poorFix = accuracy > 35;
+
+    let instant = 0;
+    if (hasReported && reported > 0.4) {
+      instant = reported;
+      if (derived > 0.5) instant = reported * 0.7 + derived * 0.3;
+    } else if (derived > 0.6) {
+      instant = derived;
+    } else if (hasReported) {
+      instant = reported;
     }
 
-    // İki GPS kaynağını birleştir
-    let instant = reported;
-    if (derived > 0.5) {
-      if (reported < 1) instant = derived;
-      else instant = reported * 0.55 + derived * 0.45;
-    }
-    if (reported < 2.2 && derived < 2.8) {
-      instant = Math.min(instant, Math.max(derived * 0.9, reported * 0.55));
-    }
-    if (reported < 1.2 && derived < 2.2 && poorFix) {
-      instant = Math.max(reported * 0.4, derived * 0.3);
-    }
-    if (instant < STOP_ENTER_KMH && derived < STOP_EXIT_KMH) {
-      deriveKmh = deriveKmh * 0.78 + instant * 0.22;
-    } else if (derived > 0.3) {
-      deriveKmh = deriveKmh * 0.4 + derived * 0.6;
+    if (poorFix && instant < 2.5 && (!hasReported || reported < 1.0)) {
+      instant = Math.max(0, instant - 0.4);
     }
 
-    gpsKmh = instant;
-    noteSpeedSample(instant, now);
+    gpsKmh = Math.max(0, instant);
+    noteSpeedSample(gpsKmh, now);
 
-    if (lastFixMs && instant >= 0) {
-      // GPS ile doğrulanmış hızlanma → ileri ekseni kalibre et
-      if (accelKmhS > 2.5 && !forwardAxis) {
+    if (lastFixMs && gpsKmh >= 0) {
+      if (accelKmhS > 2.0 && !forwardAxis) {
         calibrateForwardFromTrend();
       }
     }
@@ -517,12 +481,7 @@ const GpsTracker = (() => {
     if (now - lastEmitMs < (changing ? 10 : 28)) return;
     lastEmitMs = now;
     if (onUpdate) {
-      const planned = plannedAudioKmh(now);
-      audioPlanKmh = planned;
-      let audioKmh =
-        displayKmh < HARD_ZERO_KMH && gpsKmh < HARD_ZERO_KMH
-          ? 0
-          : Math.max(0, planned);
+      let audioKmh = displayKmh < HARD_ZERO_KMH ? 0 : displayKmh;
       onUpdate({
         kmh: displayKmh,
         audioKmh,
