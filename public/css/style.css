@@ -2439,6 +2439,111 @@ body.audio-muted .mode-chip {
   text-transform: uppercase;
 }
 
+/* ==========================================================================
+   3 Haneli Hızlarda (100+ km/h) Çember Dışına Taşmayı Önleme Kuralları
+   Ana yapıyı bozmadan kadran dairesi içinde kusursuz merkezleme ve ölçekleme
+   ========================================================================== */
+
+.speed-readout,
+.minimal-readout,
+.bars-readout {
+  max-width: 82%;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+.speed-number,
+.minimal-number,
+.bars-number {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* 1) Dijital Kadran 3 Hane */
+.speed-gauge-wrap.is-triple-digits .speed-number,
+.speed-gauge-wrap[data-digits="3"] .speed-number,
+.speed-number.is-triple-digits {
+  font-size: clamp(66px, 18vw, 110px) !important;
+  letter-spacing: -0.045em !important;
+  white-space: nowrap !important;
+}
+
+/* 2) Minimal Kadran 3 Hane */
+.speed-gauge-wrap.is-triple-digits .minimal-number,
+.speed-gauge-wrap[data-digits="3"] .minimal-number,
+.minimal-number.is-triple-digits {
+  font-size: clamp(76px, 21vw, 126px) !important;
+  letter-spacing: -0.04em !important;
+  white-space: nowrap !important;
+}
+
+/* 3) Barlar / Equalizer Kadran 3 Hane */
+.speed-gauge-wrap.is-triple-digits .bars-number,
+.speed-gauge-wrap[data-digits="3"] .bars-number,
+.bars-number.is-triple-digits {
+  font-size: clamp(60px, 16.5vw, 100px) !important;
+  letter-spacing: -0.04em !important;
+  white-space: nowrap !important;
+}
+
+/* 4) Analog Kadran 3 Hane */
+.speed-gauge-wrap.is-triple-digits .analog-number,
+.speed-gauge-wrap[data-digits="3"] .analog-number,
+.analog-number.is-triple-digits {
+  font-size: clamp(34px, 9.5vw, 52px) !important;
+  letter-spacing: -0.03em !important;
+}
+
+/* —— Temaya Özel Geniş Font İnce Ayarları —— */
+
+/* Night City (Michroma geniş glif dengesi) */
+.speed-gauge-wrap[data-visual="night-city"].is-triple-digits .speed-number,
+.speed-gauge-wrap[data-visual="night-city"] .speed-number.is-triple-digits {
+  font-size: clamp(52px, 14vw, 84px) !important;
+  letter-spacing: -0.065em !important;
+}
+.speed-gauge-wrap[data-visual="night-city"].is-triple-digits .minimal-number,
+.speed-gauge-wrap[data-visual="night-city"] .minimal-number.is-triple-digits {
+  font-size: clamp(58px, 15.5vw, 94px) !important;
+  letter-spacing: -0.065em !important;
+}
+.speed-gauge-wrap[data-visual="night-city"].is-triple-digits .bars-number,
+.speed-gauge-wrap[data-visual="night-city"] .bars-number.is-triple-digits {
+  font-size: clamp(48px, 12.5vw, 78px) !important;
+  letter-spacing: -0.065em !important;
+}
+
+/* Neon, Matrix, Cyber-Lime, Plasma, Glow, Warp (Orbitron sıkılaştırması) */
+.speed-gauge-wrap.is-triple-digits[data-visual="neon"] .speed-number,
+.speed-gauge-wrap.is-triple-digits[data-visual="neon"] .minimal-number,
+.speed-gauge-wrap.is-triple-digits[data-visual="neon"] .bars-number,
+.speed-gauge-wrap.is-triple-digits[data-visual="matrix"] .speed-number,
+.speed-gauge-wrap.is-triple-digits[data-visual="cyber-lime"] .speed-number {
+  letter-spacing: -0.035em !important;
+}
+
+/* Redline (İtalik Chakra Petch eğim dengesi) */
+.speed-gauge-wrap.is-triple-digits[data-visual="redline"] .speed-number {
+  font-size: clamp(64px, 17.5vw, 106px) !important;
+  letter-spacing: -0.04em !important;
+}
+
+/* Tesla Araç Tarayıcısı 3 Hane */
+body.tesla-browser .speed-gauge-wrap.is-triple-digits .speed-number,
+body.ephemeral-browser .speed-gauge-wrap.is-triple-digits .speed-number {
+  font-size: clamp(38px, calc(var(--tesla-gauge) * 0.23), 96px) !important;
+  letter-spacing: -0.035em !important;
+}
+body.tesla-browser .speed-gauge-wrap.is-triple-digits .minimal-number,
+body.ephemeral-browser .speed-gauge-wrap.is-triple-digits .minimal-number {
+  font-size: clamp(46px, calc(var(--tesla-gauge) * 0.27), 112px) !important;
+  letter-spacing: -0.035em !important;
+}
+body.tesla-browser .speed-gauge-wrap.is-triple-digits .bars-number,
+body.ephemeral-browser .speed-gauge-wrap.is-triple-digits .bars-number {
+  font-size: clamp(36px, calc(var(--tesla-gauge) * 0.21), 86px) !important;
+}
+
 /* —— Theme → gauge link (all screens inherit --gauge-hue / accents) —— */
 .speed-gauge-wrap .ring-fill {
   stroke: url(#ringGrad);
