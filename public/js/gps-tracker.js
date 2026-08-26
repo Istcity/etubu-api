@@ -25,7 +25,7 @@ const GpsTracker = (() => {
   let audioPlanKmh = 0;
   let lastFixMs = null;
   let lastEmitMs = 0;
-  let sensitivity = 1.24; // UI %20 → SENS_MIN + 0.2*(SENS_MAX-SENS_MIN)
+  let sensitivity = 1.0; // UI %0 → SENS_MIN (1.0x saf GPS referans hızı)
   let totalKm = 0;
   let lastKmSampleMs = null;
   let predictionTimer = null;
