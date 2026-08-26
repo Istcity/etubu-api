@@ -389,8 +389,19 @@
   const GAUGE_KEY = "etubu_gauge_screen";
   let gaugeScreen = "digital";
 
+  function triggerGaugeTransitionSpin() {
+    if (!speedGaugeWrap) return;
+    speedGaugeWrap.classList.remove("is-spinning-3d");
+    void speedGaugeWrap.offsetWidth;
+    speedGaugeWrap.classList.add("is-spinning-3d");
+    setTimeout(() => {
+      speedGaugeWrap?.classList.remove("is-spinning-3d");
+    }, 750);
+  }
+
   function setGaugeScreen(name, persist = true) {
     if (!GAUGE_SCREENS.includes(name)) name = "digital";
+    const prev = gaugeScreen;
     gaugeScreen = name;
     speedGaugeWrap?.setAttribute("data-gauge", name);
     speedGaugeWrap?.querySelectorAll(".gauge-screen").forEach((el) => {
@@ -405,6 +416,9 @@
       try {
         localStorage.setItem(GAUGE_KEY, name);
       } catch (_) {}
+    }
+    if (prev && prev !== name) {
+      triggerGaugeTransitionSpin();
     }
   }
 
@@ -627,8 +641,11 @@
     }
     setSpeedColors(hudDisplayKmh, readMaxKmh());
     syncMapOpacityUi();
-    if (!silent && themeCueReady && prev && prev !== modeKey) {
-      playThemeChangeSound();
+    if (prev && prev !== modeKey) {
+      triggerGaugeTransitionSpin();
+      if (!silent && themeCueReady) {
+        playThemeChangeSound();
+      }
     }
   }
 
@@ -1845,6 +1862,22 @@
     e.stopPropagation();
     setGaugeScreen(btn.dataset.gaugeGoto);
   });
+
+  /* 3D Havada Asılı Kadran Parallaks Eğilme Hareketi */
+  speedHud?.addEventListener("pointermove", (e) => {
+    if (!speedGaugeWrap || speedGaugeWrap.classList.contains("is-spinning-3d") || hudTouchActive) return;
+    const rect = speedHud.getBoundingClientRect();
+    const nx = (e.clientX - rect.left) / rect.width - 0.5;
+    const ny = (e.clientY - rect.top) / rect.height - 0.5;
+    const tiltX = (-ny * 14).toFixed(1);
+    const tiltY = (nx * 18).toFixed(1);
+    speedGaugeWrap.style.transform = `perspective(1200px) translateZ(58px) rotateX(${tiltX}deg) rotateY(${tiltY}deg)`;
+  }, { passive: true });
+
+  speedHud?.addEventListener("pointerleave", () => {
+    if (!speedGaugeWrap || speedGaugeWrap.classList.contains("is-spinning-3d")) return;
+    speedGaugeWrap.style.transform = "";
+  }, { passive: true });
 
   const UI_CHROME_SEL =
     "#controlDock, #panelToggle, #muteToggle, #routeBriefTop, #routeBriefPeek, #routeFormPeek, .picker-sheet, .paywall, button, select, input, a, label, .gauge-dots, .avg-speed-panel, .route-guard, #focusLock, #audioUnlockOverlay";
