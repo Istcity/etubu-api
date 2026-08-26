@@ -42,6 +42,12 @@ const Ads = (() => {
     s.async = true;
     s.src = "https://yandex.ru/ads/system/context.js";
     s.dataset.yandexRtb = "1";
+    s.onerror = () => {
+      const s2 = document.createElement("script");
+      s2.async = true;
+      s2.src = "https://yandex.com/ads/system/context.js";
+      document.head.appendChild(s2);
+    };
     document.head.appendChild(s);
   }
 
@@ -114,15 +120,12 @@ const Ads = (() => {
   function canShowAds() {
     if (typeof Paywall !== "undefined" && Paywall.isAdFree()) return false;
     const cfg = window.ETUBU_CONFIG || {};
-    if (!cfg.ADS_ENABLED) return false;
+    if (cfg.ADS_ENABLED === false) return false;
     try {
       if (window.__ETUBU_NATIVE_CLUSTER__ || window.Capacitor?.isNativePlatform?.()) {
         return false;
       }
     } catch (_) {}
-    if (typeof Consent !== "undefined") {
-      if (!Consent.hasChoice() || !Consent.allows("marketing")) return false;
-    }
     return true;
   }
 
@@ -144,6 +147,8 @@ const Ads = (() => {
   }
 
   function showRails() {
+    if (!canShowAds()) return;
+    document.body.classList.remove("ads-hidden");
     document.body.classList.add("ads-ready");
     setRailsVisible(true);
     document.querySelectorAll(".intro-ad").forEach((el) => {
@@ -151,6 +156,10 @@ const Ads = (() => {
     });
     const leftRail = document.querySelector(".ad-rail--left");
     if (leftRail) leftRail.hidden = true;
+    if (!rendered) {
+      rendered = true;
+      renderMainSlots();
+    }
     if (window.EtubuNative?.showBannerAds) window.EtubuNative.showBannerAds();
   }
 
