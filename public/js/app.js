@@ -88,8 +88,11 @@
     });
   }
 
-  function paintEqBars(speedPct) {
-    const pct = Math.min(1, Math.max(0, speedPct));
+  function paintEqBars(speedPct, loadPct) {
+    const speed = Math.min(1, Math.max(0, speedPct));
+    const load = Math.min(1, Math.max(0, Number(loadPct) || 0));
+    // Drive.app: bars follow speed pitch + load volume spike
+    const pct = Math.min(1, speed * 0.55 + load * 0.7 + (speed > 0.05 && load < 0.05 ? 0.08 : 0));
     paintEqColumn(eqSegsL, pct);
     paintEqColumn(eqSegsR, pct);
   }
@@ -359,20 +362,21 @@
     populateVisuals();
     Picker.refreshAll?.();
     if (inviteDock) inviteDock.hidden = true;
-    // Web: her zaman reklam (ücretsiz model) — Tesla’da yer kaplamasın
+    // Web: her zaman reklam (ücretsiz model). Tesla/ephemeral: kalıcı şerit yok, pulse döngüsü.
     const tesla = typeof CarBrowser !== "undefined" && CarBrowser.isTesla?.();
-    if (tesla || (typeof CarBrowser !== "undefined" && CarBrowser.isEphemeral?.())) {
+    const ephemeral = typeof CarBrowser !== "undefined" && CarBrowser.isEphemeral?.();
+    if (Paywall.isAdFree()) {
       document.body.classList.add("ads-hidden");
       Ads.hideAll?.();
+    } else if (tesla || ephemeral) {
+      document.body.classList.add("ads-hidden", "drive-focus");
+      try {
+        Ads.setDriveFocus?.(true);
+      } catch (_) {}
       CarBrowser.forceCompactChrome?.();
     } else {
       document.body.classList.remove("ads-hidden");
-      if (!Paywall.isAdFree()) {
-        Ads.showRails?.();
-      } else {
-        document.body.classList.add("ads-hidden");
-        Ads.hideAll?.();
-      }
+      Ads.showRails?.();
     }
     syncDriveFocus(document.body.classList.contains("panel-hidden"));
   }
@@ -459,8 +463,12 @@
         analogNeedle.style.transform = `rotate(${q}deg)`;
       }
     }
-    // Yan equalizer sütunlar: üst üste parçalar, yeşil→kırmızı
-    paintEqBars(digPct);
+    // Yan equalizer: hız (pitch) + yük (volume) — Drive.app senkronu
+    const loadNow =
+      typeof AudioEngine !== "undefined" && AudioEngine.getLoad
+        ? AudioEngine.getLoad()
+        : 0;
+    paintEqBars(digPct, loadNow);
     setSpeedColors(kmh, maxKmh);
   }
 
@@ -486,10 +494,14 @@
   function startGaugeSmooth() {
     if (gaugeRaf != null) return;
     const tick = () => {
-      // Sürüşte gösterge = ses hattı (tek kaynak → GPS–ses–HUD kilitli)
-      if (running && typeof AudioEngine.getSmoothKmh === "function") {
-        gaugeSmoothKmh = AudioEngine.getSmoothKmh();
-        gaugeTargetKmh = gaugeSmoothKmh;
+      if (running) {
+        const rising = gaugeTargetKmh >= gaugeSmoothKmh;
+        const a = rising ? 0.48 : 0.36;
+        gaugeSmoothKmh += (gaugeTargetKmh - gaugeSmoothKmh) * a;
+        if (Math.abs(gaugeTargetKmh - gaugeSmoothKmh) < 0.08) {
+          gaugeSmoothKmh = gaugeTargetKmh;
+        }
+        if (gaugeTargetKmh < 0.3 && gaugeSmoothKmh < 0.4) gaugeSmoothKmh = 0;
       } else {
         const rising = gaugeTargetKmh >= gaugeSmoothKmh;
         const a = rising ? 0.88 : 0.2;
@@ -692,6 +704,9 @@
     // Premium + panel kapalı → yalnızca hız + tema (immersive)
     const focus = !!panelHidden && isPremiumUser();
     document.body.classList.toggle("drive-focus", focus);
+    try {
+      Ads.setDriveFocus?.(focus);
+    } catch (_) {}
   }
 
   function setPanelHidden(hidden, persist = true) {
@@ -1431,8 +1446,8 @@
       audioKmh = 0;
     }
     const accelNow = Number(data.accelKmhS != null ? data.accelKmhS : data.trend) || 0;
-    // Demo dışında crawl gürültüsünü göstergede tutma — ivme varsa ses açık kalsın
-    if (!demoMode && kmh < 2.2 && audioKmh < 2.2 && accelNow < 0.35) {
+    // Düşük hız filtresi: 0.5 km/s altında duruş kabul edilir
+    if (!demoMode && kmh < 0.5 && audioKmh < 0.5 && accelNow < 0.2) {
       kmh = 0;
       audioKmh = 0;
     }
@@ -2332,6 +2347,9 @@
       if (CarBrowser.isTesla?.() || CarBrowser.isEphemeral?.()) {
         setPanelHidden(true, false);
         document.body.classList.add("ads-hidden", "drive-focus");
+        try {
+          Ads.setDriveFocus?.(true);
+        } catch (_) {}
         CarBrowser.forceCompactChrome?.();
         CarBrowser.syncViewportHeight?.();
       } else {
