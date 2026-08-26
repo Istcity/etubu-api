@@ -1481,7 +1481,7 @@
     }
   }
 
-  async function startDrive() {
+  async function startDrive(isAuto = false) {
     if (startInFlight) return;
     if (running) stopDrive();
 
@@ -1528,10 +1528,12 @@
       }
       AudioEngine.setSpeed(0, { source: "gps" });
     } catch (err) {
-      console.warn("Audio start failed", err);
-      alert(t("audioStartFail"));
-      running = false;
-      return;
+      console.warn("Audio start deferred or failed", err);
+      if (!isAuto) {
+        alert(t("audioStartFail"));
+        running = false;
+        return;
+      }
     } finally {
       startInFlight = false;
       syncStartStopUi();
@@ -1549,6 +1551,23 @@
     enterDriveFocus();
     startAvgIdleTicker();
 
+    // Otomatik başlangıçta tarayıcı ses politikasından dolayı askıda kalırsa, ekrana ilk dokunuşta sesi anında çözer
+    if (isAuto) {
+      const unlockOnFirstTouch = () => {
+        AudioEngine.kickUnlock?.();
+        clearDriveMute();
+        AudioEngine.ensureCtx?.().then(() => {
+          AudioEngine.start(voice).catch(() => {});
+        }).catch(() => {});
+        window.removeEventListener("pointerdown", unlockOnFirstTouch);
+        window.removeEventListener("keydown", unlockOnFirstTouch);
+        window.removeEventListener("touchstart", unlockOnFirstTouch);
+      };
+      window.addEventListener("pointerdown", unlockOnFirstTouch, { passive: true });
+      window.addEventListener("keydown", unlockOnFirstTouch, { passive: true });
+      window.addEventListener("touchstart", unlockOnFirstTouch, { passive: true });
+    }
+
     GpsTracker.setSensitivity(readSensitivity());
     const gpsOk = GpsTracker.start({
       onUpdate: onSpeedUpdate,
@@ -1556,7 +1575,7 @@
         if (session !== driveSession || !running) return;
         const el = $("gpsState");
         if (el) el.textContent = msg;
-        alert(t("gpsNeeded") + msg);
+        if (!isAuto) alert(t("gpsNeeded") + msg);
       },
     });
     if (gpsOk === false) {
@@ -2437,6 +2456,11 @@
     });
     // After prefs/catalog settle — theme swipe/select may play cue
     themeCueReady = true;
+
+    // Otomatik Başlat: Uygulama açıldığında sürüş ve GPS doğrudan aktif başlasın
+    setTimeout(() => {
+      startDrive(true).catch((err) => console.warn("[etubu] Auto-start drive error", err));
+    }, 200);
   }
 
   if (document.readyState === "loading") {
