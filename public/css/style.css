@@ -973,16 +973,36 @@ body.audio-muted .mode-chip {
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
-  /* Harita görünsün — glass-panel blur'unu kapat */
-  background: transparent !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
+  background: rgba(10, 14, 26, 0.42) !important;
+  backdrop-filter: blur(14px) saturate(1.35) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(1.35) !important;
   transform-style: preserve-3d;
-  /* Kare/dikdörtgen gölge yok — yalnızca yumuşak dairesel glow */
+  /* Kartın tamamını çevreleyen yumuşak neon çerçeve */
+  border: 1.5px solid hsla(var(--speed-hue, var(--theme-hue)), 92%, 64%, 0.75) !important;
   box-shadow:
-    0 0 0 1px hsla(var(--speed-hue, var(--theme-hue)), 85%, 62%, calc(0.22 + var(--speed-glow, 0) * 0.4)),
-    0 0 calc(36px + var(--speed-glow, 0) * 64px) hsla(var(--speed-hue, var(--theme-hue)), 90%, 55%, calc(0.18 + var(--speed-glow, 0) * 0.48));
-  transition: box-shadow 0.35s ease, background-color 0.4s ease;
+    0 0 0 1px hsla(var(--speed-hue, var(--theme-hue)), 95%, 72%, 0.65),
+    0 0 18px hsla(var(--speed-hue, var(--theme-hue)), 90%, 55%, 0.45),
+    0 0 38px hsla(var(--speed-hue, var(--theme-hue)), 85%, 48%, 0.26),
+    inset 0 0 20px hsla(var(--speed-hue, var(--theme-hue)), 90%, 55%, 0.12) !important;
+  animation: neonFramePulse 5s ease-in-out infinite;
+  transition: border-color 0.35s ease, box-shadow 0.35s ease;
+}
+
+@keyframes neonFramePulse {
+  0%, 100% {
+    box-shadow:
+      0 0 0 1px hsla(var(--speed-hue, var(--theme-hue)), 95%, 72%, 0.70),
+      0 0 18px hsla(var(--speed-hue, var(--theme-hue)), 90%, 55%, 0.48),
+      0 0 40px hsla(var(--speed-hue, var(--theme-hue)), 85%, 48%, 0.28),
+      inset 0 0 20px hsla(var(--speed-hue, var(--theme-hue)), 90%, 55%, 0.12);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px hsla(var(--speed-hue, var(--theme-hue)), 90%, 65%, 0.50),
+      0 0 12px hsla(var(--speed-hue, var(--theme-hue)), 85%, 50%, 0.32),
+      0 0 26px hsla(var(--speed-hue, var(--theme-hue)), 80%, 45%, 0.18),
+      inset 0 0 14px hsla(var(--speed-hue, var(--theme-hue)), 85%, 50%, 0.08);
+  }
 }
 
 .speed-hud::after {
