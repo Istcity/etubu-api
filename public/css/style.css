@@ -849,6 +849,8 @@ body.audio-muted .mode-chip {
   padding-left: calc(var(--panel-offset) + var(--ad-side-w) + 16px + var(--safe-left));
   pointer-events: none;
   transition: padding-left 0.28s ease;
+  perspective: 1200px;
+  perspective-origin: 50% 50%;
 }
 
 .speed-stack {
@@ -875,6 +877,7 @@ body.audio-muted .mode-chip {
   background: transparent !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
+  transform-style: preserve-3d;
   /* Kare/dikdörtgen gölge yok — yalnızca yumuşak dairesel glow */
   box-shadow:
     0 0 0 1px hsla(var(--speed-hue, var(--theme-hue)), 85%, 62%, calc(0.22 + var(--speed-glow, 0) * 0.4)),
@@ -1499,6 +1502,24 @@ body.audio-muted .mode-chip {
   touch-action: none;
   -webkit-user-select: none;
   user-select: none;
+  transform-style: preserve-3d;
+  transform: translateZ(36px);
+  border-radius: 50%;
+  /* 3D Havada Asılı / Ekran Üstünde Yüzen Kadran Efekti */
+  filter: drop-shadow(0 26px 45px rgba(0, 0, 0, 0.85)) drop-shadow(0 0 35px hsla(var(--gauge-hue), 90%, 55%, 0.28));
+  transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), filter 0.35s ease;
+}
+
+/* 3D Kadran Çerçevesi / Işık Yansıması */
+.speed-gauge-wrap::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 20%, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.03) 40%, transparent 68%);
+  box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.22), inset 0 -4px 10px rgba(0, 0, 0, 0.65);
+  pointer-events: none;
+  z-index: 1;
 }
 
 .gauge-screen {
@@ -1620,8 +1641,9 @@ body.audio-muted .mode-chip {
     #fff 100%
   );
   box-shadow:
-    0 0 14px hsla(var(--gauge-hue), 95%, 55%, 0.65),
-    0 0 3px rgba(0, 0, 0, 0.4);
+    0 0 16px hsla(var(--gauge-hue), 95%, 55%, 0.7),
+    0 8px 16px rgba(0, 0, 0, 0.8);
+  transform: translateZ(16px);
   transform-origin: bottom center;
 }
 
@@ -1629,9 +1651,9 @@ body.audio-muted .mode-chip {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 18px;
-  height: 18px;
-  margin: -9px 0 0 -9px;
+  width: 22px;
+  height: 22px;
+  margin: -11px 0 0 -11px;
   border-radius: 50%;
   background: radial-gradient(
     circle at 35% 30%,
@@ -1639,9 +1661,8 @@ body.audio-muted .mode-chip {
     var(--gauge-accent) 45%,
     #0a0e14 100%
   );
-  box-shadow:
-    0 0 0 3px hsla(var(--gauge-hue), 80%, 40%, 0.45),
-    0 0 14px hsla(var(--gauge-hue), 90%, 55%, 0.55);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.85), 0 0 12px hsla(var(--gauge-hue), 90%, 55%, 0.5);
+  transform: translateZ(22px);
 }
 
 .analog-readout {
@@ -2063,6 +2084,8 @@ body.audio-muted .mode-chip {
   align-items: center;
   justify-content: center;
   gap: 0;
+  transform-style: preserve-3d;
+  transform: translateZ(26px);
 }
 /* Dairesel aura — drop-shadow kutu/kare hale üretmesin */
 .speed-readout::before {
@@ -2097,8 +2120,9 @@ body.audio-muted .mode-chip {
   -webkit-text-fill-color: transparent;
   background-clip: text;
   filter: none;
-  text-shadow: 0 0 24px rgba(0, 240, 255, 0.45), 0 0 48px rgba(0, 240, 255, 0.2);
+  text-shadow: 0 12px 28px rgba(0, 0, 0, 0.9), 0 0 28px rgba(0, 240, 255, 0.45);
   font-variant-numeric: tabular-nums;
+  transform: translateZ(22px);
   transition: text-shadow 0.25s ease, background 0.35s ease;
 }
 
