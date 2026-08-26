@@ -115,6 +115,7 @@
   const inviteDock = $("inviteDock");
   const voiceLockHint = $("voiceLockHint");
   const panelToggle = $("panelToggle");
+  const muteToggle = $("muteToggle");
   const demoBtn = $("demoBtn");
   const focusLockEl = $("focusLock");
 
@@ -1853,7 +1854,7 @@
   });
 
   const UI_CHROME_SEL =
-    "#controlDock, #panelToggle, #routeBriefTop, #routeBriefPeek, #routeFormPeek, .picker-sheet, .paywall, button, select, input, a, label, .gauge-dots, .avg-speed-panel, .route-guard, #focusLock, #audioUnlockOverlay";
+    "#controlDock, #panelToggle, #muteToggle, #routeBriefTop, #routeBriefPeek, #routeFormPeek, .picker-sheet, .paywall, button, select, input, a, label, .gauge-dots, .avg-speed-panel, .route-guard, #focusLock, #audioUnlockOverlay";
 
   function isUiChrome(el) {
     return el instanceof Element && !!el.closest(UI_CHROME_SEL);
@@ -1926,6 +1927,19 @@
     showGestureToast(t("gestureVoice", { name }));
   }
 
+  function syncMuteBtnUi() {
+    const btn = $("muteToggle");
+    if (!btn) return;
+    const isMuted = !!(AudioEngine.isMuted?.() || voiceSelect?.value === "silent-mode");
+    btn.classList.toggle("is-muted", isMuted);
+    const soundIcon = btn.querySelector(".mute-icon-sound");
+    const muteIcon = btn.querySelector(".mute-icon-muted");
+    const textEl = $("muteToggleText");
+    if (soundIcon) soundIcon.style.display = isMuted ? "none" : "block";
+    if (muteIcon) muteIcon.style.display = isMuted ? "block" : "none";
+    if (textEl) textEl.textContent = isMuted ? "Sessiz" : "Ses Açık";
+  }
+
   /** Başlat = ses açık; mute tercihi sürüş başında temizlenir (URL dahil) */
   function clearDriveMute() {
     AudioEngine.setMuted?.(false);
@@ -1934,20 +1948,47 @@
       if (typeof CarBrowser !== "undefined" && CarBrowser.setPref) {
         CarBrowser.setPref("mute", "0", { forceUrl: true });
         CarBrowser.refreshTeslaHint?.();
-        return;
       }
     } catch (_) {}
     try {
       localStorage.setItem("etubu_mute", "0");
     } catch (_) {}
     prefSet("mute", "0");
+    syncMuteBtnUi();
   }
 
   function toggleDriveMute() {
-    const next = !(AudioEngine.isMuted?.() ?? false);
-    AudioEngine.setMuted(next);
-    document.body.classList.toggle("audio-muted", next);
-    prefSet("mute", next ? "1" : "0");
+    const isCurrentlyMuted = !!(AudioEngine.isMuted?.() || voiceSelect?.value === "silent-mode");
+    const next = !isCurrentlyMuted;
+
+    if (!next) {
+      // Sesi aç
+      if (voiceSelect?.value === "silent-mode") {
+        const defaultAudible = "tesla";
+        if (voiceSelect) {
+          voiceSelect.value = defaultAudible;
+          prefSet("voice", defaultAudible);
+          Picker?.refreshAll?.();
+        }
+      }
+      AudioEngine.setMuted(false);
+      document.body.classList.remove("audio-muted");
+      prefSet("mute", "0");
+      if (running) {
+        const v = voiceSelect?.value && voiceSelect.value !== "silent-mode" ? voiceSelect.value : "tesla";
+        AudioEngine.start(v).then(() => {
+          AudioEngine.setMaxKmh(readMaxKmh());
+          AudioEngine.setVolume(readVolume());
+        });
+      }
+    } else {
+      // Sessize al
+      AudioEngine.setMuted(true);
+      document.body.classList.add("audio-muted");
+      prefSet("mute", "1");
+    }
+
+    syncMuteBtnUi();
     showGestureToast(t(next ? "gestureMuted" : "gestureUnmuted"));
   }
 
@@ -2202,6 +2243,11 @@
     setPanelHidden(!document.body.classList.contains("panel-hidden"));
   });
 
+  muteToggle?.addEventListener("click", () => {
+    AudioEngine.kickUnlock?.();
+    toggleDriveMute();
+  });
+
   volumeSlider?.addEventListener("input", () => {
     syncVolumeUi();
     AudioEngine.setVolume(readVolume());
@@ -2240,6 +2286,12 @@
     const v = AudioEngine.getVoices().find((x) => x.key === voiceSelect.value);
     void v;
     prefSet("voice", voiceSelect.value);
+    if (voiceSelect.value !== "silent-mode" && AudioEngine.isMuted?.()) {
+      AudioEngine.setMuted(false);
+      document.body.classList.remove("audio-muted");
+      prefSet("mute", "0");
+    }
+    syncMuteBtnUi();
     if (running) {
       AudioEngine.start(voiceSelect.value).then(() => {
         AudioEngine.setMaxKmh(readMaxKmh());
@@ -2449,7 +2501,10 @@
       I18n.fillLangSelect?.();
       Picker.refreshAll?.();
     });
-    step("prefs", () => loadUserPrefs());
+    step("prefs", () => {
+      loadUserPrefs();
+      syncMuteBtnUi();
+    });
     step("paymentQuery", () => {
       const params = new URLSearchParams(location.search);
       if (params.get("payment") === "error") {
