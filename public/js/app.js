@@ -270,17 +270,13 @@
   }
 
   function unlocked() {
-    return (
-      demoMode ||
-      Paywall.hasCatalogAccess(GpsTracker.getTotalKm?.() ?? GpsTracker.loadTotalKm())
-    );
+    return true; // Web sürümü: tüm ses kataloğu ve temalar tamamen ücretsiz ve açıktır
   }
 
   function populateVoices() {
     if (!voiceSelect) return;
     const prev = voiceSelect.value;
     voiceSelect.innerHTML = "";
-    const full = unlocked();
     const order =
       AudioEngine.getVoiceGroupOrder?.() || ["ev", "exhaust", "race", "fx"];
     const labelKeys = {
@@ -297,7 +293,6 @@
       groups[id] = g;
     });
     AudioEngine.getVoices().forEach((v) => {
-      if (!full && v.key !== DEFAULT_VOICE() && v.key !== "silent-mode") return;
       const opt = document.createElement("option");
       opt.value = v.key;
       opt.textContent = v.label;
@@ -309,22 +304,21 @@
     });
     // Varsayılan açılış: Sessiz Mod (Yalnızca HUD)
     const valid = new Set([...voiceSelect.options].map((o) => o.value));
-    if (valid.has("silent-mode")) {
-      voiceSelect.value = "silent-mode";
-    } else if (valid.has(prev) && full) {
+    if (valid.has(prev)) {
       voiceSelect.value = prev;
+    } else if (valid.has("silent-mode")) {
+      voiceSelect.value = "silent-mode";
     } else {
       voiceSelect.value = DEFAULT_VOICE();
     }
-    voiceSelect.disabled = !full && voiceSelect.options.length <= 1;
-    if (voiceLockHint) voiceLockHint.hidden = full;
+    voiceSelect.disabled = false;
+    if (voiceLockHint) voiceLockHint.hidden = true;
   }
 
   function populateVisuals() {
     if (!visualSelect) return;
     const prev = visualSelect.value;
     visualSelect.innerHTML = "";
-    const full = unlocked();
     const gaugeGroups = {
       digital: document.createElement("optgroup"),
       analog: document.createElement("optgroup"),
@@ -332,7 +326,6 @@
     gaugeGroups.digital.label = t("visualGroupDigital");
     gaugeGroups.analog.label = t("visualGroupAnalog");
     Scene.getModes().forEach((m) => {
-      if (!full && m.key !== DEFAULT_VISUAL()) return;
       const opt = document.createElement("option");
       opt.value = m.key;
       const translated = t(m.labelKey);
@@ -344,12 +337,12 @@
     if (gaugeGroups.analog.children.length) visualSelect.appendChild(gaugeGroups.analog);
     const validVis = new Set([...visualSelect.options].map((o) => o.value));
     const prevResolved = prev === "aurora" ? "glow" : prev;
-    if (validVis.has(prevResolved) && full) {
+    if (validVis.has(prevResolved)) {
       visualSelect.value = prevResolved;
     } else {
       visualSelect.value = DEFAULT_VISUAL();
     }
-    visualSelect.disabled = !full && visualSelect.options.length <= 1;
+    visualSelect.disabled = false;
     applyVisualTheme(visualSelect.value);
   }
 
