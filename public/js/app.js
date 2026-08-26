@@ -177,7 +177,7 @@
   }
 
   function readSensitivity() {
-    return pctToSensitivity(sensitivitySlider?.value ?? 20);
+    return pctToSensitivity(sensitivitySlider?.value ?? 0);
   }
 
   function defaultVolumePct() {
@@ -227,7 +227,7 @@
   }
 
   function syncSensitivityUi() {
-    const pct = clampPct(sensitivitySlider?.value ?? 20);
+    const pct = clampPct(sensitivitySlider?.value ?? 0);
     if (sensitivitySlider) sensitivitySlider.value = String(pct);
     setPctLabel(sensitivityLabel, pct);
   }
@@ -2316,15 +2316,18 @@
     }
     syncVolumeUi();
 
-    // Sensitivity — varsayılan %20
+    // Sensitivity — varsayılan %0 (1.0x saf GPS referans hızı)
     const sensRaw = prefGet("sensitivity");
     if (sensRaw != null && sensitivitySlider) {
-      sensitivitySlider.value = String(clampPct(sensRaw));
-    } else if (sensitivitySlider) {
-      const htmlVal = parseFloat(sensitivitySlider.value);
-      if (!Number.isFinite(htmlVal) || htmlVal === 46) {
-        sensitivitySlider.value = "20";
+      if ((sensRaw === "20" || sensRaw === "46") && !localStorage.getItem("etubu_sens_zero_v1")) {
+        localStorage.setItem("etubu_sens_zero_v1", "1");
+        sensitivitySlider.value = "0";
+        prefSet("sensitivity", "0");
+      } else {
+        sensitivitySlider.value = String(clampPct(sensRaw));
       }
+    } else if (sensitivitySlider) {
+      sensitivitySlider.value = "0";
     }
     syncSensitivityUi();
     try {
