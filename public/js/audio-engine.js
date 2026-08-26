@@ -421,6 +421,7 @@ class EtubuAudioEngine {
     /** Sadece ICE: son vites + geçiş blip’i */
     this._lastGear = 0;
     this._shiftKick = 0;
+    this._shiftCutUntil = 0;
     /** 0..1 gaz yükü — powerKw birincil */
     this._throttleLoad = 0;
     /** 0..1 regen yükü — negatif powerKw */
@@ -1910,13 +1911,41 @@ class EtubuAudioEngine {
         ? profileOrGears
         : { gears: profileOrGears, ice: (profileOrGears || 1) > 1 };
     const g = this._effectiveGears(p);
+    const n = Math.max(0, Math.min(1, Number(norm) || 0));
+
     if (g <= 1) {
-      // Tek oran: hızla doğrusal yükselen ton (vites basamağı yok)
-      return { gear: 1, rpm: 0.1 + Math.max(0, Math.min(1, norm)) * 0.9 };
+      // EV: Tek oran - logaritmik hızlanma eğrisi (Porsche Taycan / Tesla Plaid)
+      // İlk kalkışta (0-50 km/s) hissedilir tırmanış, yüksek hızda oturan aerodinamik ton
+      const evCurve = Math.pow(n, 0.82);
+      return { gear: 1, rpm: 0.1 + evCurve * 0.9 };
     }
-    const slot = Math.min(g - 1, Math.floor(norm * g));
-    const local = norm * g - slot;
-    return { gear: slot + 1, rpm: 0.2 + local * 0.75 };
+
+    // Hyundai Ioniq 5 N e-Shift Aşamalı Vites Dağılımı (Progressive Dual-Clutch):
+    // Alt vitesler (1 ve 2) şehir içi seri kalkış için dar; üst vitesler uzun oranlıdır
+    let splits;
+    if (g === 7) {
+      splits = [0.18, 0.33, 0.49, 0.67, 0.83, 0.94, 1.0];
+    } else if (g === 6) {
+      splits = [0.20, 0.37, 0.55, 0.73, 0.88, 1.0];
+    } else if (g === 8) {
+      splits = [0.15, 0.28, 0.42, 0.57, 0.72, 0.84, 0.94, 1.0];
+    } else {
+      splits = Array.from({ length: g }, (_, i) => (i + 1) / g);
+    }
+
+    let slot = 0;
+    while (slot < g - 1 && n > splits[slot]) {
+      slot++;
+    }
+
+    const prevSplit = slot === 0 ? 0 : splits[slot - 1];
+    const nextSplit = splits[slot];
+    const range = Math.max(0.01, nextSplit - prevSplit);
+    const local = Math.max(0, Math.min(1, (n - prevSplit) / range));
+
+    // Her viteste 2000 RPM tabanından 7800 RPM kesiciye doğru devir tırmanışı
+    const rpm = 0.24 + local * 0.74;
+    return { gear: slot + 1, rpm };
   }
 
   _applyParams(kmh, force) {
@@ -1925,6 +1954,7 @@ class EtubuAudioEngine {
       this._gearInfo = { gear: 0, rpm: 0.12 };
       this._lastGear = 0;
       this._shiftKick = 0;
+      this._shiftCutUntil = 0;
       return;
     }
     const p = graph.profile;
@@ -1943,26 +1973,27 @@ class EtubuAudioEngine {
     const tau = force ? (cabin ? 0.032 : 0.02) : cabin ? Math.max(0.032, tauBase) : tauBase;
     const rateTau = force ? tau : rising ? tau : tau * 1.25;
     const norm = this._norm(kmh);
-    // Load for volume; speed for pitch / band seat
-    const loadPos = Math.max(0, Math.min(1, load * 0.9 + regen * 0.45 + norm * 0.12));
     const feelNorm = Math.max(0, Math.min(1, norm));
-    let rpm = Math.max(0.08, Math.min(1, this._engineRpm || 0.12));
-    if (!(this._engineRpm > 0)) {
-      rpm = Math.min(1, 0.1 + feelNorm * 0.9);
-      this._engineRpm = rpm;
-    }
 
-    // Gear from speed (Drive.app virtual gearbox), not from load
+    // Vites ve Devir Hesabı (Hyundai Ioniq 5 N e-Shift DCT Mantığı)
     const gearInfo = this._gearFromNorm(feelNorm, p);
+    let rpm = gearInfo.rpm;
+
     if (p.ice) {
       if (this._lastGear > 0 && gearInfo.gear !== this._lastGear) {
-        this._shiftKick = cabin ? 0.16 : 0.24;
+        if (gearInfo.gear > this._lastGear) {
+          // Vites Yükseltme (Up-shift): 75ms mikro tork kesintisi (shift cut) + egzoz patırtısı
+          this._shiftKick = cabin ? 0.24 : 0.35;
+          this._shiftCutUntil = performance.now() + 75;
+        } else {
+          // Vites Düşürme (Down-shift): Ara gazı (rev-match)
+          this._shiftKick = cabin ? 0.18 : 0.26;
+        }
       }
       this._lastGear = gearInfo.gear;
-      this._shiftKick = Math.max(0, (this._shiftKick || 0) * (force ? 0 : 0.88));
-      // Shift: instant pitch drop, then climb with speed
+      this._shiftKick = Math.max(0, (this._shiftKick || 0) * (force ? 0 : 0.86));
       if (this._shiftKick > 0.02) {
-        rpm = Math.max(0.08, rpm - this._shiftKick * 0.22);
+        rpm = Math.max(0.12, rpm - this._shiftKick * 0.24);
       }
     } else {
       this._lastGear = 0;
@@ -1974,10 +2005,28 @@ class EtubuAudioEngine {
     const vol = Math.max(0.16, this._volume) * (p.master || 1) * (cabin ? 1.05 : 1.2);
     const floor = this.AUDIBLE_FLOOR * vol;
 
-    // Hıza doğrudan bağlı ses seviyesi: Hızlandıkça ses artar, yavaşladıkça azalır, durunca sakin rölanti
-    const speedVol = 0.22 + feelNorm * 0.78;
-    const accelBoost = 1 + load * (cabin ? 0.2 : 0.3);
-    const punch = speedVol * accelBoost;
+    // —— SÜRÜŞ YÜKÜ VE SABİT HIZ UĞULTU ÖNLEME (HYUNDAI & PORSCHE MODELİ) ——
+    // 1. Sabit Hızda Süzülme (Cruising):
+    // Araç hareket halindeyse (feelNorm > 0.06) ve ne sert gaz ne sert fren varsa
+    const isCruising = feelNorm > 0.06 && load < 0.18 && regen < 0.18;
+    
+    // Sabit hızda ses seviyesi %35-40 geri çekilir (uğultu / drone engelleme)
+    const cruiseAttenuation = isCruising ? Math.max(0.60, 0.62 + load * 2.1) : 1.0;
+
+    // 2. Hızlanırken Gaz Yükü (Throttle Acceleration Boost):
+    // Gaza basıldığında motor anında yırtıcılaşır (+20% - +40%)
+    const accelBoost = 1.0 + load * (cabin ? 0.28 : 0.42);
+
+    // 3. Vites Atma Anında Mikro Tork Kesintisi (DCT Shift Cut):
+    const isShiftCut = this._shiftCutUntil && performance.now() < this._shiftCutUntil;
+    const shiftCutDuck = isShiftCut ? 0.45 : 1.0;
+
+    // 4. Logaritmik Hız Hacmi (0-50 km/s kalkış doygunluğu):
+    const speedCurve = Math.pow(feelNorm, 0.74);
+    const speedVol = 0.20 + speedCurve * 0.80;
+
+    // Toplam dinamik ses gücü (Punch):
+    const punch = speedVol * accelBoost * cruiseAttenuation * shiftCutDuck;
 
     const hasSample = !!(n.drive || n.drive2 || n.loopIdle || n.loopMid || n.loopHigh || n.regen);
     const sampleLed = !!p.sampleLed && hasSample;
@@ -1998,16 +2047,23 @@ class EtubuAudioEngine {
     this._targetParam(n.mid.osc.frequency, midHz, tau, force);
     this._targetParam(n.body.osc.frequency, bodyHz, tau, force);
 
-    const filtCap = Math.min(cabin ? 2200 : 3000, (p.filterHz || 1200) * (cabin ? 1.15 : 1.35));
+    // —— DİNAMİK ALÇAK GEÇİREN FİLTRE (PORSCHE TAYCAN PESS MODELİ) ——
+    // Hızlanırken boğaz 2800-3400 Hz'e açılır (yırtıcı kükreme)
+    // Sabit hızda ve süzülmede 950-1200 Hz'e kapanır (uğultusuz kadife ton)
+    const baseFilt = p.filterHz || 1200;
+    const dynFilterCutoff = isCruising
+      ? Math.min(cabin ? 1600 : 2000, baseFilt * (0.65 + feelNorm * 0.35))
+      : Math.min(cabin ? 2800 : 3600, baseFilt * (0.75 + feelNorm * 0.65 + load * 0.75));
+
     this._targetParam(
       n.idle.filter.frequency,
-      Math.min(filtCap, (p.filterHz || 1200) * (0.35 + feelNorm * 0.3)),
+      Math.min(dynFilterCutoff, baseFilt * (0.35 + feelNorm * 0.3)),
       tau,
       force
     );
     this._targetParam(
       n.mid.filter.frequency,
-      Math.min(filtCap, (p.filterHz || 1200) * (0.55 + rpm * 0.55 + load * 0.1)),
+      Math.min(dynFilterCutoff, baseFilt * (0.55 + rpm * 0.55 + load * 0.2)),
       tau,
       force
     );
@@ -2025,7 +2081,7 @@ class EtubuAudioEngine {
     this._targetParam(n.mid.gain.gain, midGain, tau, force);
     this._targetParam(
       n.body.gain.gain,
-      Math.max(0.0001, (0.03 + midW * 0.08 + load * 0.05 + regen * 0.04) * vol * bodyMul),
+      Math.max(0.0001, (0.03 + midW * 0.08 + load * 0.05 + regen * 0.04) * vol * bodyMul * (isCruising ? 0.75 : 1)),
       tau,
       force
     );
@@ -2034,7 +2090,7 @@ class EtubuAudioEngine {
       this._targetParam(n.harm.osc.frequency, midHz * 1.4 + load * 20, tau, force);
       this._targetParam(
         n.harm.filter.frequency,
-        Math.min(cabin ? 1700 : 2400, (p.filterHz || 1200) * (0.85 + rpm * 0.25)),
+        Math.min(dynFilterCutoff, baseFilt * (0.85 + rpm * 0.25)),
         tau,
         force
       );
@@ -2069,12 +2125,15 @@ class EtubuAudioEngine {
 
     if (n.road) this._targetParam(n.road.gain.gain, 0.0001, tau, force);
 
-    // Playback rate — Hız arttıkça devir/frekans yükselir, yavaşladıkça iner
-    const rateRaw = 0.75 + feelNorm * 0.88 + (p.ice ? (gearInfo.rpm * 0.35) : 0) + load * 0.05;
-    const rate = Math.max(this.RATE_MIN || 0.72, Math.min(this.RATE_MAX || 1.75, rateRaw));
+    // Playback rate — Vitesli motorlarda devirle birebir senkron düşüş/tırmanış, EV'de kesintisiz logaritmik
+    const rateRaw = p.ice
+      ? (0.64 + rpm * 0.86 + load * 0.06)
+      : (0.72 + Math.pow(feelNorm, 0.78) * 0.92 + load * 0.06);
+    const rate = Math.max(this.RATE_MIN || 0.70, Math.min(this.RATE_MAX || 1.80, rateRaw));
 
     const bands = graph.bands || this._resolveLoopBands(p);
     const driveDuck = 1 - regen * 0.45;
+    const loadPos = Math.max(0, Math.min(1, load * 0.9 + regen * 0.45 + feelNorm * 0.12));
     if (bands && (n.loopIdle || n.loopMid || n.loopHigh)) {
       const w = this._bandWeights(kmh, bands.edges, loadPos);
       const applyBand = (node, weight, baseGain, rateMul) => {
@@ -2087,7 +2146,7 @@ class EtubuAudioEngine {
         this._targetRate(node.src.playbackRate, rate * rateMul, rateTau, force);
         this._targetParam(
           node.filter.frequency,
-          Math.min(cabin ? 2200 : 2800, (p.filterHz || 1200) * (0.65 + feelNorm * 0.55 + load * 0.04)),
+          Math.min(dynFilterCutoff, (p.filterHz || 1200) * (0.65 + feelNorm * 0.55 + load * 0.04)),
           tau,
           force
         );
@@ -2112,7 +2171,7 @@ class EtubuAudioEngine {
         this._targetRate(n.drive.src.playbackRate, rate, rateTau, force);
         this._targetParam(
           n.drive.filter.frequency,
-          Math.min(cabin ? 2200 : 2800, (p.filterHz || 1200) * (0.7 + feelNorm * 0.55 + load * 0.04)),
+          Math.min(dynFilterCutoff, (p.filterHz || 1200) * (0.7 + feelNorm * 0.55 + load * 0.04)),
           tau,
           force
         );
@@ -2132,7 +2191,7 @@ class EtubuAudioEngine {
         this._targetRate(n.drive2.src.playbackRate, rate * 0.98 + 0.01, rateTau, force);
         this._targetParam(
           n.drive2.filter.frequency,
-          Math.min(cabin ? 2000 : 2600, (p.filterHz || 1200) * (0.65 + feelNorm * 0.5)),
+          Math.min(dynFilterCutoff, (p.filterHz || 1200) * (0.65 + feelNorm * 0.5)),
           tau,
           force
         );
