@@ -542,75 +542,61 @@ const Scene = (() => {
     const { cx, cy, motion: v } = softBg();
     const t = animT;
 
-    // 1. Agresif Kırmızı Yarış Kokpiti Zemini
-    const rlineR = Math.max(w, h) * (0.45 + v * 0.35);
+    // 1. Derin kadife kırmızı yarış kokpiti zemini (Gözü yormayan yumuşak akkor)
+    const rlineR = Math.max(w, h) * (0.42 + v * 0.28);
     const g = ctx.createRadialGradient(cx, cy, 60, cx, cy, rlineR);
-    g.addColorStop(0, `hsla(355, 100%, 50%, ${0.30 + v * 0.45})`);
-    g.addColorStop(0.40, `hsla(12, 95%, 35%, ${0.20 + v * 0.30})`);
-    g.addColorStop(0.80, `hsla(355, 85%, 12%, ${0.10 + v * 0.15})`);
+    g.addColorStop(0, `hsla(355, 85%, 42%, ${0.24 + v * 0.26})`);
+    g.addColorStop(0.40, `hsla(12, 80%, 28%, ${0.14 + v * 0.18})`);
+    g.addColorStop(0.80, `hsla(355, 70%, 10%, ${0.06 + v * 0.08})`);
     g.addColorStop(1, "transparent");
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, w, h);
 
-    // 2. Yarış Pisti Apex Kerbleri (Ekranın sol ve sağ kenarlarından aşağı akan kırmızı-beyaz kerbler)
-    const curbCount = 12;
-    const curbSpeed = (t * (2.2 + v * 10.0)) % 1;
-    const curbW = Math.min(100, Math.max(45, w * 0.08));
-    for (let i = 0; i < curbCount; i++) {
-      const p = (i / curbCount + curbSpeed) % 1;
-      const y = Math.pow(p, 1.2) * h;
-      const curbH = 18 + p * 36;
-      const isRed = (i % 2) === 0;
-      const curbAlpha = (0.35 + v * 0.65) * Math.max(0.2, p);
-
-      // Sol Kerb
-      ctx.fillStyle = isRed ? `hsla(358, 100%, 55%, ${curbAlpha})` : `rgba(255,255,255,${curbAlpha * 0.95})`;
-      ctx.fillRect(0, y, curbW * (0.5 + p * 0.5), curbH);
-
-      // Sağ Kerb
-      const wCur = curbW * (0.5 + p * 0.5);
-      ctx.fillRect(w - wCur, y, wCur, curbH);
+    // 2. Yumuşak akıcı aerodinamik kırmızı şeritler (Gözü yormayan yumuşak dalgalar)
+    const ribbons = skipHeavyFx ? 3 : 5;
+    for (let r = 0; r < ribbons; r++) {
+      const yBase = cy + (r - (ribbons - 1) / 2) * (h * 0.22);
+      ctx.beginPath();
+      const steps = skipHeavyFx ? 16 : 28;
+      for (let s = 0; s <= steps; s++) {
+        const p = s / steps;
+        const x = p * w;
+        const wave = Math.sin(p * 4.2 - t * (0.8 + v * 2.2) + r * 1.4) * (18 + v * 25);
+        const y = yBase + wave;
+        if (s === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.strokeStyle = `hsla(${352 + r * 4}, 90%, 62%, ${0.12 + v * 0.28})`;
+      ctx.lineWidth = 2.5 + v * 2.5;
+      ctx.stroke();
     }
 
-    // 3. Titanyum Asfalt Kıvılcımları (F1 Skid-Block Sparks)
-    const sparkCount = Math.min(particles.length, skipHeavyFx ? 35 : 75);
+    // 3. Yavaşça süzülen yumuşak yakut kor parçacıkları (Silky Ruby Embers)
+    const sparkCount = Math.min(particles.length, skipHeavyFx ? 25 : 50);
     for (let i = 0; i < sparkCount; i++) {
       const p = particles[i];
-      p.y += (0.004 + v * 0.045) * (0.7 + p.size * 0.25);
-      p.x += (p.x > 0.5 ? 0.0015 : -0.0015) * (1 + v * 4) + Math.sin(t * 3.5 + i) * 0.0012;
-      if (p.y > 1.05) { p.y = 0.35; p.x = 0.38 + Math.random() * 0.24; }
-      
+      p.y -= (0.0012 + v * 0.016) * (0.6 + p.size * 0.15);
+      p.x += Math.sin(t * 1.2 + p.hueOff) * 0.0008;
+      if (p.y < -0.05) { p.y = 1.05; p.x = Math.random(); }
+
       const px = p.x * w;
       const py = p.y * h;
-      const sz = 2.0 + p.size * 1.8;
-      const alpha = (0.35 + v * 0.65);
+      const sz = (1.8 + p.size * 1.4) * (0.8 + v * 0.4);
+      const alpha = 0.22 + v * 0.45;
 
-      const len = (20 + v * 70) * (py / h);
       ctx.beginPath();
-      ctx.moveTo(px, py);
-      ctx.lineTo(px + (p.x - 0.5) * len * 0.7, py + len);
-      ctx.strokeStyle = `hsla(38, 100%, 75%, ${alpha})`;
-      ctx.lineWidth = sz;
-      ctx.stroke();
+      ctx.arc(px, py, sz, 0, Math.PI * 2);
+      ctx.fillStyle = `hsla(356, 92%, 70%, ${alpha})`;
+      ctx.fill();
     }
 
-    // 4. Yarış Kadran Devir Arkı & Shift-Light Flaşörü
-    const arcR = Math.max(165, Math.min(w, h) * 0.22) + v * 60;
+    // 4. Kadran çevresinde yumuşak nefes alan kızıl halka
+    const breath = 0.5 + 0.5 * Math.sin(t * 1.8);
+    const arcR = Math.max(160, Math.min(w, h) * 0.22) + v * 40 + breath * 6;
     ctx.beginPath();
     ctx.arc(cx, cy, arcR, -Math.PI * 0.85, Math.PI * 0.85);
-    ctx.strokeStyle = `hsla(358, 100%, 65%, ${0.25 + v * 0.55})`;
-    ctx.lineWidth = 3.5 + v * 4.0;
+    ctx.strokeStyle = `hsla(355, 92%, 65%, ${0.20 + v * 0.40})`;
+    ctx.lineWidth = 2.5 + v * 2.5;
     ctx.stroke();
-
-    // Devir kesici (Shift-Light): v > 0.75 iken yarış otomobillerindeki gibi parlak yanıp söner
-    if (v > 0.75) {
-      const flash = (Math.sin(t * 22) + 1) * 0.5;
-      ctx.beginPath();
-      ctx.arc(cx, cy, arcR + 10, -Math.PI * 0.85, Math.PI * 0.85);
-      ctx.strokeStyle = `rgba(255, 30, 45, ${flash * 0.9})`;
-      ctx.lineWidth = 5;
-      ctx.stroke();
-    }
   }
 
   function drawShards(cx, cy) {
@@ -1590,68 +1576,87 @@ const Scene = (() => {
     const { cx, cy } = softBg();
     const v = renderMotion;
     const t = animT;
-    ctx.fillStyle = "#050506"; ctx.fillRect(0, 0, w, h);
-    const sky = ctx.createRadialGradient(cx, cy * 0.72, 0, cx, cy, Math.max(w, h) * 0.72);
-    sky.addColorStop(0, "#1c1c20"); sky.addColorStop(0.45, "#0c0c0e"); sky.addColorStop(1, "#030304");
-    ctx.fillStyle = sky; ctx.fillRect(0, 0, w, h);
-    softBlob(cx - w * 0.12, cy - h * 0.08, 110 + v * 40, 0, 0.08 + v * 0.06);
-    softBlob(cx + w * 0.14, cy + h * 0.06, 90 + v * 35, 210, 0.06 + v * 0.05);
-    const grains = skipHeavyFx ? 40 : Math.floor(50 + v * 90);
-    for (let i = 0; i < grains; i++) {
-      const gx = ((i * 97 + t * 28) % w + w) % w;
-      const gy = ((i * 53 + t * 13) % h + h) % h;
-      const a = 0.04 + (i % 5) * 0.015 + v * 0.02;
-      ctx.fillStyle = i % 3 === 0 ? `rgba(255,255,255,${a})` : `rgba(0,0,0,${a * 1.4})`;
-      ctx.fillRect(gx, gy, 1 + (i % 2), 1 + (i % 3));
+
+    // 1. Derin lüks siyah-karbon kadife zemin
+    ctx.fillStyle = "#080306";
+    ctx.fillRect(0, 0, w, h);
+
+    const sky = ctx.createRadialGradient(cx, cy, 50, cx, cy, Math.max(w, h) * 0.65);
+    sky.addColorStop(0, `hsla(352, 80%, 28%, ${0.28 + v * 0.25})`);
+    sky.addColorStop(0.45, `hsla(345, 65%, 14%, ${0.18 + v * 0.16})`);
+    sky.addColorStop(1, "#040103");
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, w, h);
+
+    // 2. Yumuşak nefes alan konsantrik kızıl su dalgaları (Concentric Crimson Ripples)
+    const ripples = skipHeavyFx ? 3 : 6;
+    for (let i = 0; i < ripples; i++) {
+      const phase = (t * 0.25 + i / ripples) % 1;
+      const r = Math.min(w, h) * (0.15 + phase * 0.45);
+      const a = (1 - phase) * (0.18 + v * 0.24);
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.strokeStyle = `hsla(355, 85%, 62%, ${a})`;
+      ctx.lineWidth = 2.0 - phase * 0.8;
+      ctx.stroke();
     }
-    softBlob(cx, cy + Math.min(h, w) * 0.2, 90 + v * 60, 0, 0.1 + v * 0.12);
+
+    // 3. Kadran arkasında yavaşça dalgalanan yumuşak kızıl sis aurası
+    softBlob(cx + Math.sin(t * 0.4) * 25, cy + Math.cos(t * 0.35) * 15, Math.min(w, h) * (0.26 + v * 0.18), 352, 0.18 + v * 0.18);
+    softBlob(cx - Math.sin(t * 0.3) * 20, cy - Math.cos(t * 0.4) * 12, Math.min(w, h) * (0.22 + v * 0.14), 10, 0.12 + v * 0.14);
   }
 
   function drawMiniVibrant() {
     const { cx, cy } = softBg();
     const v = renderMotion;
     const t = animT;
-    ctx.fillStyle = "#16050e"; ctx.fillRect(0, 0, w, h);
+
+    // 1. Derin gece fuşya/mor zemin
+    ctx.fillStyle = "#0c040d";
+    ctx.fillRect(0, 0, w, h);
+
+    // 2. Yumuşak harmonik sıvı ışık küreleri (Floating Luminescent Spheres)
     const discs = [
-      { x: -0.18, y: -0.12, r: 0.42, hue: 350, a: 0.45 },
-      { x: 0.22, y: -0.05, r: 0.36, hue: 18, a: 0.4 },
-      { x: -0.05, y: 0.22, r: 0.48, hue: 325, a: 0.38 },
-      { x: 0.16, y: 0.28, r: 0.32, hue: 8, a: 0.35 },
+      { x: -0.16, y: -0.10, r: 0.44, hue: 335, a: 0.35 },
+      { x: 0.18, y: -0.06, r: 0.38, hue: 15, a: 0.32 },
+      { x: -0.06, y: 0.18, r: 0.46, hue: 310, a: 0.30 },
+      { x: 0.14, y: 0.22, r: 0.35, hue: 350, a: 0.28 },
     ];
     for (let i = 0; i < discs.length; i++) {
       const d = discs[i];
-      const px = cx + w * d.x + Math.sin(t * 0.5 + i) * (4 + v * 6);
-      const py = cy + h * d.y + Math.cos(t * 0.4 + i) * (3 + v * 5);
-      const rr = Math.min(w, h) * d.r;
+      const px = cx + w * d.x + Math.sin(t * 0.6 + i * 1.5) * 24;
+      const py = cy + h * d.y + Math.cos(t * 0.5 + i * 1.2) * 20;
+      const rr = Math.min(w, h) * (d.r + v * 0.12);
       const g = ctx.createRadialGradient(px, py, 0, px, py, rr);
-      g.addColorStop(0, `hsla(${d.hue}, 92%, ${52 + v * 8}%, ${d.a})`);
-      g.addColorStop(0.55, `hsla(${d.hue - 12}, 85%, 32%, ${d.a * 0.55})`);
+      g.addColorStop(0, `hsla(${d.hue}, 90%, 62%, ${d.a + v * 0.22})`);
+      g.addColorStop(0.50, `hsla(${d.hue - 15}, 80%, 38%, ${(d.a + v * 0.22) * 0.45})`);
       g.addColorStop(1, "transparent");
-      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(px, py, rr, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(px, py, rr, 0, Math.PI * 2);
+      ctx.fill();
     }
-    const bands = [{ hue: 340, y: 0.42, a: 0.4 }, { hue: 12, y: 0.58, a: 0.35 }, { hue: 330, y: 0.72, a: 0.3 }];
-    for (let i = 0; i < bands.length; i++) {
-      const b = bands[i]; const y0 = h * b.y;
-      ctx.beginPath(); ctx.moveTo(0, y0);
-      const steps = skipHeavyFx ? 6 : 12;
+
+    // 3. İpeksi akıcı renkli aurora dalgaları (Silky Aurora Waves)
+    const waveCount = skipHeavyFx ? 3 : 5;
+    for (let i = 0; i < waveCount; i++) {
+      const yBase = cy + (i - (waveCount - 1) / 2) * (h * 0.20);
+      ctx.beginPath();
+      const steps = skipHeavyFx ? 18 : 32;
       for (let s = 0; s <= steps; s++) {
         const p = s / steps;
-        ctx.lineTo(p * w, y0 + Math.sin(p * Math.PI * 2 + t * 0.7 + i) * (14 + v * 18));
+        const x = p * w;
+        const wave = Math.sin(p * 3.8 + t * (0.8 + v * 1.8) + i * 1.2) * (20 + v * 28);
+        const y = yBase + wave;
+        if (s === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
       }
-      ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath();
-      const g = ctx.createLinearGradient(0, y0 - 30, 0, h);
-      g.addColorStop(0, `hsla(${b.hue}, 90%, 48%, ${b.a})`);
-      g.addColorStop(1, `hsla(${b.hue - 15}, 80%, 16%, ${b.a * 0.5})`);
-      ctx.fillStyle = g; ctx.fill();
+      ctx.strokeStyle = `hsla(${330 + i * 15}, 95%, 68%, ${0.16 + v * 0.26})`;
+      ctx.lineWidth = 3.0 + v * 3.0;
+      ctx.stroke();
     }
-    const barN = skipHeavyFx ? 5 : 9;
-    for (let i = 0; i < barN; i++) {
-      const bx = cx - 58 + i * 14;
-      const bh = 7 + Math.abs(Math.sin(t * 2.8 + i * 0.7)) * (10 + v * 22);
-      ctx.fillStyle = `hsla(${340 + i * 5}, 95%, 65%, ${0.28 + v * 0.25})`;
-      ctx.fillRect(bx, cy + Math.min(78, h * 0.18) - bh, 7, bh);
-    }
-    miniAmbientRing(cx, cy, 340, { r: 0.37, sat: 90, a: 0.22 });
+
+    // 4. Kadran arkasında yumuşak parlayan fuşya aurası
+    miniAmbientRing(cx, cy, 335, { r: 0.38, sat: 90, a: 0.25 });
   }
 
   function drawMiniGokart() {
@@ -1726,22 +1731,53 @@ const Scene = (() => {
     const { cx, cy } = softBg();
     const v = renderMotion;
     const t = animT;
-    ctx.fillStyle = "#031006"; ctx.fillRect(0, 0, w, h);
-    const rings = skipHeavyFx ? 5 : 8;
-    for (let i = 0; i < rings; i++) {
-      const phase = (t * 0.12 + i / rings) % 1;
-      const rr = Math.min(w, h) * (0.12 + i * 0.055) + v * 8;
-      ctx.beginPath(); ctx.arc(cx, cy, rr, 0, Math.PI * 2);
-      ctx.strokeStyle = `hsla(${112 + i * 5}, 88%, ${42 + i * 4}%, ${0.38 - i * 0.03 + v * 0.14})`;
-      ctx.lineWidth = i === 0 ? 3.5 : 1.8; ctx.stroke();
-      if (i < 3) {
-        ctx.beginPath(); ctx.arc(cx, cy, rr * (0.72 + phase * 0.28), 0, Math.PI * 2);
-        ctx.strokeStyle = `hsla(125, 100%, 62%, ${(1 - phase) * 0.14})`;
-        ctx.lineWidth = 1.4; ctx.stroke();
-      }
+
+    // 1. Dinlendirici zümrüt yeşili derin gece zemini (Gözü dinlendiren ton)
+    ctx.fillStyle = "#020c05";
+    ctx.fillRect(0, 0, w, h);
+
+    const aura = ctx.createRadialGradient(cx, cy, 50, cx, cy, Math.max(w, h) * 0.65);
+    aura.addColorStop(0, `hsla(135, 85%, 28%, ${0.28 + v * 0.24})`);
+    aura.addColorStop(0.42, `hsla(145, 75%, 15%, ${0.16 + v * 0.16})`);
+    aura.addColorStop(1, "#010502");
+    ctx.fillStyle = aura;
+    ctx.fillRect(0, 0, w, h);
+
+    // 2. Yumuşak sakin zen su dalgaları (Soft Concentric Zen Ripples)
+    const ripples = skipHeavyFx ? 4 : 7;
+    for (let i = 0; i < ripples; i++) {
+      const phase = (t * 0.22 + i / ripples) % 1;
+      const r = Math.min(w, h) * (0.12 + phase * 0.44);
+      const a = (1 - phase) * (0.22 + v * 0.26);
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.strokeStyle = `hsla(${128 + i * 4}, 90%, 65%, ${a})`;
+      ctx.lineWidth = 2.0 - phase * 0.7;
+      ctx.stroke();
     }
-    softBlob(cx, cy, 48 + v * 30, 125, 0.12 + v * 0.14);
-    softBlob(cx, cy + 110, 120 + v * 80, 118, 0.2 + v * 0.24);
+
+    // 3. Yavaşça yükselen zümrüt ışık tozları / ateş böcekleri (Bioluminescent Emerald Dust)
+    const fireflyCount = skipHeavyFx ? 25 : 55;
+    for (let i = 0; i < fireflyCount; i++) {
+      const p = particles[i % particles.length];
+      p.y -= (0.0015 + v * 0.018) * (0.5 + (i % 3) * 0.2);
+      p.x += Math.sin(t * 1.4 + i) * 0.0007;
+      if (p.y < -0.05) { p.y = 1.05; p.x = Math.random(); }
+
+      const px = p.x * w;
+      const py = p.y * h;
+      const sz = 1.8 + (i % 3) * 1.2;
+      const pulse = 0.5 + 0.5 * Math.sin(t * 2.2 + i * 1.5);
+      const alpha = (0.25 + pulse * 0.45) * (0.6 + v * 0.4);
+
+      ctx.beginPath();
+      ctx.arc(px, py, sz, 0, Math.PI * 2);
+      ctx.fillStyle = `hsla(132, 95%, 72%, ${alpha})`;
+      ctx.fill();
+    }
+
+    // 4. Kadran arkasında dinlendirici nane yeşili aurası
+    softBlob(cx, cy, Math.min(w, h) * (0.24 + v * 0.16), 130, 0.16 + v * 0.16);
   }
 
   function drawMiniBalance() {
