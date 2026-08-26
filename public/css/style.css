@@ -3782,7 +3782,7 @@ body.panel-hidden .control-dock {
 
 body.panel-hidden .panel-toggle {
   left: calc(var(--safe-left) + 18px);
-  top: calc(var(--safe-top) + 16px);
+  top: calc(var(--ad-top-h) + var(--safe-top) + 16px);
   min-width: 112px;
   border-color: rgba(0, 240, 255, 0.75);
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.6), 0 0 22px rgba(0, 240, 255, 0.4);
