@@ -487,6 +487,17 @@
       if (analogSpeedValue) analogSpeedValue.textContent = shownStr;
       if (minimalSpeedValue) minimalSpeedValue.textContent = shownStr;
       if (barsSpeedValue) barsSpeedValue.textContent = shownStr;
+
+      const digits = shownStr.length;
+      const isTriple = digits >= 3;
+      if (speedGaugeWrap) {
+        speedGaugeWrap.dataset.digits = String(digits);
+        speedGaugeWrap.classList.toggle("is-triple-digits", isTriple);
+      }
+      speedValue?.classList.toggle("is-triple-digits", isTriple);
+      minimalSpeedValue?.classList.toggle("is-triple-digits", isTriple);
+      barsSpeedValue?.classList.toggle("is-triple-digits", isTriple);
+      analogSpeedValue?.classList.toggle("is-triple-digits", isTriple);
     }
     setRing(kmh, readMaxKmh());
   }
