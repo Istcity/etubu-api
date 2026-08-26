@@ -3770,6 +3770,85 @@ body.panel-hidden .panel-toggle {
   white-space: nowrap;
 }
 
+/* —— Sağ Üst Sessize Alma / Ses Açma Butonu —— */
+.mute-toggle {
+  position: fixed;
+  top: calc(var(--ad-top-h) + var(--safe-top) + 16px);
+  right: calc(var(--safe-right) + 18px);
+  z-index: 60;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 95px;
+  height: 42px;
+  padding: 0 16px;
+  border: 1.5px solid rgba(0, 240, 255, 0.55);
+  border-radius: 21px;
+  background: rgba(8, 16, 32, 0.95);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: #00f0ff;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), 0 0 18px rgba(0, 240, 255, 0.25);
+  transition: all 0.22s ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mute-toggle:hover {
+  background: rgba(0, 240, 255, 0.18);
+  border-color: #00f0ff;
+  box-shadow: 0 6px 26px rgba(0, 0, 0, 0.55), 0 0 24px rgba(0, 240, 255, 0.5);
+  transform: translateY(-1px);
+}
+
+.mute-toggle:active {
+  transform: scale(0.95);
+}
+
+/* Sessiz Durumunda Kor Amber / Kırmızı Uyarı Işığı */
+.mute-toggle.is-muted,
+body.audio-muted .mute-toggle {
+  border-color: rgba(255, 75, 90, 0.7);
+  color: #ff4d64;
+  background: rgba(26, 10, 16, 0.95);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6), 0 0 20px rgba(255, 75, 90, 0.35);
+}
+
+.mute-toggle-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  stroke: currentColor;
+}
+
+.mute-toggle-text {
+  white-space: nowrap;
+}
+
+/* Tesla ve mobil tarayıcı uyumu */
+body.tesla-browser .mute-toggle,
+body.ephemeral-browser .mute-toggle {
+  top: max(var(--tesla-pad, 14px), 14px);
+  right: max(var(--tesla-pad, 14px), 14px);
+  z-index: 60;
+  height: 42px;
+}
+
+@media (max-width: 900px) {
+  .mute-toggle {
+    top: calc(var(--safe-top) + 14px);
+    right: calc(var(--safe-right) + 14px);
+    height: 40px;
+    padding: 0 13px;
+    font-size: 12px;
+  }
+}
+
 .control-dock .field {
   gap: 6px;
   padding: 10px 12px;
