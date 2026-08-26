@@ -702,12 +702,11 @@
   }
 
   function isPremiumUser() {
-    // Web ücretsiz: paneli kapatınca immersive sürüş herkese açık
-    return true;
+    return typeof Paywall !== "undefined" && Paywall.isAdFree();
   }
 
   function syncDriveFocus(panelHidden) {
-    // Premium + panel kapalı → yalnızca hız + tema (immersive)
+    // Sadece gerçekten ücretli/reklamsız premium kullanıcılar için drive-focus
     const focus = !!panelHidden && isPremiumUser();
     document.body.classList.toggle("drive-focus", focus);
     try {
@@ -718,6 +717,9 @@
   function setPanelHidden(hidden, persist = true) {
     document.body.classList.toggle("panel-hidden", hidden);
     syncDriveFocus(hidden);
+    if (!isPremiumUser()) {
+      Ads.showRails?.();
+    }
     const editorial = document.getElementById("siteEditorial");
     if (editorial) editorial.hidden = !!hidden;
     if (panelToggle) {
