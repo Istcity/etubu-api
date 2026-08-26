@@ -169,15 +169,14 @@ html, body {
 
 /* Hız rengi (--speed-hue) bozulmasın diye sabit tema override yok */
 
-/* Theme canvas is clipped to the speed card — slides with the dial via .speed-stage */
+/* Full-screen animated dynamic theme canvas */
 #sceneCanvas {
-  position: absolute;
+  position: fixed;
   inset: 0;
-  width: 100%;
-  height: 100%;
+  width: 100vw;
+  height: 100vh;
   z-index: 0;
   pointer-events: none;
-  border-radius: inherit;
   image-rendering: auto;
   -webkit-font-smoothing: antialiased;
 }
@@ -2638,37 +2637,7 @@ html[data-visual="deep-ocean"] .speed-hud::before {
   background: radial-gradient(circle at 50% 100%, rgba(0, 195, 255, 0.20), transparent 70%);
 }
 
-/* Hız kadranı canlı cam parıltı süpürmesi */
-.speed-gauge-wrap::after {
-  content: "";
-  position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: linear-gradient(
-    60deg,
-    transparent 42%,
-    rgba(255, 255, 255, 0.04) 48%,
-    rgba(255, 255, 255, 0.10) 50%,
-    rgba(255, 255, 255, 0.04) 52%,
-    transparent 58%
-  );
-  pointer-events: none;
-  z-index: 5;
-  animation: gaugeGlassShine 8s ease-in-out infinite;
-}
 
-@keyframes gaugeGlassShine {
-  0%, 100% {
-    transform: rotate(0deg) translateY(-15%);
-    opacity: 0.25;
-  }
-  50% {
-    transform: rotate(180deg) translateY(15%);
-    opacity: 0.65;
-  }
-}
 
 .route-brief-cities {
   display: none !important;
@@ -2708,14 +2677,9 @@ html[data-visual="deep-ocean"] .speed-hud::before {
   background: transparent;
 }
 
-/* Harita netliği kaydırıcısı yalnızca bu katmanı etkiler */
+/* Harita karartma katmanı temayı örtmesin */
 .hud-map-dim {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background: #070b12;
-  opacity: var(--map-opacity, 1);
+  display: none !important;
 }
 
 .hud-map-tiles,
