@@ -1742,98 +1742,61 @@ body.audio-muted .mode-chip {
 }
 
 /* ==========================================================================
-   Gerçeğe Yakın Otomobil Dashboard Formları (Real Automotive Cockpit Geometries)
+   Tüm Temalar İçin Kusursuz Yuvarlak 3D Otomobil Kadranı (Circular Precision)
    ========================================================================== */
 
-/* 1. Gerçekçi Spor Altıgen Dashboard (Audi RS / Lamborghini Cockpit Binnacle) —— Night City, Plasma, Warp */
-.speed-gauge-wrap[data-visual="night-city"],
-.speed-gauge-wrap[data-visual="plasma"],
+.speed-gauge-wrap,
+.speed-gauge-wrap[data-visual] {
+  border-radius: 50% !important;
+  aspect-ratio: 1 !important;
+  clip-path: none !important;
+}
+
+.speed-gauge-wrap::before,
+.speed-gauge-wrap[data-visual]::before {
+  border-radius: 50% !important;
+  clip-path: none !important;
+  inset: -10px;
+}
+
+/* Temaya özel lüks iç kadran ambiyansları */
+.speed-gauge-wrap[data-visual="redline"] {
+  background: radial-gradient(circle at 50% 45%, rgba(38, 8, 14, 0.72) 0%, rgba(10, 4, 6, 0.96) 80%);
+}
+
+.speed-gauge-wrap[data-visual="night-city"] {
+  background: radial-gradient(circle at 50% 50%, rgba(18, 12, 32, 0.75) 0%, rgba(8, 6, 16, 0.96) 80%);
+}
+
+.speed-gauge-wrap[data-visual="plasma"] {
+  background: radial-gradient(circle at 50% 50%, rgba(12, 22, 38, 0.75) 0%, rgba(6, 10, 20, 0.96) 80%);
+}
+
 .speed-gauge-wrap[data-visual="warp"] {
-  border-radius: 20px !important;
-  aspect-ratio: 1.14;
-  clip-path: polygon(10% 0%, 90% 0%, 100% 20%, 100% 80%, 90% 100%, 10% 100%, 0% 80%, 0% 20%);
-  background: radial-gradient(circle at 50% 50%, rgba(18, 14, 32, 0.85) 0%, rgba(8, 6, 16, 0.96) 85%);
-  box-shadow:
-    0 32px 64px -10px rgba(0, 0, 0, 0.95),
-    0 0 0 2px hsla(var(--gauge-hue), 90%, 65%, 0.45),
-    0 0 35px hsla(var(--gauge-hue), 95%, 55%, 0.28);
+  background: radial-gradient(circle at 50% 50%, rgba(10, 16, 32, 0.75) 0%, rgba(4, 8, 18, 0.96) 80%);
 }
 
-.speed-gauge-wrap[data-visual="night-city"]::before,
-.speed-gauge-wrap[data-visual="plasma"]::before,
-.speed-gauge-wrap[data-visual="warp"]::before {
-  border-radius: 20px !important;
-  clip-path: polygon(10% 0%, 90% 0%, 100% 20%, 100% 80%, 90% 100%, 10% 100%, 0% 80%, 0% 20%);
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.26) 0%, transparent 42%, rgba(0, 240, 255, 0.18) 100%);
-  border: 2px solid hsla(var(--gauge-hue), 95%, 65%, 0.65);
-  inset: -6px;
-}
-
-/* 2. Gerçekçi Yuvarlak Hatlı Dikdörtgen Dashboard (BMW Curved Display / Mercedes MBUX / Tesla Screen) —— Canlı, Neon, Matrix, Redline, Gokart */
 .speed-gauge-wrap[data-visual="mini-vibrant"],
-.speed-gauge-wrap[data-visual="neon"],
-.speed-gauge-wrap[data-visual="matrix"],
-.speed-gauge-wrap[data-visual="redline"],
-.speed-gauge-wrap[data-visual="mini-gokart"] {
-  border-radius: 28px !important;
-  aspect-ratio: 1.15;
-  clip-path: none !important;
-  background: radial-gradient(circle at 50% 45%, rgba(18, 22, 34, 0.82) 0%, rgba(6, 8, 14, 0.96) 85%);
-  border: 1.5px solid hsla(var(--gauge-hue), 85%, 60%, 0.45);
-  box-shadow:
-    0 32px 64px -10px rgba(0, 0, 0, 0.95),
-    inset 0 3px 6px rgba(255, 255, 255, 0.22),
-    inset 0 -8px 20px rgba(0, 0, 0, 0.85),
-    0 0 0 2px hsla(var(--gauge-hue), 90%, 65%, 0.35),
-    0 0 40px hsla(var(--gauge-hue), 95%, 55%, 0.25);
+.speed-gauge-wrap[data-visual="neon"] {
+  background: radial-gradient(circle at 50% 50%, rgba(22, 10, 30, 0.72) 0%, rgba(8, 6, 14, 0.96) 80%);
 }
 
-.speed-gauge-wrap[data-visual="mini-vibrant"]::before,
-.speed-gauge-wrap[data-visual="neon"]::before,
-.speed-gauge-wrap[data-visual="matrix"]::before,
-.speed-gauge-wrap[data-visual="redline"]::before,
-.speed-gauge-wrap[data-visual="mini-gokart"]::before {
-  border-radius: 30px !important;
-  clip-path: none !important;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.20) 0%, transparent 45%, rgba(0, 0, 0, 0.75) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  inset: -6px;
+.speed-gauge-wrap[data-visual="alev"] {
+  background: radial-gradient(circle at 50% 45%, rgba(36, 16, 6, 0.72) 0%, rgba(12, 6, 4, 0.96) 80%);
 }
 
-/* Redline ve Gokart için üst spor yarış çizgisi */
-.speed-gauge-wrap[data-visual="redline"],
-.speed-gauge-wrap[data-visual="mini-gokart"] {
-  border-top: 3px solid #ff2b43 !important;
+.speed-gauge-wrap[data-visual="bayrak"] {
+  background: radial-gradient(circle at 50% 45%, rgba(32, 8, 12, 0.70) 0%, rgba(10, 4, 6, 0.96) 80%);
 }
 
-/* 3. Klasik Yuvarlak Otomobil Göstergesi (Porsche 911 / Swiss Chrono Pod) —— Zamansız, Yeşil, Deep Ocean, Yıldız, Alev, Bayrak, Denge, Kişisel, Glow */
 .speed-gauge-wrap[data-visual="mini-timeless"],
 .speed-gauge-wrap[data-visual="mini-green"],
 .speed-gauge-wrap[data-visual="deep-ocean"],
 .speed-gauge-wrap[data-visual="yildiz"],
 .speed-gauge-wrap[data-visual="mini-personal"],
 .speed-gauge-wrap[data-visual="mini-balance"],
-.speed-gauge-wrap[data-visual="glow"],
-.speed-gauge-wrap[data-visual="alev"],
-.speed-gauge-wrap[data-visual="bayrak"] {
-  border-radius: 50% !important;
-  aspect-ratio: 1 !important;
-  clip-path: none !important;
+.speed-gauge-wrap[data-visual="glow"] {
   background: radial-gradient(circle at 50% 45%, rgba(16, 24, 38, 0.65) 0%, rgba(6, 10, 18, 0.94) 80%);
-}
-
-.speed-gauge-wrap[data-visual="mini-timeless"]::before,
-.speed-gauge-wrap[data-visual="mini-green"]::before,
-.speed-gauge-wrap[data-visual="deep-ocean"]::before,
-.speed-gauge-wrap[data-visual="yildiz"]::before,
-.speed-gauge-wrap[data-visual="mini-personal"]::before,
-.speed-gauge-wrap[data-visual="mini-balance"]::before,
-.speed-gauge-wrap[data-visual="glow"]::before,
-.speed-gauge-wrap[data-visual="alev"]::before,
-.speed-gauge-wrap[data-visual="bayrak"]::before {
-  border-radius: 50% !important;
-  clip-path: none !important;
-  inset: -10px;
 }
 
 .gauge-screen {
