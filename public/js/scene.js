@@ -545,57 +545,59 @@ const Scene = (() => {
     // 1. Derin kadife kırmızı yarış kokpiti zemini (Gözü yormayan yumuşak akkor)
     const rlineR = Math.max(w, h) * (0.42 + v * 0.28);
     const g = ctx.createRadialGradient(cx, cy, 60, cx, cy, rlineR);
-    g.addColorStop(0, `hsla(355, 85%, 42%, ${0.24 + v * 0.26})`);
-    g.addColorStop(0.40, `hsla(12, 80%, 28%, ${0.14 + v * 0.18})`);
-    g.addColorStop(0.80, `hsla(355, 70%, 10%, ${0.06 + v * 0.08})`);
+    g.addColorStop(0, `hsla(355, 85%, 42%, ${0.20 + v * 0.20})`);
+    g.addColorStop(0.40, `hsla(12, 80%, 28%, ${0.12 + v * 0.14})`);
+    g.addColorStop(0.80, `hsla(355, 70%, 10%, ${0.05 + v * 0.06})`);
     g.addColorStop(1, "transparent");
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, w, h);
 
-    // 2. Yumuşak akıcı aerodinamik kırmızı şeritler (Gözü yormayan yumuşak dalgalar)
-    const ribbons = skipHeavyFx ? 3 : 5;
+    // 2. Çok yavaş, pürüzsüz ve sakin aerodinamik rüzgar tüneli çizgileri (Soft & Silky Redline)
+    // Kullanıcı İsteği: "redlinedaki çizgileri daha yavaş daha soft yap çok karmaşık ve hızlı"
+    const ribbons = skipHeavyFx ? 2 : 3;
     for (let r = 0; r < ribbons; r++) {
-      const yBase = cy + (r - (ribbons - 1) / 2) * (h * 0.22);
+      const yBase = cy + (r - (ribbons - 1) / 2) * (h * 0.26);
       ctx.beginPath();
-      const steps = skipHeavyFx ? 16 : 28;
+      const steps = skipHeavyFx ? 20 : 36;
       for (let s = 0; s <= steps; s++) {
         const p = s / steps;
         const x = p * w;
-        const wave = Math.sin(p * 4.2 - t * (0.8 + v * 2.2) + r * 1.4) * (18 + v * 25);
+        // Çok yavaş akış (t * 0.28), uzun aerodinamik dalga boyu (p * 1.8), yumuşak kavis
+        const wave = Math.sin(p * 1.8 - t * (0.26 + v * 0.50) + r * 1.6) * (8 + v * 10);
         const y = yBase + wave;
         if (s === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
       }
-      ctx.strokeStyle = `hsla(${352 + r * 4}, 90%, 62%, ${0.12 + v * 0.28})`;
-      ctx.lineWidth = 2.5 + v * 2.5;
+      ctx.strokeStyle = `hsla(${352 + r * 5}, 86%, 62%, ${0.07 + v * 0.12})`;
+      ctx.lineWidth = 1.8 + v * 1.4;
       ctx.stroke();
     }
 
-    // 3. Yavaşça süzülen yumuşak yakut kor parçacıkları (Silky Ruby Embers)
-    const sparkCount = Math.min(particles.length, skipHeavyFx ? 25 : 50);
+    // 3. Çok yavaşça süzülen sakin akkor parçacıklar
+    const sparkCount = Math.min(particles.length, skipHeavyFx ? 12 : 20);
     for (let i = 0; i < sparkCount; i++) {
       const p = particles[i];
-      p.y -= (0.0012 + v * 0.016) * (0.6 + p.size * 0.15);
-      p.x += Math.sin(t * 1.2 + p.hueOff) * 0.0008;
+      p.y -= (0.0004 + v * 0.004) * (0.6 + p.size * 0.15);
+      p.x += Math.sin(t * 0.8 + p.hueOff) * 0.0004;
       if (p.y < -0.05) { p.y = 1.05; p.x = Math.random(); }
 
       const px = p.x * w;
       const py = p.y * h;
-      const sz = (1.8 + p.size * 1.4) * (0.8 + v * 0.4);
-      const alpha = 0.22 + v * 0.45;
+      const sz = (1.4 + p.size * 1.1) * (0.8 + v * 0.3);
+      const alpha = 0.12 + v * 0.22;
 
       ctx.beginPath();
       ctx.arc(px, py, sz, 0, Math.PI * 2);
-      ctx.fillStyle = `hsla(356, 92%, 70%, ${alpha})`;
+      ctx.fillStyle = `hsla(356, 90%, 68%, ${alpha})`;
       ctx.fill();
     }
 
-    // 4. Kadran çevresinde yumuşak nefes alan kızıl halka
-    const breath = 0.5 + 0.5 * Math.sin(t * 1.8);
-    const arcR = Math.max(160, Math.min(w, h) * 0.22) + v * 40 + breath * 6;
+    // 4. Kadran çevresinde yumuşak nefes alan sakin kızıl halka
+    const breath = 0.5 + 0.5 * Math.sin(t * 1.2);
+    const arcR = Math.max(160, Math.min(w, h) * 0.22) + v * 25 + breath * 4;
     ctx.beginPath();
     ctx.arc(cx, cy, arcR, -Math.PI * 0.85, Math.PI * 0.85);
-    ctx.strokeStyle = `hsla(355, 92%, 65%, ${0.20 + v * 0.40})`;
-    ctx.lineWidth = 2.5 + v * 2.5;
+    ctx.strokeStyle = `hsla(355, 90%, 64%, ${0.14 + v * 0.24})`;
+    ctx.lineWidth = 2.0 + v * 1.5;
     ctx.stroke();
   }
 
