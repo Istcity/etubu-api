@@ -27,6 +27,107 @@
   --ad-bottom-h: 92px;
   --ad-side-w: 0px;
   --ad-middle-h: 0px;
+
+  /* —— Tema Tipografisi (Hız Rakamları ve Metin Karakterleri) —— */
+  --theme-num-font: "Orbitron", sans-serif;
+  --theme-num-weight: 800;
+  --theme-num-style: normal;
+  --theme-num-spacing: -0.02em;
+  --theme-txt-font: "Orbitron", sans-serif;
+  --theme-txt-spacing: 0.22em;
+}
+
+/* 1. ALEV: Agresif İtalik Motorsport Rakamları (Chakra Petch) */
+html[data-visual="alev"],
+.speed-gauge-wrap[data-visual="alev"] {
+  --theme-num-font: "Chakra Petch", sans-serif;
+  --theme-num-weight: 700;
+  --theme-num-style: italic;
+  --theme-num-spacing: -0.01em;
+  --theme-txt-font: "Chakra Petch", sans-serif;
+  --theme-txt-spacing: 0.18em;
+}
+
+/* 2. REDLINE & TUNNEL: Yüksek Hız Telemetrisi & Yarış (Chakra Petch) */
+html[data-visual="redline"],
+.speed-gauge-wrap[data-visual="redline"],
+html[data-visual="tunnel"],
+.speed-gauge-wrap[data-visual="tunnel"] {
+  --theme-num-font: "Chakra Petch", sans-serif;
+  --theme-num-weight: 700;
+  --theme-num-style: normal;
+  --theme-num-spacing: 0;
+  --theme-txt-font: "Chakra Petch", sans-serif;
+  --theme-txt-spacing: 0.16em;
+}
+
+/* 3. YILDIZ (Cosmos): Havacılık & Uzay Aviyonik Göstergesi (Share Tech Mono) */
+html[data-visual="yildiz"],
+.speed-gauge-wrap[data-visual="yildiz"] {
+  --theme-num-font: "Share Tech Mono", monospace;
+  --theme-num-weight: 700;
+  --theme-num-style: normal;
+  --theme-num-spacing: 0.02em;
+  --theme-txt-font: "Share Tech Mono", monospace;
+  --theme-txt-spacing: 0.18em;
+}
+
+/* 4. DEEP OCEAN & MINI TIMELESS: Lüks GT Kokpit (Rajdhani) */
+html[data-visual="deep-ocean"],
+.speed-gauge-wrap[data-visual="deep-ocean"],
+html[data-visual="mini-timeless"],
+.speed-gauge-wrap[data-visual="mini-timeless"] {
+  --theme-num-font: "Rajdhani", sans-serif;
+  --theme-num-weight: 700;
+  --theme-num-style: normal;
+  --theme-num-spacing: 0.01em;
+  --theme-txt-font: "Rajdhani", sans-serif;
+  --theme-txt-spacing: 0.24em;
+}
+
+/* 5. NIGHT CITY: Fütüristik Geniş Siber Kokpit (Michroma) */
+html[data-visual="night-city"],
+.speed-gauge-wrap[data-visual="night-city"] {
+  --theme-num-font: "Michroma", sans-serif;
+  --theme-num-weight: 400;
+  --theme-num-style: normal;
+  --theme-num-spacing: -0.04em;
+  --theme-txt-font: "Michroma", sans-serif;
+  --theme-txt-spacing: 0.28em;
+}
+
+/* 6. BAYRAK & MINI VIBRANT: Modern Aerodinamik & Elektro (Space Grotesk) */
+html[data-visual="bayrak"],
+.speed-gauge-wrap[data-visual="bayrak"],
+html[data-visual="mini-vibrant"],
+.speed-gauge-wrap[data-visual="mini-vibrant"],
+html[data-visual="mini-personal"],
+.speed-gauge-wrap[data-visual="mini-personal"],
+html[data-visual="mini-green"],
+.speed-gauge-wrap[data-visual="mini-green"] {
+  --theme-num-font: "Space Grotesk", sans-serif;
+  --theme-num-weight: 700;
+  --theme-num-style: normal;
+  --theme-num-spacing: -0.03em;
+  --theme-txt-font: "Space Grotesk", sans-serif;
+  --theme-txt-spacing: 0.18em;
+}
+
+/* 7. NEON, PLASMA, WARP, GLOW: İkonik Dijital Cyber EV (Orbitron) */
+html[data-visual="neon"],
+.speed-gauge-wrap[data-visual="neon"],
+html[data-visual="plasma"],
+.speed-gauge-wrap[data-visual="plasma"],
+html[data-visual="warp"],
+.speed-gauge-wrap[data-visual="warp"],
+html[data-visual="glow"],
+.speed-gauge-wrap[data-visual="glow"] {
+  --theme-num-font: "Orbitron", sans-serif;
+  --theme-num-weight: 800;
+  --theme-num-style: normal;
+  --theme-num-spacing: -0.02em;
+  --theme-txt-font: "Orbitron", sans-serif;
+  --theme-txt-spacing: 0.22em;
 }
 
 body.ads-ready {
@@ -1602,9 +1703,10 @@ body.audio-muted .mode-chip {
   width: 2.6em;
   margin-left: -1.3em;
   text-align: center;
-  font-family: "Orbitron", sans-serif;
+  font-family: var(--theme-num-font, "Orbitron", sans-serif);
   font-size: clamp(10px, 2.6vw, 13px);
   font-weight: 600;
+  font-style: var(--theme-num-style, normal);
   color: hsla(var(--gauge-hue), 75%, 78%, 0.9);
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
   transform:
@@ -1678,9 +1780,10 @@ body.audio-muted .mode-chip {
 }
 
 .analog-number {
-  font-family: "Orbitron", sans-serif;
+  font-family: var(--theme-num-font, "Orbitron", sans-serif);
   font-size: clamp(43px, 12.5vw, 66px);
-  font-weight: 700;
+  font-weight: var(--theme-num-weight, 700);
+  font-style: var(--theme-num-style, normal);
   color: var(--gauge-accent);
   text-shadow: 0 0 16px hsla(var(--gauge-hue), 90%, 55%, 0.45);
   font-variant-numeric: tabular-nums;
@@ -1688,11 +1791,12 @@ body.audio-muted .mode-chip {
 }
 
 .analog-unit {
-  font-family: "Orbitron", sans-serif;
+  font-family: var(--theme-txt-font, "Orbitron", sans-serif);
   font-size: 14px;
-  letter-spacing: 0.18em;
+  letter-spacing: var(--theme-txt-spacing, 0.18em);
   color: var(--text-dim);
   margin-top: 2px;
+  text-transform: uppercase;
 }
 
 /* —— Minimal ekran —— */
@@ -1725,11 +1829,12 @@ body.audio-muted .mode-chip {
 .minimal-number {
   position: relative;
   z-index: 1;
-  font-family: "Orbitron", sans-serif;
+  font-family: var(--theme-num-font, "Orbitron", sans-serif);
   font-size: clamp(113px, 34vw, 199px);
-  font-weight: 800;
+  font-weight: var(--theme-num-weight, 800);
+  font-style: var(--theme-num-style, normal);
   line-height: 0.9;
-  letter-spacing: -0.03em;
+  letter-spacing: var(--theme-num-spacing, -0.03em);
   color: #fff;
   filter: none;
   text-shadow:
@@ -1739,12 +1844,13 @@ body.audio-muted .mode-chip {
 }
 
 .minimal-unit {
-  font-family: "Orbitron", sans-serif;
+  font-family: var(--theme-txt-font, "Orbitron", sans-serif);
   font-size: clamp(18px, 4.5vw, 26px);
   font-weight: 600;
-  letter-spacing: 0.22em;
+  letter-spacing: var(--theme-txt-spacing, 0.22em);
   color: var(--gauge-accent);
   margin-top: 6px;
+  text-transform: uppercase;
 }
 
 /* —— Ekran 4: yan barlı dijital —— */
@@ -1832,11 +1938,12 @@ body.audio-muted .mode-chip {
 .bars-number {
   position: relative;
   z-index: 1;
-  font-family: "Orbitron", sans-serif;
+  font-family: var(--theme-num-font, "Orbitron", sans-serif);
   font-size: clamp(86px, 24vw, 154px);
-  font-weight: 800;
+  font-weight: var(--theme-num-weight, 800);
+  font-style: var(--theme-num-style, normal);
   line-height: 0.9;
-  letter-spacing: -0.03em;
+  letter-spacing: var(--theme-num-spacing, -0.03em);
   color: #fff;
   background: linear-gradient(180deg, #fff 0%, var(--gauge-accent, var(--cyan)) 55%, var(--gauge-hot, var(--magenta)) 100%);
   -webkit-background-clip: text;
@@ -1850,12 +1957,13 @@ body.audio-muted .mode-chip {
 }
 
 .bars-unit {
-  font-family: "Orbitron", sans-serif;
+  font-family: var(--theme-txt-font, "Orbitron", sans-serif);
   font-size: clamp(16px, 4vw, 24px);
   font-weight: 600;
-  letter-spacing: 0.2em;
+  letter-spacing: var(--theme-txt-spacing, 0.2em);
   color: var(--text-dim);
   margin-top: 6px;
+  text-transform: uppercase;
 }
 
 .gauge-dots {
@@ -2012,9 +2120,10 @@ body.audio-muted .mode-chip {
 }
 
 .avg-speed-value {
-  font-family: "Orbitron", sans-serif;
+  font-family: var(--theme-num-font, "Orbitron", sans-serif);
   font-size: clamp(18px, 4.5vw, 24px);
   font-weight: 700;
+  font-style: var(--theme-num-style, normal);
   color: var(--gauge-accent, var(--cyan));
   font-variant-numeric: tabular-nums;
   line-height: 1;
@@ -2110,11 +2219,12 @@ body.audio-muted .mode-chip {
 .speed-number {
   position: relative;
   z-index: 1;
-  font-family: "Orbitron", sans-serif;
+  font-family: var(--theme-num-font, "Orbitron", sans-serif);
   font-size: clamp(96px, 26vw, 160px);
-  font-weight: 800;
+  font-weight: var(--theme-num-weight, 800);
+  font-style: var(--theme-num-style, normal);
   line-height: .9;
-  letter-spacing: -.02em;
+  letter-spacing: var(--theme-num-spacing, -.02em);
   background: linear-gradient(180deg, #ffffff 20%, #e0f7ff 65%, #00f0ff 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -2123,16 +2233,17 @@ body.audio-muted .mode-chip {
   text-shadow: 0 12px 28px rgba(0, 0, 0, 0.9), 0 0 28px rgba(0, 240, 255, 0.45);
   font-variant-numeric: tabular-nums;
   transform: translateZ(22px);
-  transition: text-shadow 0.25s ease, background 0.35s ease;
+  transition: text-shadow 0.25s ease, background 0.35s ease, font-family 0.25s ease;
 }
 
 .speed-unit {
-  font-family: "Orbitron", sans-serif;
+  font-family: var(--theme-txt-font, "Orbitron", sans-serif);
   font-size: clamp(16px, 4vw, 22px);
   font-weight: 600;
-  letter-spacing: .25em;
+  letter-spacing: var(--theme-txt-spacing, .25em);
   color: rgba(0, 240, 255, 0.75);
   margin-top: 6px;
+  text-transform: uppercase;
 }
 
 /* —— Theme → gauge link (all screens inherit --gauge-hue / accents) —— */
