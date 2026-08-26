@@ -1636,7 +1636,7 @@ body.audio-muted .mode-chip {
     0 0 0 2px hsla(var(--gauge-hue), 90%, 65%, 0.45),
     0 0 45px hsla(var(--gauge-hue), 95%, 55%, 0.32);
   filter: drop-shadow(0 24px 42px rgba(0, 0, 0, 0.92));
-  transition: transform 0.38s cubic-bezier(0.2, 0.9, 0.3, 1), box-shadow 0.35s ease, filter 0.35s ease;
+  transition: border-radius 0.45s ease, clip-path 0.45s ease, transform 0.38s cubic-bezier(0.2, 0.9, 0.3, 1), box-shadow 0.35s ease, filter 0.35s ease, background 0.4s ease;
   will-change: transform;
 }
 
@@ -1645,7 +1645,7 @@ body.audio-muted .mode-chip {
   content: "";
   position: absolute;
   inset: -10px;
-  border-radius: 50%;
+  border-radius: inherit;
   background: radial-gradient(circle at 32% 18%, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0.08) 32%, rgba(10, 14, 24, 0.92) 72%);
   box-shadow:
     0 8px 24px rgba(0, 0, 0, 0.9),
@@ -1654,6 +1654,7 @@ body.audio-muted .mode-chip {
     0 0 0 2px rgba(255, 255, 255, 0.15);
   pointer-events: none;
   z-index: 2;
+  transition: border-radius 0.45s ease, clip-path 0.45s ease, background 0.4s ease, border-color 0.4s ease, inset 0.4s ease;
 }
 
 /* Geçişlerde yuvarlak kadranın 3D dönme ve öne fırlama animasyonu */
@@ -1683,6 +1684,86 @@ body.audio-muted .mode-chip {
 
 .speed-gauge-wrap.is-spinning-3d {
   animation: gauge3DSpin 0.72s cubic-bezier(0.34, 1.35, 0.64, 1) forwards;
+}
+
+/* ==========================================================================
+   Farklı Geometrilere Sahip Kadran Formları (Temaya Özel 3D Form Mimarisi)
+   ========================================================================== */
+
+/* 1. Siber / Fütüristik Geometrik Kadran (Altıgen / Octagon Bezel) —— Night City, Plasma, Warp */
+.speed-gauge-wrap[data-visual="night-city"],
+.speed-gauge-wrap[data-visual="plasma"],
+.speed-gauge-wrap[data-visual="warp"] {
+  border-radius: 0 !important;
+  clip-path: polygon(24% 2%, 76% 2%, 98% 24%, 98% 76%, 76% 98%, 24% 98%, 2% 76%, 2% 24%);
+  background: radial-gradient(circle at 50% 50%, rgba(20, 14, 38, 0.75) 0%, rgba(8, 6, 16, 0.94) 80%);
+}
+
+.speed-gauge-wrap[data-visual="night-city"]::before,
+.speed-gauge-wrap[data-visual="plasma"]::before,
+.speed-gauge-wrap[data-visual="warp"]::before {
+  border-radius: 0 !important;
+  clip-path: polygon(24% 2%, 76% 2%, 98% 24%, 98% 76%, 76% 98%, 24% 98%, 2% 76%, 2% 24%);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.32) 0%, transparent 40%, rgba(0, 240, 255, 0.22) 100%);
+  border: 2px solid hsla(var(--gauge-hue), 95%, 65%, 0.65);
+  inset: -4px;
+}
+
+/* 2. GT3 / F1 Yarış Kapsülü (Cockpit Curved Capsule) —— Redline, Mini-Gokart */
+.speed-gauge-wrap[data-visual="redline"],
+.speed-gauge-wrap[data-visual="mini-gokart"] {
+  border-radius: 46px 46px 28px 28px !important;
+  background: radial-gradient(circle at 50% 40%, rgba(48, 10, 18, 0.70) 0%, rgba(14, 5, 8, 0.94) 85%);
+  border-top: 3px solid #ff2b43;
+}
+
+.speed-gauge-wrap[data-visual="redline"]::before,
+.speed-gauge-wrap[data-visual="mini-gokart"]::before {
+  border-radius: 48px 48px 30px 30px !important;
+  background: linear-gradient(180deg, rgba(255, 50, 60, 0.28) 0%, transparent 45%, rgba(0, 0, 0, 0.85) 100%);
+  border: 1.5px solid rgba(255, 40, 50, 0.48);
+}
+
+/* 3. Süpersonik Kalkan / Jet Nozzle (Aerodynamic Shield) —— Alev, Bayrak */
+.speed-gauge-wrap[data-visual="alev"],
+.speed-gauge-wrap[data-visual="bayrak"] {
+  border-radius: 48% 48% 32% 32% / 54% 54% 36% 36% !important;
+  background: radial-gradient(circle at 50% 35%, rgba(44, 22, 8, 0.68) 0%, rgba(12, 6, 4, 0.94) 80%);
+}
+
+.speed-gauge-wrap[data-visual="alev"]::before,
+.speed-gauge-wrap[data-visual="bayrak"]::before {
+  border-radius: 48% 48% 32% 32% / 54% 54% 36% 36% !important;
+  background: radial-gradient(circle at 35% 20%, rgba(255, 140, 40, 0.32) 0%, transparent 50%, rgba(0, 0, 0, 0.85) 90%);
+  border: 1.5px solid hsla(var(--gauge-hue), 95%, 60%, 0.48);
+}
+
+/* 4. Lüks EV Squircle (Porsche-Lotus Kavisli Kare) —— Mini-Vibrant, Neon, Matrix */
+.speed-gauge-wrap[data-visual="mini-vibrant"],
+.speed-gauge-wrap[data-visual="neon"],
+.speed-gauge-wrap[data-visual="matrix"] {
+  border-radius: 28% !important;
+  background: radial-gradient(circle at 50% 50%, rgba(28, 10, 34, 0.68) 0%, rgba(8, 6, 12, 0.92) 80%);
+}
+
+.speed-gauge-wrap[data-visual="mini-vibrant"]::before,
+.speed-gauge-wrap[data-visual="neon"]::before,
+.speed-gauge-wrap[data-visual="matrix"]::before {
+  border-radius: 28% !important;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.28) 0%, transparent 45%, rgba(255, 0, 128, 0.22) 100%);
+  border: 1.5px solid hsla(var(--gauge-hue), 90%, 65%, 0.48);
+}
+
+/* 5. Klasik Kronometre Yuvarlak (Swiss Circle) —— Mini-Timeless, Mini-Green, Deep Ocean, Yildiz, Glow */
+.speed-gauge-wrap[data-visual="mini-timeless"],
+.speed-gauge-wrap[data-visual="mini-green"],
+.speed-gauge-wrap[data-visual="deep-ocean"],
+.speed-gauge-wrap[data-visual="yildiz"],
+.speed-gauge-wrap[data-visual="mini-personal"],
+.speed-gauge-wrap[data-visual="mini-balance"],
+.speed-gauge-wrap[data-visual="glow"] {
+  border-radius: 50% !important;
+  background: radial-gradient(circle at 50% 45%, rgba(16, 24, 38, 0.62) 0%, rgba(6, 10, 18, 0.94) 80%);
 }
 
 .gauge-screen {
