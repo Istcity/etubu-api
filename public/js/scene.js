@@ -322,36 +322,29 @@ const Scene = (() => {
     advanceMotion();
     const motion = renderMotion;
     const base = viewCenter();
-    const idle = motion < 0.025;
-    swayX = 0; swayY = 0;
-    shake *= 0.9;
     const cx = base.cx;
     const cy = base.cy;
-    ctx.fillStyle = "#03050e";
+
+    // Sade, derin ve modern zemin
+    ctx.fillStyle = "#060812";
     ctx.fillRect(0, 0, w, h);
-    const layers = skipHeavyFx || idle
-      ? [{ x: cx, y: cy * 0.84, r: Math.max(w, h) * 0.58, h: 0, l: 11 + motion * 3, a: idle ? 0.32 : 0.42 },
-         { x: cx + w * 0.1, y: cy - h * 0.05, r: Math.max(w, h) * 0.4, h: 12, l: 12 + motion * 2, a: idle ? 0.1 : 0.16 }]
-      : [{ x: cx, y: cy * 0.84, r: Math.max(w, h) * 0.58, h: 0, l: 11 + motion * 3, a: 0.44 },
-         { x: cx - w * 0.14, y: cy + h * 0.04, r: Math.max(w, h) * 0.38, h: -10, l: 12 + motion * 2, a: 0.14 },
-         { x: cx + w * 0.12, y: cy - h * 0.06, r: Math.max(w, h) * 0.42, h: 12, l: 12 + motion * 2.5, a: 0.15 }];
-    for (const L of layers) {
-      const g = ctx.createRadialGradient(L.x, L.y, 0, L.x, L.y, L.r);
-      g.addColorStop(0, `hsla(${themeHue + L.h}, 68%, ${L.l}%, ${L.a})`);
-      g.addColorStop(0.5, `hsla(${themeHue + L.h + 8}, 55%, ${L.l * 0.55}%, ${L.a * 0.28})`);
-      g.addColorStop(1, "transparent");
-      ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
-    }
-    if (!idle) {
-      const breath = 0.5 + 0.5 * Math.sin(animT * 1.1);
-      const orbR = 70 + motion * 180 + breath * 16;
-      const orb = ctx.createRadialGradient(cx, cy, 0, cx, cy, orbR);
-      orb.addColorStop(0, `hsla(${themeHue}, 88%, ${48 + motion * 14}%, ${0.14 + motion * 0.24})`);
-      orb.addColorStop(0.45, `hsla(${themeHue + 22}, 72%, 42%, ${0.06 + motion * 0.1})`);
-      orb.addColorStop(1, "transparent");
-      ctx.fillStyle = orb; ctx.fillRect(0, 0, w, h);
-      drawSpeedColorExpand(cx, cy, motion);
-    }
+
+    // Gösterge arkasında hıza göre genişleyen ve parlayan pürüzsüz ambiyans aurası
+    const breath = 0.5 + 0.5 * Math.sin(animT * 0.9);
+    const auraR = Math.max(w, h) * (0.34 + motion * 0.28) + breath * 16;
+    const auraHue = themeHue || 195;
+    const aura = ctx.createRadialGradient(cx, cy, 0, cx, cy, auraR);
+    
+    const lightness = 22 + motion * 24;
+    const alpha = 0.16 + motion * 0.22;
+    aura.addColorStop(0, `hsla(${auraHue}, 90%, ${lightness}%, ${alpha})`);
+    aura.addColorStop(0.42, `hsla(${auraHue + 15}, 80%, ${lightness * 0.55}%, ${alpha * 0.35})`);
+    aura.addColorStop(0.85, `hsla(${auraHue + 30}, 65%, 8%, ${alpha * 0.08})`);
+    aura.addColorStop(1, "transparent");
+    
+    ctx.fillStyle = aura;
+    ctx.fillRect(0, 0, w, h);
+
     renderMotion = motion;
     return { cx, cy, motion };
   }
@@ -427,51 +420,49 @@ const Scene = (() => {
     }
   }
 
-  // ─── PREMIUM WARP STREAKS ───
+  // ─── MODERN AERODYNAMIC SPEED STREAKS ───
   function drawWarpStreaks(cx, cy, motion) {
-    const n = Math.floor(24 + motion * 40);
+    const n = Math.floor(22 + motion * 38);
     const t = animT;
     for (let i = 0; i < n; i++) {
-      const ang = (i / n) * Math.PI * 2 + t * (0.1 + motion * 0.3);
-      const innerR = 20 + (i % 6) * 4;
-      const len = 30 + motion * 280 * (0.4 + (i % 7) / 7);
+      const ang = (i / n) * Math.PI * 2 + t * (0.04 + motion * 0.22);
+      const innerR = 75 + motion * 35;
+      const len = 45 + motion * 280 * (0.4 + (i % 5) / 5);
       const x0 = cx + Math.cos(ang) * innerR;
       const y0 = cy + Math.sin(ang) * innerR;
       const x1 = cx + Math.cos(ang) * (innerR + len);
       const y1 = cy + Math.sin(ang) * (innerR + len);
       const g = ctx.createLinearGradient(x0, y0, x1, y1);
-      g.addColorStop(0, `hsla(${themeHue + i * 3}, 80%, 70%, 0)`);
-      g.addColorStop(0.4, `hsla(${themeHue + i * 3}, 90%, 75%, ${0.08 + motion * 0.4})`);
-      g.addColorStop(1, `hsla(${themeHue + i * 3 + 20}, 95%, 85%, ${0.15 + motion * 0.5})`);
-      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1);
-      ctx.strokeStyle = g; ctx.lineWidth = 1 + motion * 2.5; ctx.stroke();
+      g.addColorStop(0, `hsla(${themeHue}, 85%, 70%, 0)`);
+      g.addColorStop(0.3, `hsla(${themeHue}, 95%, 75%, ${0.06 + motion * 0.38})`);
+      g.addColorStop(1, `hsla(${themeHue + 25}, 100%, 85%, ${0.12 + motion * 0.5})`);
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x1, y1);
+      ctx.strokeStyle = g;
+      ctx.lineWidth = 1.2 + motion * 2.2;
+      ctx.stroke();
     }
   }
 
   // ─── INDIVIDUAL THEME DRAWERS ───
 
   function drawTunnel() {
-    const { cx, cy } = softBg();
-    const v = renderMotion;
-    const horizon = h * (0.44 - v * 0.02);
-    drawSkyEffect(cx, horizon * 0.85, v, themeHue);
-    drawRoadEffect(cx, horizon, v, themeHue);
+    const { cx, cy, motion: v } = softBg();
     const speed = 0.008 + v * 0.16;
     tunnelZ = (tunnelZ + speed) % 1;
-    const rings = skipHeavyFx ? 10 : 14;
+    const rings = skipHeavyFx ? 8 : 12;
     for (let i = 0; i < rings; i++) {
       const t = (i / rings + tunnelZ) % 1;
       const ease = t * t;
-      const alpha = (1 - t) * (0.1 + v * 0.4);
-      const radius = Math.min(w, h) * (0.06 + ease * 0.7);
-      softBlob(cx, cy, radius * 0.35, themeHue + t * 40, alpha * 0.45);
+      const alpha = (1 - t) * (0.15 + v * 0.5);
+      const radius = Math.min(w, h) * (0.08 + ease * 0.75);
       ctx.beginPath();
-      ctx.strokeStyle = `hsla(${themeHue + t * 35}, 90%, ${55 + v * 15}%, ${alpha * 0.55})`;
-      ctx.lineWidth = 4 + v * 10 * (1 - t);
-      ctx.arc(cx, cy, radius, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = `hsla(${themeHue + t * 25}, 90%, ${60 + v * 15}%, ${alpha * 0.45})`;
+      ctx.lineWidth = 1.5 + v * 3 * (1 - t);
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.stroke();
     }
-    softBlob(cx, cy, 50 + v * 90, themeHue, 0.35 + v * 0.4);
-    drawGlassOverlay(cx, cy);
   }
 
   function drawRedline() {
@@ -513,36 +504,58 @@ const Scene = (() => {
   }
 
   function drawGlow() {
-    const { cx, cy } = softBg();
-    const v = renderMotion;
+    const { cx, cy, motion: v } = softBg();
     const t = animT;
-    const horizon = h * (0.48 - v * 0.03);
-    drawSkyEffect(cx, horizon, v, themeHue);
-    drawRoadEffect(cx, horizon, v, themeHue);
-    drawNebulaClouds(cx, cy * 0.7, v, themeHue, 0.2);
-    const orbs = skipHeavyFx ? 4 : 6;
-    for (let i = 0; i < orbs; i++) {
-      const phase = t * (0.22 + i * 0.04) + i * 1.15;
-      const radius = Math.min(w, h) * (0.12 + (i % 3) * 0.05 + v * 0.08);
-      const ox = cx + Math.cos(phase) * radius * (0.9 + (i % 2) * 0.35);
-      const oy = Math.min(horizon - 20, cy + Math.sin(phase * 0.85) * radius * (0.55 + v * 0.25));
-      const size = 40 + i * 14 + v * 70 + Math.sin(phase * 1.4) * 10;
-      softBlob(ox, oy, size, themeHue + i * 14, 0.1 + v * 0.22 + (i % 2) * 0.04);
-    }
-    const breath = 0.5 + 0.5 * Math.sin(t * 1.15);
-    softBlob(cx, cy, 55 + v * 130 + breath * 22, themeHue + 8, 0.2 + v * 0.32);
-    softBlob(cx, horizon, 90 + v * 120, themeHue + 20, 0.12 + v * 0.2);
-    const drift = 0.0006 + v * 0.006;
-    for (const p of particles) {
-      p.z -= drift * (0.5 + p.size * 0.08);
-      if (p.z <= 0) { p.z = 1; p.x = Math.random(); p.y = Math.random(); }
+
+    // Sade ve modern hız vektör parçacıkları (Speed stream particles)
+    const drift = 0.0012 + v * 0.016;
+    const pCount = Math.min(particles.length, skipHeavyFx ? 35 : 70);
+    
+    for (let i = 0; i < pCount; i++) {
+      const p = particles[i];
+      p.z -= drift * (0.6 + p.size * 0.1);
+      if (p.z <= 0) { 
+        p.z = 1; 
+        p.x = Math.random(); 
+        p.y = Math.random(); 
+      }
+      
       const depth = 1 - p.z;
-      const px = p.x * w + Math.sin(t * 0.4 + p.hueOff) * 8 * depth;
-      const py = p.y * h + (0.5 - p.y) * depth * v * 28;
-      const size = p.size * (0.5 + depth * 2.2) * (1 + v * 0.5);
-      softBlob(px, py, size * 1.8, themeHue + p.hueOff, p.alpha * depth * 0.55);
+      const dx = (p.x - 0.5) * 2;
+      const dy = (p.y - 0.5) * 2;
+      const px = cx + dx * w * 0.55 * depth;
+      const py = cy + dy * h * 0.55 * depth;
+      
+      const pSize = (1 + p.size * 1.6) * depth;
+      const pAlpha = depth * (0.2 + v * 0.7);
+      
+      if (v > 0.06) {
+        const streakLen = v * depth * 40;
+        const sx = px - dx * streakLen;
+        const sy = py - dy * streakLen;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(px, py);
+        ctx.strokeStyle = `hsla(${themeHue + p.hueOff}, 90%, 75%, ${pAlpha * 0.75})`;
+        ctx.lineWidth = Math.max(1, pSize * 0.85);
+        ctx.stroke();
+      } else {
+        ctx.beginPath();
+        ctx.arc(px, py, pSize, 0, Math.PI * 2);
+        ctx.fillStyle = `hsla(${themeHue + p.hueOff}, 85%, 80%, ${pAlpha})`;
+        ctx.fill();
+      }
     }
-    drawGlassOverlay(cx, cy);
+
+    // Zarif modern hız halkası
+    if (v > 0.02) {
+      const ringR = 145 + v * 130 + Math.sin(t * 1.4) * 8;
+      ctx.beginPath();
+      ctx.arc(cx, cy, ringR, 0, Math.PI * 2);
+      ctx.strokeStyle = `hsla(${themeHue}, 90%, 65%, ${0.06 + v * 0.2})`;
+      ctx.lineWidth = 1.5 + v * 2;
+      ctx.stroke();
+    }
   }
 
   function drawAurora() { drawGlow(); }
@@ -688,14 +701,8 @@ const Scene = (() => {
   }
 
   function drawWarp() {
-    const { cx, cy } = softBg();
-    const v = renderMotion;
-    const horizon = h * (0.45 - v * 0.04);
-    drawSkyEffect(cx, horizon, v, themeHue);
-    drawRoadEffect(cx, horizon, v, themeHue);
+    const { cx, cy, motion: v } = softBg();
     drawWarpStreaks(cx, cy, v);
-    softBlob(cx, cy, 70 + v * 110, themeHue, 0.3 + v * 0.35);
-    drawGlassOverlay(cx, cy);
   }
 
   function drawNeon() {
