@@ -136,10 +136,8 @@ const Scene = (() => {
 
   function resize() {
     const dpr = Math.min(Math.max(window.devicePixelRatio || 1, 1), 2);
-    const host = hostEl || canvas?.parentElement;
-    const rect = host?.getBoundingClientRect?.();
-    w = Math.max(1, Math.round(rect?.width || window.innerWidth));
-    h = Math.max(1, Math.round(rect?.height || window.innerHeight));
+    w = Math.max(1, window.innerWidth);
+    h = Math.max(1, window.innerHeight);
     canvas.width = Math.round(w * dpr);
     canvas.height = Math.round(h * dpr);
     canvas.style.width = w + "px";
@@ -148,7 +146,16 @@ const Scene = (() => {
     applyCtxQuality();
   }
 
-  function viewCenter() { return { cx: w * 0.5, cy: h * 0.5 }; }
+  function viewCenter() {
+    const hud = document.getElementById("speedHud");
+    if (hud) {
+      const r = hud.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) {
+        return { cx: r.left + r.width * 0.5, cy: r.top + r.height * 0.5 };
+      }
+    }
+    return { cx: w * 0.5, cy: h * 0.5 };
+  }
 
   function setMode(m) {
     m = resolveMode(m);
@@ -536,78 +543,72 @@ const Scene = (() => {
     const t = animT;
 
     // 1. Agresif Kırmızı Yarış Kokpiti Zemini
-    const rlineR = Math.max(w, h) * (0.38 + v * 0.32);
-    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, rlineR);
-    g.addColorStop(0, `hsla(355, 96%, 46%, ${0.20 + v * 0.42})`);
-    g.addColorStop(0.42, `hsla(10, 92%, 30%, ${0.12 + v * 0.24})`);
-    g.addColorStop(0.80, `hsla(355, 80%, 10%, ${0.05 + v * 0.10})`);
+    const rlineR = Math.max(w, h) * (0.45 + v * 0.35);
+    const g = ctx.createRadialGradient(cx, cy, 60, cx, cy, rlineR);
+    g.addColorStop(0, `hsla(355, 100%, 50%, ${0.30 + v * 0.45})`);
+    g.addColorStop(0.40, `hsla(12, 95%, 35%, ${0.20 + v * 0.30})`);
+    g.addColorStop(0.80, `hsla(355, 85%, 12%, ${0.10 + v * 0.15})`);
     g.addColorStop(1, "transparent");
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, w, h);
 
-    // 2. Yarış Pisti Apex Kerbleri (Red & White Racing Curbs Streaming on Sides)
-    const curbCount = 10;
-    const curbSpeed = (t * (2.5 + v * 8.0)) % 1;
-    const bottomY = cy + 120;
+    // 2. Yarış Pisti Apex Kerbleri (Ekranın sol ve sağ kenarlarından aşağı akan kırmızı-beyaz kerbler)
+    const curbCount = 12;
+    const curbSpeed = (t * (2.2 + v * 10.0)) % 1;
+    const curbW = Math.min(100, Math.max(45, w * 0.08));
     for (let i = 0; i < curbCount; i++) {
       const p = (i / curbCount + curbSpeed) % 1;
-      const y = bottomY + Math.pow(p, 1.4) * (h - bottomY);
-      const curbH = 10 + p * 25;
+      const y = Math.pow(p, 1.2) * h;
+      const curbH = 18 + p * 36;
       const isRed = (i % 2) === 0;
-      const curbAlpha = (0.12 + v * 0.55) * p;
+      const curbAlpha = (0.35 + v * 0.65) * Math.max(0.2, p);
 
       // Sol Kerb
-      ctx.fillStyle = isRed ? `hsla(358, 95%, 52%, ${curbAlpha})` : `rgba(255,255,255,${curbAlpha * 0.9})`;
-      ctx.fillRect(0, y, 35 + p * 60, curbH);
+      ctx.fillStyle = isRed ? `hsla(358, 100%, 55%, ${curbAlpha})` : `rgba(255,255,255,${curbAlpha * 0.95})`;
+      ctx.fillRect(0, y, curbW * (0.5 + p * 0.5), curbH);
 
       // Sağ Kerb
-      ctx.fillRect(w - (35 + p * 60), y, 35 + p * 60, curbH);
+      const wCur = curbW * (0.5 + p * 0.5);
+      ctx.fillRect(w - wCur, y, wCur, curbH);
     }
 
-    // 3. Titanyum Asfalt Kıvılcımları (F1 Skid-Block Sparks when accelerating)
-    const sparkCount = Math.min(particles.length, skipHeavyFx ? 20 : 45);
+    // 3. Titanyum Asfalt Kıvılcımları (F1 Skid-Block Sparks)
+    const sparkCount = Math.min(particles.length, skipHeavyFx ? 35 : 75);
     for (let i = 0; i < sparkCount; i++) {
       const p = particles[i];
-      p.y += (0.003 + v * 0.035) * (0.7 + p.size * 0.2);
-      p.x += (p.x > 0.5 ? 0.001 : -0.001) * (1 + v * 4) + Math.sin(t * 3 + i) * 0.0008;
-      if (p.y > 1.05) { p.y = 0.45; p.x = 0.42 + Math.random() * 0.16; }
+      p.y += (0.004 + v * 0.045) * (0.7 + p.size * 0.25);
+      p.x += (p.x > 0.5 ? 0.0015 : -0.0015) * (1 + v * 4) + Math.sin(t * 3.5 + i) * 0.0012;
+      if (p.y > 1.05) { p.y = 0.35; p.x = 0.38 + Math.random() * 0.24; }
       
       const px = p.x * w;
       const py = p.y * h;
-      const sz = 1.5 + p.size * 1.6;
-      const alpha = (0.25 + v * 0.75) * (py / h);
+      const sz = 2.0 + p.size * 1.8;
+      const alpha = (0.35 + v * 0.65);
 
-      if (v > 0.08) {
-        const len = (15 + v * 55) * (py / h);
-        ctx.beginPath();
-        ctx.moveTo(px, py);
-        ctx.lineTo(px + (p.x - 0.5) * len * 0.6, py + len);
-        ctx.strokeStyle = `hsla(38, 100%, 75%, ${alpha})`;
-        ctx.lineWidth = sz * 0.9;
-        ctx.stroke();
-      } else {
-        ctx.beginPath();
-        ctx.arc(px, py, sz, 0, Math.PI * 2);
-        ctx.fillStyle = `hsla(32, 100%, 72%, ${alpha})`;
-        ctx.fill();
-      }
+      const len = (20 + v * 70) * (py / h);
+      ctx.beginPath();
+      ctx.moveTo(px, py);
+      ctx.lineTo(px + (p.x - 0.5) * len * 0.7, py + len);
+      ctx.strokeStyle = `hsla(38, 100%, 75%, ${alpha})`;
+      ctx.lineWidth = sz;
+      ctx.stroke();
     }
 
     // 4. Yarış Kadran Devir Arkı & Shift-Light Flaşörü
-    const arcR = 145 + v * 125;
+    const arcR = Math.max(165, Math.min(w, h) * 0.22) + v * 60;
     ctx.beginPath();
     ctx.arc(cx, cy, arcR, -Math.PI * 0.85, Math.PI * 0.85);
-    ctx.strokeStyle = `hsla(358, 100%, 65%, ${0.15 + v * 0.5})`;
-    ctx.lineWidth = 2.5 + v * 3.5;
+    ctx.strokeStyle = `hsla(358, 100%, 65%, ${0.25 + v * 0.55})`;
+    ctx.lineWidth = 3.5 + v * 4.0;
     ctx.stroke();
 
-    // Devir kesici (Shift-Light): v > 0.78 iken yarış otomobillerindeki gibi parlak yanıp söner
-    if (v > 0.78) {
-      const flash = (Math.sin(t * 18) + 1) * 0.5;
+    // Devir kesici (Shift-Light): v > 0.75 iken yarış otomobillerindeki gibi parlak yanıp söner
+    if (v > 0.75) {
+      const flash = (Math.sin(t * 22) + 1) * 0.5;
       ctx.beginPath();
-      ctx.arc(cx, cy, arcR + 8, -Math.PI * 0.85, Math.PI * 0.85);
-      ctx.strokeStyle = `rgba(255, 30, 45, ${flash * 0.8})`;
-      ctx.lineWidth = 4;
+      ctx.arc(cx, cy, arcR + 10, -Math.PI * 0.85, Math.PI * 0.85);
+      ctx.strokeStyle = `rgba(255, 30, 45, ${flash * 0.9})`;
+      ctx.lineWidth = 5;
       ctx.stroke();
     }
   }
@@ -683,60 +684,60 @@ const Scene = (() => {
   function drawDeepOcean() {
     const { cx, cy, motion: v } = softBg();
     const t = animT;
-    if (!bubbles.length) seedBubbles(skipHeavyFx ? 25 : 55);
+    if (!bubbles.length) seedBubbles(skipHeavyFx ? 35 : 75);
 
     // 1. Derin Okyanus Abisal Mavisi
-    const oceanR = Math.max(w, h) * (0.36 + v * 0.32);
-    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, oceanR);
-    g.addColorStop(0, `hsla(195, 92%, 35%, ${0.22 + v * 0.35})`);
-    g.addColorStop(0.40, `hsla(212, 88%, 22%, ${0.14 + v * 0.22})`);
-    g.addColorStop(0.80, `hsla(225, 80%, 10%, ${0.06 + v * 0.10})`);
+    const oceanR = Math.max(w, h) * (0.45 + v * 0.35);
+    const g = ctx.createRadialGradient(cx, cy, 60, cx, cy, oceanR);
+    g.addColorStop(0, `hsla(195, 100%, 40%, ${0.30 + v * 0.40})`);
+    g.addColorStop(0.38, `hsla(215, 92%, 26%, ${0.20 + v * 0.26})`);
+    g.addColorStop(0.80, `hsla(230, 85%, 12%, ${0.10 + v * 0.12})`);
     g.addColorStop(1, "transparent");
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, w, h);
 
-    // 2. Sualtı Işık Kırılmaları (Caustic Light Beams)
-    const beamCount = 5;
+    // 2. Sualtı Işık Kırılmaları (Caustic Light Beams across the page)
+    const beamCount = 6;
     for (let i = 0; i < beamCount; i++) {
-      const bx = cx + Math.sin(t * (0.6 + v * 1.2) + i * 1.3) * w * 0.35;
+      const bx = cx + Math.sin(t * (0.7 + v * 1.5) + i * 1.2) * w * 0.40;
       const lg = ctx.createLinearGradient(bx, 0, bx, h);
-      lg.addColorStop(0, `hsla(188 + i * 8, 90%, 75%, ${0.06 + v * 0.18})`);
-      lg.addColorStop(0.65, "transparent");
+      lg.addColorStop(0, `hsla(188 + i * 8, 95%, 75%, ${0.12 + v * 0.24})`);
+      lg.addColorStop(0.70, "transparent");
       ctx.fillStyle = lg;
-      ctx.fillRect(bx - 55, 0, 110, h);
+      ctx.fillRect(bx - 70, 0, 140, h);
     }
 
     // 3. Yükselen ve Hızla Kaçan Hava Kabarcıkları (Ascending Air Bubbles)
-    const riseSpeed = 0.0015 + v * 0.022;
+    const riseSpeed = 0.0025 + v * 0.030;
     for (let i = 0; i < bubbles.length; i++) {
       const b = bubbles[i];
       b.y -= riseSpeed * b.speed;
-      b.wobble += 0.04 + v * 0.1;
+      b.wobble += 0.05 + v * 0.12;
       if (b.y < -0.05) { b.y = 1.05; b.x = Math.random(); }
 
-      const bx = b.x * w + Math.sin(b.wobble) * (8 + v * 15);
+      const bx = b.x * w + Math.sin(b.wobble) * (10 + v * 20);
       const by = b.y * h;
-      const bAlpha = 0.2 + v * 0.6;
+      const bAlpha = 0.35 + v * 0.65;
 
       ctx.beginPath();
-      ctx.arc(bx, by, b.r * (0.8 + v * 0.4), 0, Math.PI * 2);
-      ctx.strokeStyle = `hsla(${b.hue}, 95%, 82%, ${bAlpha})`;
-      ctx.lineWidth = 1.2;
+      ctx.arc(bx, by, b.r * (1 + v * 0.5), 0, Math.PI * 2);
+      ctx.strokeStyle = `hsla(${b.hue}, 95%, 85%, ${bAlpha})`;
+      ctx.lineWidth = 1.6;
       ctx.stroke();
 
       // Kabarcık içi parlama
       ctx.beginPath();
-      ctx.arc(bx - b.r * 0.3, by - b.r * 0.3, b.r * 0.25, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(255,255,255,${bAlpha * 0.8})`;
+      ctx.arc(bx - b.r * 0.3, by - b.r * 0.3, b.r * 0.3, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255,255,255,${bAlpha * 0.9})`;
       ctx.fill();
     }
 
     // 4. Hidrodinamik Halka
-    const ringR = 145 + v * 125;
+    const ringR = Math.max(160, Math.min(w, h) * 0.22) + v * 70;
     ctx.beginPath();
     ctx.arc(cx, cy, ringR, 0, Math.PI * 2);
-    ctx.strokeStyle = `hsla(190, 95%, 68%, ${0.08 + v * 0.28})`;
-    ctx.lineWidth = 1.8 + v * 2.5;
+    ctx.strokeStyle = `hsla(190, 100%, 72%, ${0.15 + v * 0.40})`;
+    ctx.lineWidth = 2.5 + v * 3.0;
     ctx.stroke();
   }
 
@@ -840,10 +841,10 @@ const Scene = (() => {
   function drawWarp() {
     const { cx, cy, motion: v } = softBg();
     const t = animT;
-    if (!warpStars.length) seedWarpStars(skipHeavyFx ? 55 : 110);
+    if (!warpStars.length) seedWarpStars(skipHeavyFx ? 90 : 180);
 
-    const speedZ = 0.003 + v * 0.045;
-    const maxRadius = Math.max(w, h) * 0.85;
+    const speedZ = 0.004 + v * 0.065;
+    const maxRadius = Math.max(w, h);
 
     // 1. Merkezden Ufka Yayılan Işık Hızı Parçacıkları (Relativistic Hyperspace)
     for (let i = 0; i < warpStars.length; i++) {
@@ -857,48 +858,40 @@ const Scene = (() => {
         continue;
       }
 
-      // 3D Perspektif İzdüşümü
-      const pz = Math.max(0.02, s.z);
-      const px = cx + (s.x / pz) * (w * 0.45);
-      const py = cy + (s.y / pz) * (h * 0.45);
+      // 3D Perspektif İzdüşümü (Tüm ekrana yayılır)
+      const pz = Math.max(0.015, s.z);
+      const px = cx + (s.x / pz) * (w * 0.55);
+      const py = cy + (s.y / pz) * (h * 0.55);
 
-      const oldPz = Math.max(0.02, prevZ + (v > 0.08 ? speedZ * (1.5 + v * 5) : 0));
-      const oldPx = cx + (s.x / oldPz) * (w * 0.45);
-      const oldPy = cy + (s.y / oldPz) * (h * 0.45);
+      const oldPz = Math.max(0.015, prevZ + (v > 0.04 ? speedZ * (2 + v * 7) : speedZ * 1.5));
+      const oldPx = cx + (s.x / oldPz) * (w * 0.55);
+      const oldPy = cy + (s.y / oldPz) * (h * 0.55);
 
-      const alpha = Math.min(1, (1 - s.z) * (0.3 + v * 0.7));
-      const thickness = Math.max(1, (1 - s.z) * (1.5 + v * 3.5));
+      const alpha = Math.min(1, (1 - s.z) * (0.45 + v * 0.55));
+      const thickness = Math.max(1.2, (1 - s.z) * (2 + v * 4.5));
 
-      if (v > 0.05) {
-        // Hızlandıkça uzayan lazer çizgisi
-        const g = ctx.createLinearGradient(oldPx, oldPy, px, py);
-        g.addColorStop(0, "transparent");
-        g.addColorStop(0.3, `hsla(${s.hue}, 90%, 65%, ${alpha * 0.4})`);
-        g.addColorStop(1, `hsla(${s.hue + 25}, 100%, 85%, ${alpha})`);
-        ctx.beginPath();
-        ctx.moveTo(oldPx, oldPy);
-        ctx.lineTo(px, py);
-        ctx.strokeStyle = g;
-        ctx.lineWidth = thickness;
-        ctx.stroke();
-      } else {
-        ctx.beginPath();
-        ctx.arc(px, py, thickness * 0.8, 0, Math.PI * 2);
-        ctx.fillStyle = `hsla(${s.hue}, 95%, 80%, ${alpha * 0.85})`;
-        ctx.fill();
-      }
+      const g = ctx.createLinearGradient(oldPx, oldPy, px, py);
+      g.addColorStop(0, "transparent");
+      g.addColorStop(0.3, `hsla(${s.hue}, 95%, 65%, ${alpha * 0.5})`);
+      g.addColorStop(1, `hsla(${s.hue + 25}, 100%, 88%, ${alpha})`);
+      ctx.beginPath();
+      ctx.moveTo(oldPx, oldPy);
+      ctx.lineTo(px, py);
+      ctx.strokeStyle = g;
+      ctx.lineWidth = thickness;
+      ctx.stroke();
     }
 
     // 2. Genişleyen Warp Şok Dalgası Halkaları (Expansion Shockwave Rings)
-    const ringCount = 3;
+    const ringCount = 4;
     for (let r = 0; r < ringCount; r++) {
-      const prog = ((t * (0.4 + v * 1.2) + r / ringCount) % 1);
-      const radius = 100 + prog * maxRadius * 0.65;
-      const alpha = (1 - prog) * (0.08 + v * 0.35);
+      const prog = ((t * (0.5 + v * 1.5) + r / ringCount) % 1);
+      const radius = 80 + prog * maxRadius * 0.75;
+      const alpha = (1 - prog) * (0.15 + v * 0.55);
       ctx.beginPath();
       ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-      ctx.strokeStyle = `hsla(${themeHue + prog * 40}, 95%, 72%, ${alpha})`;
-      ctx.lineWidth = 1.5 + (1 - prog) * 3;
+      ctx.strokeStyle = `hsla(${themeHue + prog * 45}, 100%, 75%, ${alpha})`;
+      ctx.lineWidth = 2.0 + (1 - prog) * 4;
       ctx.stroke();
     }
   }
@@ -1048,106 +1041,103 @@ const Scene = (() => {
     const t = animT;
 
     // 1. Dinamik Dönen Plazma Küreleri
-    const orbs = skipHeavyFx ? 4 : 7;
+    const orbs = skipHeavyFx ? 5 : 8;
     for (let i = 0; i < orbs; i++) {
-      const ang = t * (0.45 + i * 0.1) + i * 1.1;
-      const dist = 75 + v * 135 + Math.sin(t * 1.5 + i) * 30;
+      const ang = t * (0.5 + i * 0.12) + i * 1.1;
+      const dist = 110 + v * 160 + Math.sin(t * 1.6 + i) * 40;
       const ox = cx + Math.cos(ang) * dist;
       const oy = cy + Math.sin(ang) * dist * 0.75;
-      const size = 60 + i * 22 + v * 90;
-      softBlob(ox, oy, size, themeHue + i * 28, 0.14 + v * 0.32);
+      const size = 80 + i * 25 + v * 110;
+      softBlob(ox, oy, size, themeHue + i * 28, 0.22 + v * 0.38);
     }
 
     // 2. Kadran Çevresinde Çakan Canlı Elektrik Şimşek Arkları (Electric Arcs)
-    const arcSegments = skipHeavyFx ? 8 : 16;
-    const ringR = 145 + v * 125;
+    const arcSegments = skipHeavyFx ? 10 : 20;
+    const ringR = Math.max(160, Math.min(w, h) * 0.22) + v * 70;
     ctx.beginPath();
     for (let i = 0; i <= arcSegments; i++) {
       const ang = (i / arcSegments) * Math.PI * 2;
-      const jitter = (Math.random() - 0.5) * (8 + v * 28);
+      const jitter = (Math.random() - 0.5) * (12 + v * 35);
       const r = ringR + jitter;
       const x = cx + Math.cos(ang) * r;
       const y = cy + Math.sin(ang) * r;
       if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     }
     ctx.closePath();
-    ctx.strokeStyle = `hsla(${themeHue + 25}, 100%, 78%, ${0.25 + v * 0.65})`;
-    ctx.lineWidth = 1.8 + v * 2.5;
+    ctx.strokeStyle = `hsla(${themeHue + 25}, 100%, 82%, ${0.40 + v * 0.60})`;
+    ctx.lineWidth = 2.5 + v * 3.0;
     ctx.stroke();
 
     // Hızlandıkça merkezden dışarı fırlayan yüksek voltaj şimşekleri
-    if (v > 0.15) {
-      const bolts = Math.floor(2 + v * 5);
-      for (let b = 0; b < bolts; b++) {
-        const ang = Math.random() * Math.PI * 2;
-        let lx = cx + Math.cos(ang) * 50;
-        let ly = cy + Math.sin(ang) * 50;
-        ctx.beginPath();
-        ctx.moveTo(lx, ly);
-        const steps = 4;
-        for (let s = 1; s <= steps; s++) {
-          const r = 50 + (s / steps) * (ringR + 50);
-          const dev = (Math.random() - 0.5) * 24;
-          lx = cx + Math.cos(ang + dev * 0.05) * r;
-          ly = cy + Math.sin(ang + dev * 0.05) * r;
-          ctx.lineTo(lx, ly);
-        }
-        ctx.strokeStyle = `hsla(${themeHue + 40}, 100%, 88%, ${0.3 + v * 0.6})`;
-        ctx.lineWidth = 1.5 + v * 1.5;
-        ctx.stroke();
+    const bolts = Math.floor(2 + v * 7);
+    for (let b = 0; b < bolts; b++) {
+      const ang = Math.random() * Math.PI * 2;
+      let lx = cx + Math.cos(ang) * 60;
+      let ly = cy + Math.sin(ang) * 60;
+      ctx.beginPath();
+      ctx.moveTo(lx, ly);
+      const steps = 5;
+      for (let s = 1; s <= steps; s++) {
+        const r = 60 + (s / steps) * (ringR + 100 + v * 150);
+        const dev = (Math.random() - 0.5) * 35;
+        lx = cx + Math.cos(ang + dev * 0.06) * r;
+        ly = cy + Math.sin(ang + dev * 0.06) * r;
+        ctx.lineTo(lx, ly);
       }
+      ctx.strokeStyle = `hsla(${themeHue + 40}, 100%, 90%, ${0.40 + v * 0.60})`;
+      ctx.lineWidth = 1.8 + v * 2.0;
+      ctx.stroke();
     }
   }
 
   function drawNightCity() {
     const { cx, cy, motion: v } = softBg();
     const t = animT;
-    const horizon = h * (0.44 - v * 0.04);
+    const horizon = cy + 40;
 
     // 1. Synthwave Mor & Neon Gece Gökyüzü
     const sky = ctx.createLinearGradient(0, 0, 0, horizon);
     sky.addColorStop(0, "#080318");
-    sky.addColorStop(0.65, `hsla(285, 80%, 18%, ${0.3 + v * 0.2})`);
-    sky.addColorStop(1, `hsla(320, 95%, 45%, ${0.4 + v * 0.3})`);
+    sky.addColorStop(0.55, `hsla(285, 85%, 22%, ${0.45 + v * 0.25})`);
+    sky.addColorStop(1, `hsla(325, 100%, 50%, ${0.55 + v * 0.35})`);
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, w, horizon);
 
     // 2. Neon Siber Güneş (Segmented Synthwave Sun)
-    const sunR = Math.min(w, h) * 0.20;
-    const sunGrad = ctx.createLinearGradient(cx, horizon - sunR * 1.5, cx, horizon);
-    sunGrad.addColorStop(0, "hsla(50, 100%, 75%, 0.85)");
-    sunGrad.addColorStop(0.5, "hsla(330, 100%, 65%, 0.75)");
-    sunGrad.addColorStop(1, "hsla(280, 90%, 45%, 0.4)");
+    const sunR = Math.min(w, h) * 0.24;
+    const sunGrad = ctx.createLinearGradient(cx, horizon - sunR * 1.4, cx, horizon);
+    sunGrad.addColorStop(0, "hsla(50, 100%, 75%, 0.95)");
+    sunGrad.addColorStop(0.5, "hsla(330, 100%, 65%, 0.85)");
+    sunGrad.addColorStop(1, "hsla(280, 90%, 45%, 0.55)");
     ctx.fillStyle = sunGrad;
     ctx.beginPath();
-    ctx.arc(cx, horizon - sunR * 0.4, sunR, Math.PI, 0);
+    ctx.arc(cx, horizon, sunR, Math.PI, 0);
     ctx.fill();
 
-    // 3. 3D Perspektif Izgara Yolu (Scrolling Synthwave Retro Grid)
-    const gridSpeed = (t * (0.4 + v * 2.5)) % 1;
-    const gridLines = skipHeavyFx ? 9 : 14;
+    // 3. 3D Perspektif Izgara Yolu (Scrolling Synthwave Retro Grid across full screen)
+    const gridSpeed = (t * (0.6 + v * 3.5)) % 1;
+    const gridLines = skipHeavyFx ? 10 : 16;
     for (let i = 0; i < gridLines; i++) {
       const p = (i / gridLines + gridSpeed) % 1;
-      const y = horizon + Math.pow(p, 1.7) * (h - horizon);
-      const alpha = p * (0.15 + v * 0.55);
+      const y = horizon + Math.pow(p, 1.6) * (h - horizon);
+      const alpha = p * (0.25 + v * 0.65);
       ctx.beginPath();
       ctx.moveTo(0, y);
       ctx.lineTo(w, y);
-      ctx.strokeStyle = `hsla(315, 95%, 65%, ${alpha})`;
-      ctx.lineWidth = 1 + p * 2;
+      ctx.strokeStyle = `hsla(315, 100%, 68%, ${alpha})`;
+      ctx.lineWidth = 1.5 + p * 3;
       ctx.stroke();
     }
 
-    // Izgaranın ufuktan aşağı inen dikey çizgileri
-    const lanes = 12;
+    // Izgaranın ufuktan aşağı inen dikey perspektif çizgileri
+    const lanes = 16;
     for (let l = -lanes; l <= lanes; l++) {
-      if (l === 0) continue;
-      const spreadBottom = cx + l * (w / (lanes * 1.4));
+      const spreadBottom = cx + l * (w / (lanes * 1.3));
       ctx.beginPath();
-      ctx.moveTo(cx + l * 4, horizon);
+      ctx.moveTo(cx + l * 6, horizon);
       ctx.lineTo(spreadBottom, h);
-      ctx.strokeStyle = `hsla(195, 90%, 60%, ${0.1 + v * 0.4})`;
-      ctx.lineWidth = 1.2;
+      ctx.strokeStyle = `hsla(195, 95%, 65%, ${0.20 + v * 0.50})`;
+      ctx.lineWidth = 1.5;
       ctx.stroke();
     }
   }
@@ -1279,89 +1269,81 @@ const Scene = (() => {
     const { cx, cy, motion: v } = softBg();
     const t = animT;
 
-    // 1. Derin sıcak akkor plazma zemini
-    const glowR = Math.max(w, h) * (0.36 + v * 0.34);
-    const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, glowR);
-    core.addColorStop(0, `hsla(18, 98%, 54%, ${0.20 + v * 0.35})`);
-    core.addColorStop(0.35, `hsla(8, 92%, 42%, ${0.12 + v * 0.22})`);
-    core.addColorStop(0.70, `hsla(350, 85%, 16%, ${0.05 + v * 0.10})`);
+    // 1. Derin sıcak akkor plazma zemin aurası
+    const glowR = Math.max(w, h) * (0.42 + v * 0.35);
+    const core = ctx.createRadialGradient(cx, cy, 50, cx, cy, glowR);
+    core.addColorStop(0, `hsla(20, 100%, 55%, ${0.35 + v * 0.40})`);
+    core.addColorStop(0.28, `hsla(10, 95%, 45%, ${0.22 + v * 0.28})`);
+    core.addColorStop(0.65, `hsla(350, 90%, 20%, ${0.10 + v * 0.15})`);
     core.addColorStop(1, "transparent");
     ctx.fillStyle = core;
     ctx.fillRect(0, 0, w, h);
 
     // 2. Canlı Dans Eden Prosedürel Alev Dilleri (Procedural Fire Tongues)
-    const flameLangs = skipHeavyFx ? 7 : 14;
-    const baseR = 120 + v * 50;
+    // Kadran çevresinden dışarıya ve yukarıya doğru yükselen belirgin alevler
+    const flameLangs = skipHeavyFx ? 12 : 24;
+    const baseR = Math.max(160, Math.min(w, h) * 0.22);
     for (let i = 0; i < flameLangs; i++) {
       const p = i / flameLangs;
-      // Kadranın alt ve yanlarından yukarıya doğru yalanan alevler
-      const ang = Math.PI * 0.1 + p * Math.PI * 0.8;
-      const wave = Math.sin(t * 3.2 + i * 1.8) * 18 + Math.cos(t * 5.1 + i * 2.4) * 12;
-      const height = (55 + v * 140 + Math.sin(t * 4.0 + i) * 25);
+      const ang = Math.PI * 0.05 + p * Math.PI * 0.9;
+      const wave = Math.sin(t * 3.6 + i * 1.7) * 26 + Math.cos(t * 5.4 + i * 2.5) * 16;
+      const height = 90 + v * 220 + Math.sin(t * 4.2 + i) * 35;
       
       const x0 = cx + Math.cos(ang) * baseR;
-      const y0 = cy + Math.sin(ang) * baseR * 0.9;
-      const xTip = cx + Math.cos(ang) * (baseR + height) + wave * 0.4;
-      const yTip = cy + Math.sin(ang) * (baseR + height) - Math.abs(wave) * 0.8;
+      const y0 = cy + Math.sin(ang) * baseR * 0.85;
+      const xTip = cx + Math.cos(ang) * (baseR + height) + wave * 0.5;
+      const yTip = cy + Math.sin(ang) * (baseR + height) - Math.abs(wave) * 1.2 - height * 0.35;
       
       const fg = ctx.createLinearGradient(x0, y0, xTip, yTip);
-      fg.addColorStop(0, `hsla(8, 95%, 45%, ${0.35 + v * 0.4})`);
-      fg.addColorStop(0.45, `hsla(26, 100%, 55%, ${0.28 + v * 0.45})`);
-      fg.addColorStop(0.85, `hsla(48, 100%, 75%, ${0.20 + v * 0.5})`);
+      fg.addColorStop(0, `hsla(10, 100%, 50%, ${0.45 + v * 0.45})`);
+      fg.addColorStop(0.40, `hsla(28, 100%, 55%, ${0.40 + v * 0.50})`);
+      fg.addColorStop(0.80, `hsla(52, 100%, 75%, ${0.30 + v * 0.55})`);
       fg.addColorStop(1, "transparent");
       
       ctx.beginPath();
-      ctx.moveTo(x0 - 15, y0);
+      ctx.moveTo(x0 - 24, y0);
       ctx.quadraticCurveTo(x0 + wave, (y0 + yTip) * 0.5, xTip, yTip);
-      ctx.quadraticCurveTo(x0 - wave, (y0 + yTip) * 0.5, x0 + 15, y0);
+      ctx.quadraticCurveTo(x0 - wave, (y0 + yTip) * 0.5, x0 + 24, y0);
       ctx.fillStyle = fg;
       ctx.fill();
     }
 
     // 3. Yukarı Doğru Fırlayan Akkor Kıvılcım Parçacıkları (Rising Ember Sparks)
-    const sparkCount = Math.min(particles.length, skipHeavyFx ? 30 : 65);
-    const driftY = 0.002 + v * 0.024;
+    const sparkCount = Math.min(particles.length, skipHeavyFx ? 40 : 90);
+    const driftY = 0.003 + v * 0.035;
     for (let i = 0; i < sparkCount; i++) {
       const p = particles[i];
-      p.y -= driftY * (0.6 + p.size * 0.2);
-      p.x += Math.sin(t * 2.2 + p.hueOff) * 0.0016 * (1 + v * 3);
+      p.y -= driftY * (0.6 + p.size * 0.25);
+      p.x += Math.sin(t * 2.5 + p.hueOff) * 0.002 * (1 + v * 3.5);
       if (p.y < -0.05) { p.y = 1.05; p.x = Math.random(); }
       const px = p.x * w;
       const py = p.y * h;
-      const depth = 1 - p.z;
-      const sz = (1.8 + p.size * 2.2) * depth * (1 + v * 0.6);
-      const alpha = depth * (0.25 + v * 0.7);
+      const sz = 2.0 + p.size * 2.2 * (1 + v * 0.8);
+      const alpha = 0.40 + v * 0.60;
 
-      if (v > 0.06) {
-        const len = (18 + v * 50) * depth;
-        ctx.beginPath();
-        ctx.moveTo(px, py);
-        ctx.lineTo(px + Math.sin(t * 2 + i) * 6, py + len);
-        ctx.strokeStyle = `hsla(28 + p.hueOff * 0.25, 100%, 78%, ${alpha * 0.9})`;
-        ctx.lineWidth = Math.max(1.2, sz * 0.8);
-        ctx.stroke();
-      } else {
-        ctx.beginPath();
-        ctx.arc(px, py, sz, 0, Math.PI * 2);
-        ctx.fillStyle = `hsla(22 + p.hueOff * 0.2, 98%, 74%, ${alpha})`;
-        ctx.fill();
-      }
+      const len = (20 + v * 70) * (0.6 + p.size * 0.2);
+      ctx.beginPath();
+      ctx.moveTo(px, py);
+      ctx.lineTo(px + Math.sin(t * 2 + i) * 6, py + len);
+      ctx.strokeStyle = `hsla(30 + p.hueOff * 0.25, 100%, 75%, ${alpha})`;
+      ctx.lineWidth = Math.max(1.5, sz * 0.8);
+      ctx.stroke();
     }
 
     // 4. Kadran Çevresinde Afterburner / Türbin Halka Parlaması
-    const ringR = 145 + v * 125 + Math.sin(t * 2.5) * 6;
+    const ringR = baseR + 15 + v * 80 + Math.sin(t * 2.5) * 8;
     ctx.beginPath();
     ctx.arc(cx, cy, ringR, 0, Math.PI * 2);
-    ctx.strokeStyle = `hsla(22, 100%, 65%, ${0.1 + v * 0.35})`;
-    ctx.lineWidth = 2.0 + v * 3.0;
+    ctx.strokeStyle = `hsla(24, 100%, 65%, ${0.25 + v * 0.55})`;
+    ctx.lineWidth = 2.5 + v * 3.5;
     ctx.stroke();
     
-    if (v > 0.4) {
-      // Yüksek hızda 2. alevli şok dalgası halkası
+    // Yüksek hızda 2. alevli şok dalgası halkası
+    if (v > 0.25) {
       ctx.beginPath();
-      ctx.arc(cx, cy, ringR * 1.18 + Math.sin(t * 4.0) * 8, 0, Math.PI * 2);
-      ctx.strokeStyle = `hsla(42, 100%, 75%, ${(v - 0.4) * 0.45})`;
-      ctx.lineWidth = 1.5 + v * 2.0;
+      ctx.arc(cx, cy, ringR * 1.25 + Math.sin(t * 4.0) * 10, 0, Math.PI * 2);
+      ctx.strokeStyle = `hsla(45, 100%, 80%, ${(v - 0.25) * 0.65})`;
+      ctx.lineWidth = 2.0 + v * 2.5;
       ctx.stroke();
     }
   }
@@ -1550,48 +1532,46 @@ const Scene = (() => {
   function drawBayrak() {
     const { cx, cy, motion: v } = softBg();
     const t = animT;
-    const ribbons = skipHeavyFx ? 4 : 7;
-    const ribbonSpeed = t * (1.8 + v * 4.5);
+    const ribbons = skipHeavyFx ? 5 : 9;
+    const ribbonSpeed = t * (2.2 + v * 6.0);
 
     for (let r = 0; r < ribbons; r++) {
-      const spreadY = (r - (ribbons - 1) / 2) * (h / (ribbons * 1.1));
+      const spreadY = (r - (ribbons - 1) / 2) * (h / (ribbons * 1.05));
       const yBase = cy + spreadY;
       const isRed = (r % 2) === 0;
 
       ctx.beginPath();
-      const steps = skipHeavyFx ? 20 : 36;
+      const steps = skipHeavyFx ? 24 : 40;
       for (let i = 0; i <= steps; i++) {
         const p = i / steps;
         const x = p * w;
-        const wave = Math.sin(p * 5.5 - ribbonSpeed + r * 1.2) * (15 + v * 35) +
-                     Math.cos(p * 9.0 + t * 2) * (6 + v * 12);
+        const wave = Math.sin(p * 5.0 - ribbonSpeed + r * 1.1) * (20 + v * 45) +
+                     Math.cos(p * 8.5 + t * 2.2) * (8 + v * 16);
         const y = yBase + wave;
         if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
       }
 
-      const g = ctx.createLinearGradient(0, yBase - 30, 0, yBase + 30);
+      const g = ctx.createLinearGradient(0, yBase - 40, 0, yBase + 40);
       g.addColorStop(0, "transparent");
       if (isRed) {
-        g.addColorStop(0.5, `hsla(355, 95%, 52%, ${0.15 + v * 0.45})`);
+        g.addColorStop(0.5, `hsla(355, 100%, 55%, ${0.25 + v * 0.55})`);
       } else {
-        g.addColorStop(0.5, `rgba(255, 255, 255, ${0.12 + v * 0.40})`);
+        g.addColorStop(0.5, `rgba(255, 255, 255, ${0.22 + v * 0.50})`);
       }
       g.addColorStop(1, "transparent");
 
       ctx.strokeStyle = g;
-      ctx.lineWidth = 2.2 + v * 4.2;
+      ctx.lineWidth = 3.0 + v * 5.0;
       ctx.stroke();
     }
 
     // Aerodinamik girdap spirali
-    if (v > 0.05) {
-      const spiralR = 145 + v * 125;
-      ctx.beginPath();
-      ctx.arc(cx, cy, spiralR, -Math.PI * 0.8, Math.PI * 0.8);
-      ctx.strokeStyle = `hsla(355, 95%, 65%, ${0.1 + v * 0.35})`;
-      ctx.lineWidth = 2.0 + v * 2.5;
-      ctx.stroke();
-    }
+    const spiralR = Math.max(160, Math.min(w, h) * 0.22) + v * 70;
+    ctx.beginPath();
+    ctx.arc(cx, cy, spiralR, -Math.PI * 0.85, Math.PI * 0.85);
+    ctx.strokeStyle = `hsla(355, 100%, 65%, ${0.20 + v * 0.45})`;
+    ctx.lineWidth = 2.5 + v * 3.5;
+    ctx.stroke();
   }
 
   function miniAmbientRing(cx, cy, hue, opts = {}) {
