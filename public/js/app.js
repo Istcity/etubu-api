@@ -5,7 +5,7 @@
   const $ = (id) => document.getElementById(id);
   const t = (key, vars) => (typeof I18n !== "undefined" ? I18n.t(key, vars) : key);
 
-  const DEFAULT_VOICE = () => "silent-mode";
+  const DEFAULT_VOICE = () => "tesla";
   const DEFAULT_VISUAL = () => Scene.DEFAULT_MODE || "glow";
 
   const startBtn = $("startBtn");
@@ -281,31 +281,26 @@
     voiceSelect.innerHTML = "";
     const full = unlocked();
     const order =
-      AudioEngine.getVoiceGroupOrder?.() || ["theme", "ev"];
+      AudioEngine.getVoiceGroupOrder?.() || ["ev", "exhaust", "race", "fx"];
     const labelKeys = {
-      theme: "voiceGroupTheme",
-      ev: "voiceGroupEv",
-      exhaust: "voiceGroupExhaust",
-      race: "voiceGroupRace",
-      fx: "voiceGroupFx",
-      sim: "voiceGroupSim",
-      proc: "voiceGroupProc",
-      grain: "voiceGroupGrain",
+      ev: "Elektrikli Araçlar (EV)",
+      exhaust: "V8 & Kaslı Motorlar",
+      race: "Yarış & Süper Spor",
+      fx: "Fütüristik & Bilimkurgu",
     };
     const groups = {};
     order.forEach((id) => {
       const g = document.createElement("optgroup");
-      g.label = t(labelKeys[id] || id);
+      g.label = labelKeys[id] || id;
       g.dataset.group = id;
       groups[id] = g;
     });
     AudioEngine.getVoices().forEach((v) => {
-      // Sessiz mod herkese açık
       if (!full && v.key !== DEFAULT_VOICE() && v.key !== "silent-mode") return;
       const opt = document.createElement("option");
       opt.value = v.key;
       opt.textContent = v.label;
-      const gid = v.group || v.family || "ev";
+      const gid = v.group || "ev";
       (groups[gid] || groups.ev).appendChild(opt);
     });
     order.forEach((id) => {
@@ -315,8 +310,8 @@
     const valid = new Set([...voiceSelect.options].map((o) => o.value));
     if (valid.has(prev) && full) {
       voiceSelect.value = prev;
-    } else if (prev === "silent-mode" && valid.has("silent-mode")) {
-      voiceSelect.value = "silent-mode";
+    } else if (valid.has("tesla")) {
+      voiceSelect.value = "tesla";
     } else {
       voiceSelect.value = DEFAULT_VOICE();
     }
