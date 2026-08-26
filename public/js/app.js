@@ -5,7 +5,7 @@
   const $ = (id) => document.getElementById(id);
   const t = (key, vars) => (typeof I18n !== "undefined" ? I18n.t(key, vars) : key);
 
-  const DEFAULT_VOICE = () => "tesla";
+  const DEFAULT_VOICE = () => "silent-mode";
   const DEFAULT_VISUAL = () => Scene.DEFAULT_MODE || "glow";
 
   const startBtn = $("startBtn");
@@ -306,12 +306,12 @@
     order.forEach((id) => {
       if (groups[id]?.children.length) voiceSelect.appendChild(groups[id]);
     });
-    // Eski/kaldırılmış ses anahtarlarını yeni kataloga düşür
+    // Varsayılan açılış: Sessiz Mod (Yalnızca HUD)
     const valid = new Set([...voiceSelect.options].map((o) => o.value));
-    if (valid.has(prev) && full) {
+    if (valid.has("silent-mode")) {
+      voiceSelect.value = "silent-mode";
+    } else if (valid.has(prev) && full) {
       voiceSelect.value = prev;
-    } else if (valid.has("tesla")) {
-      voiceSelect.value = "tesla";
     } else {
       voiceSelect.value = DEFAULT_VOICE();
     }
@@ -1491,11 +1491,14 @@
 
     // Jest içinde hemen — await yok
     AudioEngine.kickUnlock?.();
-    clearDriveMute();
+    if (isAuto && voiceSelect) {
+      voiceSelect.value = "silent-mode";
+      Picker?.refreshAll?.();
+    }
 
     const voice =
       unlocked() || voiceSelect?.value === "silent-mode"
-        ? voiceSelect.value
+        ? (voiceSelect?.value || "silent-mode")
         : DEFAULT_VOICE();
     const visual = unlocked() ? visualSelect?.value : DEFAULT_VISUAL();
     applyVisualTheme(visual);
