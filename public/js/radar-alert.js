@@ -146,8 +146,16 @@ const RadarAlert = (() => {
   }
 
   function formatDist(m) {
+    if (!Number.isFinite(m) || m <= 0) return "—";
     if (m >= 1000) return `${(m / 1000).toFixed(m >= 2000 ? 0 : 1)} km`;
-    return `${Math.round(m / 10) * 10} m`;
+    if (m > 100) {
+      // 500 mt öncesinde ve 100 mt'ye kadar: 100 mt 100 mt azalsın
+      const hundreds = Math.min(900, Math.max(100, Math.round(m / 100) * 100));
+      return `${hundreds} m`;
+    }
+    // 100 mt den sonra: 10 mt 10 mt azalsın
+    const tens = Math.max(10, Math.round(m / 10) * 10);
+    return `${tens} m`;
   }
 
   function isTurkishSpeech() {
@@ -396,18 +404,48 @@ const RadarAlert = (() => {
     hide();
   }
 
+  const passedCameras = new Set();
+  const cameraMinDist = new Map();
+
   function findAhead(lat, lng, heading) {
     const ahead = [];
+    const hasHeading = heading != null && Number.isFinite(heading);
+
     for (const cam of cameras) {
       const d = haversineM(lat, lng, cam.lat, cam.lng);
-      if (d > AHEAD_MAX_M) continue;
-      const b = bearingDeg(lat, lng, cam.lat, cam.lng);
-      const diff = angleDiff(b, heading);
-      // Arkada kalanları yok say; dar toleransla yalnızca gidiş yönü
-      if (diff > HEADING_TOLERANCE) {
-        if (d < BEHIND_IGNORE_M && diff > 120) continue;
+      if (d > AHEAD_MAX_M) {
+        if (d > 3500) {
+          passedCameras.delete(cam.id);
+          cameraMinDist.delete(cam.id);
+        }
         continue;
       }
+
+      if (passedCameras.has(cam.id)) continue;
+
+      const lastMin = cameraMinDist.get(cam.id) ?? Infinity;
+      if (d < lastMin) {
+        cameraMinDist.set(cam.id, d);
+      }
+
+      const b = bearingDeg(lat, lng, cam.lat, cam.lng);
+      const diff = hasHeading ? angleDiff(b, heading) : 0;
+
+      // Nokta geçilme tespiti:
+      // Açı 85°'den fazla sapmışsa (nokta arkada kalmışsa) veya
+      // nokta çok yaklaştıktan (<60m) sonra mesafe artmaya başlamışsa geçilmiştir.
+      const passedByAngle = hasHeading && diff > 85;
+      const passedByReceding = lastMin < 60 && d > lastMin + 10;
+
+      if (passedByAngle || passedByReceding) {
+        passedCameras.add(cam.id);
+        continue;
+      }
+
+      if (hasHeading && diff > HEADING_TOLERANCE) {
+        continue;
+      }
+
       ahead.push({ cam, d, bearing: b });
     }
     ahead.sort((a, b) => a.d - b.d);
@@ -622,29 +660,18 @@ const RadarAlert = (() => {
             label: nearest.cam.label,
           };
           alert = buildAlert(opts);
-          const speakKey = `${nearest.cam.id}-${stage.key}`;
-          if (stage.key === "far") {
+          // 500 mt öncesinde TEK sesli uyarı (5 km, 2 km, 1 km tekrarları kaldırıldı)
+          const speak500Key = `cam-500-${nearest.cam.id}`;
+          if (nearest.d <= 550 && nearest.d >= 60 && lastSpokenKey !== speak500Key) {
+            lastSpokenKey = speak500Key;
             const phrase = isTurkishSpeech()
-              ? `Radar. ${speechDist(nearest.d)}`
-              : `${t("radarAhead")} ${formatDist(nearest.d)}`;
-            speak(speakKey, phrase);
-          } else if (stage.key === "mid") {
-            const phrase = isTurkishSpeech()
-              ? "Radar. İki kilometre"
-              : `${t("radarAhead")} 2 ${t("radarKm")}`;
-            speak(speakKey, phrase);
-          } else if (stage.key === "near") {
-            const phrase = isTurkishSpeech()
-              ? `Radar. Bir kilometre${limit ? `. ${speechLimit(limit)}` : ""}`
-              : `${t("radarAhead")} 1 ${t("radarKm")}${limit ? `, ${limit}` : ""}`;
-            speak(speakKey, phrase);
-          } else if (stage.key === "critical") {
-            const phrase = over
-              ? t("radarSlow")
-              : isTurkishSpeech()
-                ? `Radar yakın. ${speechDist(nearest.d)}`
-                : `${t("radarAhead")} ${formatDist(nearest.d)}`;
-            speak(speakKey, phrase);
+              ? (kind === "corridor"
+                  ? "Hız koridoru. 500 metre."
+                  : `Radar. 500 metre.${limit ? ` ${speechLimit(limit)}.` : ""}`)
+              : `${t("radarAhead")} 500 m`;
+            speak(speak500Key, phrase);
+          } else if (nearest.d <= 300 && over) {
+            speak(`slow-${nearest.cam.id}`, t("radarSlow"));
           }
         }
       }
