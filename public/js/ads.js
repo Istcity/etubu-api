@@ -95,8 +95,13 @@ const Ads = (() => {
       return false;
     }
 
+    if (wrap.querySelector(".yandex-rtb") && wrap.dataset.rendered === "1") {
+      return true;
+    }
+
     const renderTo = `yandex_rtb_${blockId}_${containerId}_${Date.now().toString(36)}`;
     wrap.innerHTML = "";
+    wrap.dataset.rendered = "1";
     const box = document.createElement("div");
     box.id = renderTo;
     box.className = "yandex-rtb";
@@ -206,25 +211,33 @@ const Ads = (() => {
     document.body.classList.remove("ads-pulse");
     const leftRail = document.querySelector(".ad-rail--left");
     if (leftRail) leftRail.hidden = true;
+    if (driveFocus) {
+      PULSE_RAILS.forEach((sel) => {
+        const el = document.querySelector(sel);
+        if (el) el.setAttribute("hidden", "");
+      });
+    }
   }
 
   function runPulseShow() {
     if (!canShowAds() || !driveFocus) return;
-    if (document.documentElement.classList.contains("etubu-intro")) return;
-    if (document.getElementById("etubuConsent") && !document.getElementById("etubuConsent").hidden) {
-      return;
-    }
 
     document.body.classList.add("ads-pulse", "ads-ready");
     PULSE_RAILS.forEach((sel) => {
       const el = document.querySelector(sel);
-      if (el) el.hidden = false;
+      if (el) {
+        el.hidden = false;
+        el.removeAttribute("hidden");
+      }
     });
 
-    try {
-      renderMainSlots();
-    } catch (e) {
-      console.warn("Ad pulse render", e);
+    if (!rendered) {
+      rendered = true;
+      try {
+        renderMainSlots();
+      } catch (e) {
+        console.warn("Ad pulse render", e);
+      }
     }
 
     if (pulseHideTimer) clearTimeout(pulseHideTimer);
@@ -242,7 +255,18 @@ const Ads = (() => {
   function startPulse() {
     stopPulse();
     if (!canShowAds() || !driveFocus) return;
-    // Her 2 dakikada bir 10 saniye göster
+    // Önceden DOM'a yüklenmemişse hemen render et
+    if (!rendered) {
+      rendered = true;
+      try {
+        renderMainSlots();
+      } catch (e) {
+        console.warn("Ad pulse pre-render", e);
+      }
+    }
+    // Panel kapandığında sürücünün reklamı teyit edebilmesi için ilk 10 sn pulse'u hemen göster
+    runPulseShow();
+    // Ardından her 2 dakikada bir 10 saniye göster
     pulseTimer = setInterval(runPulseShow, PULSE_INTERVAL_MS);
   }
 
@@ -250,7 +274,6 @@ const Ads = (() => {
   function setDriveFocus(on) {
     driveFocus = !!on;
     if (driveFocus) {
-      endPulseShow();
       if (canShowAds()) startPulse();
       else stopPulse();
     } else {
@@ -271,7 +294,7 @@ const Ads = (() => {
       if (typeof Consent !== "undefined" && !init._consentBound) {
         init._consentBound = true;
         Consent.onChange(() => {
-          if (Consent.allows("marketing")) init();
+          if (canShowAds()) init();
           else hideAll();
         });
       }
@@ -281,23 +304,13 @@ const Ads = (() => {
     if (typeof Consent !== "undefined" && !init._consentBound) {
       init._consentBound = true;
       Consent.onChange(() => {
-        if (Consent.allows("marketing")) init();
+        if (canShowAds()) init();
         else hideAll();
       });
     }
 
+    document.body.classList.add("ads-ready");
     const cfg = window.ETUBU_CONFIG || {};
-
-    if (driveFocus) {
-      document.body.classList.add("ads-ready");
-      startPulse();
-      return;
-    }
-
-    showRails();
-
-    const leftRail = document.querySelector(".ad-rail--left");
-    if (leftRail) leftRail.hidden = true;
 
     try {
       if (cfg.YANDEX_RTB_ENABLED !== false) {
@@ -310,6 +323,15 @@ const Ads = (() => {
       renderIntroSlots();
     } catch (e) {
       console.warn("Reklam yüklenemedi", e);
+    }
+
+    const leftRail = document.querySelector(".ad-rail--left");
+    if (leftRail) leftRail.hidden = true;
+
+    if (driveFocus) {
+      startPulse();
+    } else {
+      showRails();
     }
   }
 
