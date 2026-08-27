@@ -322,9 +322,9 @@ const CarBrowser = (() => {
         typeof Ads !== "undefined" && Ads.hideAll?.();
       } catch (_) {}
     } else {
-      document.body.classList.remove("ads-hidden", "drive-focus");
+      document.body.classList.remove("ads-hidden");
       try {
-        typeof Ads !== "undefined" && Ads.showRails?.();
+        typeof Ads !== "undefined" && Ads.setDriveFocus?.(true);
       } catch (_) {}
     }
     syncViewportHeight();
