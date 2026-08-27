@@ -190,26 +190,19 @@ const RouteGuard = (() => {
   }
 
   function formatDist(m) {
-    if (!Number.isFinite(m) || m < 0) return "";
-    // Basamaklı mesafe (yol uyarıları tablosu):
-    // >5 km → 10 km; <5 km → 1 km; <2 km → 100 m; <300 m → 50 m; <100 m → 10 m
-    let stepped;
-    if (m >= 5000) {
-      stepped = Math.max(10000, Math.floor(m / 10000) * 10000);
-    } else if (m >= 2000) {
-      stepped = Math.max(1000, Math.floor(m / 1000) * 1000);
-    } else if (m >= 300) {
-      stepped = Math.max(100, Math.floor(m / 100) * 100);
-    } else if (m >= 100) {
-      stepped = Math.max(50, Math.floor(m / 50) * 50);
-    } else {
-      stepped = Math.max(10, Math.floor(m / 10) * 10);
+    if (!Number.isFinite(m) || m <= 0) return "";
+    if (m >= 1000) {
+      const km = (m / 1000).toFixed(m >= 2000 ? 0 : 1);
+      return `${km} km`;
     }
-    if (stepped >= 1000) {
-      const km = stepped / 1000;
-      return `${Number.isInteger(km) ? km : km.toFixed(1)} km`;
+    if (m > 100) {
+      // 500 mt öncesinde ve 100 mt'ye kadar: 100 mt 100 mt azalsın
+      const hundreds = Math.min(900, Math.max(100, Math.round(m / 100) * 100));
+      return `${hundreds} m`;
     }
-    return `${Math.round(stepped)} m`;
+    // 100 mt den sonra: 10 mt 10 mt azalsın
+    const tens = Math.max(10, Math.round(m / 10) * 10);
+    return `${tens} m`;
   }
 
   function setStatus(msg) {
@@ -1688,20 +1681,50 @@ const RouteGuard = (() => {
     return 3;
   }
 
+  const passedRouteHazards = new Set();
+  const routeHazardMinDist = new Map();
+
   function nearestAhead(lat, lng, heading) {
     let best = null;
+    const hasHeading = heading != null && Number.isFinite(heading);
+
     for (const h of hazards) {
+      const hid = h.id || `${h.kind}-${h.lat},${h.lng}`;
+      if (passedRouteHazards.has(hid)) continue;
+
       const d = haversineM(lat, lng, h.lat, h.lng);
-      // Şarj: 5 km kala HUD uyarısı; radar/koridor ~5.5 km; hava daha geniş
       const maxD =
         h.kind === "weather" ? 12000 : h.kind === "charge" ? 5000 : 5500;
-      if (d > maxD) continue;
-      if (heading != null && Number.isFinite(heading) && h.kind !== "weather") {
-        const b = bearingDeg(lat, lng, h.lat, h.lng);
-        // Şarj için biraz daha geniş açı — yan yoldaki istasyon kaçmasın
-        const tol = h.kind === "charge" ? 75 : 58;
-        if (angleDiff(b, heading) > tol) continue;
+      if (d > maxD) {
+        if (d > 3500) {
+          passedRouteHazards.delete(hid);
+          routeHazardMinDist.delete(hid);
+        }
+        continue;
       }
+
+      const lastMin = routeHazardMinDist.get(hid) ?? Infinity;
+      if (d < lastMin) {
+        routeHazardMinDist.set(hid, d);
+      }
+
+      const b = bearingDeg(lat, lng, h.lat, h.lng);
+      const diff = hasHeading ? angleDiff(b, heading) : 0;
+
+      // Nokta geçilme kontrolü: Arkada kalmışsa veya yaklaştıktan sonra mesafe artıyorsa hemen düşür
+      const tol = h.kind === "charge" ? 75 : 58;
+      const passedByAngle = hasHeading && h.kind !== "weather" && diff > 85;
+      const passedByReceding = lastMin < 50 && d > lastMin + 10;
+
+      if (passedByAngle || passedByReceding) {
+        passedRouteHazards.add(hid);
+        continue;
+      }
+
+      if (hasHeading && h.kind !== "weather" && diff > tol) {
+        continue;
+      }
+
       const pri = hazardPriority(h.kind);
       if (
         !best ||
@@ -1717,18 +1740,28 @@ const RouteGuard = (() => {
   /** Sıradaki kritik noktalar (makara / reel) — öncelik + mesafe */
   function listAhead(lat, lng, heading, limit = 4) {
     const list = [];
+    const hasHeading = heading != null && Number.isFinite(heading);
+
     for (const h of hazards) {
+      const hid = h.id || `${h.kind}-${h.lat},${h.lng}`;
+      if (passedRouteHazards.has(hid)) continue;
+
       const d = haversineM(lat, lng, h.lat, h.lng);
-      // Radar/koridor: uzak mesafede de tabloda görünsün (basamaklı km)
       const maxD =
         h.kind === "weather" ? 12000 : h.kind === "charge" ? 5000 : 80000;
       if (d > maxD) continue;
-      if (heading != null && Number.isFinite(heading) && h.kind !== "weather") {
-        const b = bearingDeg(lat, lng, h.lat, h.lng);
-        const tol = h.kind === "charge" ? 75 : 58;
-        // Uzak radar/koridor (>5.5 km): açı filtresi gevşek — ilk uyarı kaçmasın
-        if (d <= 5500 && angleDiff(b, heading) > tol) continue;
+
+      const b = bearingDeg(lat, lng, h.lat, h.lng);
+      const diff = hasHeading ? angleDiff(b, heading) : 0;
+      const tol = h.kind === "charge" ? 75 : 58;
+
+      const passedByAngle = hasHeading && h.kind !== "weather" && diff > 85;
+      if (passedByAngle) {
+        passedRouteHazards.add(hid);
+        continue;
       }
+
+      if (d <= 5500 && hasHeading && h.kind !== "weather" && diff > tol) continue;
       const stage =
         STAGES.find((s) => d <= s.max)?.key ||
         (d <= 80000 ? "far" : null);
