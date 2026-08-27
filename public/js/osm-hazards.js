@@ -277,10 +277,20 @@ const OsmHazards = (() => {
     }
   }
 
+  const osmPassedIds = new Set();
+  const osmMinDist = new Map();
+
   function formatDist(m) {
-    if (!Number.isFinite(m)) return "—";
-    if (m < 1000) return `${Math.round(m)} m`;
-    return `${(m / 1000).toFixed(m < 10000 ? 1 : 0)} km`;
+    if (!Number.isFinite(m) || m <= 0) return "—";
+    if (m >= 1000) return `${(m / 1000).toFixed(m < 10000 ? 1 : 0)} km`;
+    if (m > 100) {
+      // 500 mt öncesinde ve 100 mt'ye kadar: 100 mt 100 mt azalsın
+      const hundreds = Math.min(900, Math.max(100, Math.round(m / 100) * 100));
+      return `${hundreds} m`;
+    }
+    // 100 mt den sonra: 10 mt 10 mt azalsın
+    const tens = Math.max(10, Math.round(m / 10) * 10);
+    return `${tens} m`;
   }
 
   function activePoints() {
@@ -295,10 +305,34 @@ const OsmHazards = (() => {
       const type = p.type || p.kind;
       const distM = haversineM(lat, lng, p.lat, p.lng);
       const rule = RULES[type];
-      if (!rule || distM > rule.warn * 1.4) continue;
+      if (!rule || distM > rule.warn * 1.4) {
+        if (distM > 600) {
+          osmPassedIds.delete(p.id);
+          osmMinDist.delete(p.id);
+        }
+        continue;
+      }
+
+      if (osmPassedIds.has(p.id)) continue;
+
+      const lastMin = osmMinDist.get(p.id) ?? Infinity;
+      if (distM < lastMin) {
+        osmMinDist.set(p.id, distM);
+      }
+
       const brg = bearingDeg(lat, lng, p.lat, p.lng);
-      const ahead = !headingOk || angleDiff(heading, brg) <= 75;
-      if (!ahead && distM > 40) continue;
+      const diff = headingOk ? angleDiff(heading, brg) : 0;
+      const ahead = !headingOk || diff <= 75;
+
+      // Nokta geçilme kontrolü: Arkada kaldıysa veya yaklaştıktan sonra mesafe artıyorsa hemen düşür
+      const passedByAngle = headingOk && diff > 75;
+      const passedByReceding = lastMin < 35 && distM > lastMin + 8;
+
+      if (!ahead || passedByAngle || passedByReceding) {
+        osmPassedIds.add(p.id);
+        continue;
+      }
+
       scored.push({
         ...p,
         type,
