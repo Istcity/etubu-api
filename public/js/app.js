@@ -2473,10 +2473,6 @@
     step("panel", () => {
       if (CarBrowser.isTesla?.() || CarBrowser.isEphemeral?.()) {
         setPanelHidden(true, false);
-        if (!isPremiumUser()) {
-          document.body.classList.remove("ads-hidden", "drive-focus");
-          Ads.showRails?.();
-        }
         CarBrowser.forceCompactChrome?.();
         CarBrowser.syncViewportHeight?.();
       } else {
