@@ -371,9 +371,16 @@ body.panel-hidden.ads-pulse .ad-rail--top {
   pointer-events: auto !important;
   visibility: visible !important;
   opacity: 1 !important;
-  z-index: 50 !important;
+  z-index: 9999 !important;
   top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
   height: calc(50px + var(--safe-top)) !important;
+  padding-top: var(--safe-top) !important;
+  background: rgba(2, 4, 10, 0.85) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border-bottom: 1px solid rgba(0, 240, 255, 0.2) !important;
   animation: etubu-ad-pulse-in 0.35s ease;
 }
 
@@ -382,13 +389,19 @@ body.panel-hidden.ads-pulse .ad-rail--middle {
   pointer-events: auto !important;
   visibility: visible !important;
   opacity: 1 !important;
-  bottom: calc(var(--safe-bottom) + 6px) !important;
+  bottom: calc(var(--safe-bottom) + 8px) !important;
   height: 70px !important;
   min-height: 50px !important;
   left: 50% !important;
+  right: auto !important;
   transform: translateX(-50%) !important;
   width: min(728px, calc(100vw - 24px)) !important;
-  z-index: 50 !important;
+  z-index: 9999 !important;
+  background: rgba(2, 4, 10, 0.85) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border: 1px solid rgba(0, 240, 255, 0.2) !important;
+  border-radius: 12px !important;
   animation: etubu-ad-pulse-in 0.35s ease;
 }
 
@@ -397,8 +410,33 @@ body.panel-hidden.ads-pulse .ad-rail--right {
   pointer-events: auto !important;
   visibility: visible !important;
   opacity: 1 !important;
-  z-index: 50 !important;
+  z-index: 9999 !important;
   animation: etubu-ad-pulse-in 0.35s ease;
+}
+
+body.panel-hidden.ads-pulse .ad-slot,
+body.drive-focus.ads-pulse .ad-slot,
+body.tesla-browser.ads-pulse .ad-slot {
+  display: flex !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100% !important;
+  justify-content: center !important;
+  align-items: center !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+body.panel-hidden.ads-pulse .ad-inner,
+body.drive-focus.ads-pulse .ad-inner,
+body.tesla-browser.ads-pulse .ad-inner {
+  display: flex !important;
+  width: 100% !important;
+  height: 100% !important;
+  justify-content: center !important;
+  align-items: center !important;
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 
 @media (max-width: 900px) {
@@ -545,7 +583,7 @@ body.ephemeral-browser.ads-pulse .ad-rail--middle,
 body.ephemeral-browser.ads-pulse .ad-rail--right {
   display: flex !important;
   pointer-events: auto !important;
-  z-index: 55;
+  z-index: 9999 !important;
   opacity: 1;
   animation: etubu-ad-pulse-in 0.35s ease;
 }
@@ -5372,7 +5410,7 @@ body.ephemeral-browser.ads-pulse .ad-rail--top {
   opacity: 1 !important;
   top: 0 !important;
   height: calc(50px + var(--safe-top)) !important;
-  z-index: 50 !important;
+  z-index: 9999 !important;
   animation: etubu-ad-pulse-in 0.35s ease;
 }
 
@@ -5382,12 +5420,12 @@ body.ephemeral-browser.ads-pulse .ad-rail--middle {
   pointer-events: auto !important;
   visibility: visible !important;
   opacity: 1 !important;
-  bottom: calc(var(--safe-bottom) + 6px) !important;
+  bottom: calc(var(--safe-bottom) + 8px) !important;
   height: 70px !important;
   left: 50% !important;
   transform: translateX(-50%) !important;
   width: min(728px, calc(100vw - 24px)) !important;
-  z-index: 50 !important;
+  z-index: 9999 !important;
   animation: etubu-ad-pulse-in 0.35s ease;
 }
 
@@ -5401,7 +5439,7 @@ body.ephemeral-browser.ads-pulse .ad-rail--right {
   width: 120px !important;
   top: calc(50px + var(--safe-top) + 20px) !important;
   bottom: calc(70px + var(--safe-bottom) + 20px) !important;
-  z-index: 50 !important;
+  z-index: 9999 !important;
   animation: etubu-ad-pulse-in 0.35s ease;
 }
 
