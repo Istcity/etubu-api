@@ -714,22 +714,22 @@
   }
 
   function syncDriveFocus(panelHidden) {
-    // Sadece gerçekten ücretli/reklamsız premium kullanıcılar için drive-focus
-    const focus = !!panelHidden && isPremiumUser();
-    document.body.classList.toggle("drive-focus", focus);
+    const isClosed = !!panelHidden;
+    document.body.classList.toggle("panel-hidden", isClosed);
     try {
-      Ads.setDriveFocus?.(focus);
+      Ads.setDriveFocus?.(isClosed);
     } catch (_) {}
   }
 
   function setPanelHidden(hidden, persist = true) {
-    document.body.classList.toggle("panel-hidden", hidden);
-    syncDriveFocus(hidden);
-    if (!isPremiumUser()) {
+    const isClosed = !!hidden;
+    document.body.classList.toggle("panel-hidden", isClosed);
+    syncDriveFocus(isClosed);
+    if (!isClosed && !isPremiumUser()) {
       Ads.showRails?.();
     }
     const editorial = document.getElementById("siteEditorial");
-    if (editorial) editorial.hidden = !!hidden;
+    if (editorial) editorial.hidden = isClosed;
     if (panelToggle) {
       let textEl = panelToggle.querySelector(".panel-toggle-text");
       if (!textEl) {
@@ -920,9 +920,14 @@
   }
 
   function formatDistShort(m) {
-    if (m == null) return "";
-    if (m >= 1000) return `${(m / 1000).toFixed(1)} km`;
-    return `${Math.round(m / 10) * 10} m`;
+    if (m == null || m <= 0) return "";
+    if (m >= 1000) return `${(m / 1000).toFixed(m >= 2000 ? 0 : 1)} km`;
+    if (m > 100) {
+      const hundreds = Math.min(900, Math.max(100, Math.round(m / 100) * 100));
+      return `${hundreds} m`;
+    }
+    const tens = Math.max(10, Math.round(m / 10) * 10);
+    return `${tens} m`;
   }
 
   function triggerCorridorEnterPulse() {
@@ -998,6 +1003,7 @@
     const seen = new Set();
     const push = (item) => {
       if (!item) return;
+      if (item.distM != null && item.distM <= 5 && item.id !== "overspeed") return;
       const id = String(item.id || `${item.kind}-${item.dist}-${item.title}`);
       if (seen.has(id)) return;
       seen.add(id);
