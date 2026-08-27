@@ -5,7 +5,8 @@
  */
 const Ads = (() => {
   const PULSE_INTERVAL_MS = 2 * 60 * 1000; // 2 dk
-  const PULSE_RAILS = [".ad-rail--top", ".ad-rail--right"];
+  const PULSE_SHOW_MS = 10 * 1000; // 10 sn
+  const PULSE_RAILS = [".ad-rail--top", ".ad-rail--middle", ".ad-rail--right"];
 
   let pulseTimer = null;
   let pulseHideTimer = null;
@@ -205,7 +206,6 @@ const Ads = (() => {
     document.body.classList.remove("ads-pulse");
     const leftRail = document.querySelector(".ad-rail--left");
     if (leftRail) leftRail.hidden = true;
-    // drive-focus’ta CSS zaten .ad-rail’i gizler; sınıfı bırakmak yeterli
   }
 
   function runPulseShow() {
@@ -220,9 +220,6 @@ const Ads = (() => {
       const el = document.querySelector(sel);
       if (el) el.hidden = false;
     });
-    // Orta şerit pulse’ta yok
-    const mid = document.querySelector(".ad-rail--middle");
-    if (mid) mid.hidden = true;
 
     try {
       renderMainSlots();
@@ -245,17 +242,15 @@ const Ads = (() => {
   function startPulse() {
     stopPulse();
     if (!canShowAds() || !driveFocus) return;
-    // İlk gösterim ~45 sn sonra, sonra her 2 dk
+    // Her 2 dakikada bir 10 saniye göster
     pulseTimer = setInterval(runPulseShow, PULSE_INTERVAL_MS);
-    setTimeout(() => {
-      if (driveFocus && canShowAds()) runPulseShow();
-    }, 45 * 1000);
   }
 
   /** Panel kapalı / tam ekran — pulse döngüsünü aç/kapat */
   function setDriveFocus(on) {
     driveFocus = !!on;
     if (driveFocus) {
+      endPulseShow();
       if (canShowAds()) startPulse();
       else stopPulse();
     } else {
