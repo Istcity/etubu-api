@@ -357,8 +357,16 @@ body.panel-hidden {
   --ad-top-h: 50px;
 }
 
-/* Sol panel kapalıyken gelen bannerlar (solda banner kesinlikle OLMAYACAK) */
-body.panel-hidden .ad-rail--top {
+/* Panel kapalıyken bannerlar sürekli açık kalmaz; 2 dakikada bir 10 saniye (ads-pulse) görünür */
+body.panel-hidden:not(.ads-pulse) .ad-rail--top,
+body.panel-hidden:not(.ads-pulse) .ad-rail--middle,
+body.panel-hidden:not(.ads-pulse) .ad-rail--right {
+  display: none !important;
+  pointer-events: none !important;
+  opacity: 0 !important;
+}
+
+body.panel-hidden.ads-pulse .ad-rail--top {
   display: flex !important;
   pointer-events: auto !important;
   visibility: visible !important;
@@ -366,9 +374,10 @@ body.panel-hidden .ad-rail--top {
   z-index: 50 !important;
   top: 0 !important;
   height: calc(50px + var(--safe-top)) !important;
+  animation: etubu-ad-pulse-in 0.35s ease;
 }
 
-body.panel-hidden .ad-rail--middle {
+body.panel-hidden.ads-pulse .ad-rail--middle {
   display: flex !important;
   pointer-events: auto !important;
   visibility: visible !important;
@@ -380,14 +389,16 @@ body.panel-hidden .ad-rail--middle {
   transform: translateX(-50%) !important;
   width: min(728px, calc(100vw - 24px)) !important;
   z-index: 50 !important;
+  animation: etubu-ad-pulse-in 0.35s ease;
 }
 
-body.panel-hidden .ad-rail--right {
+body.panel-hidden.ads-pulse .ad-rail--right {
   display: flex !important;
   pointer-events: auto !important;
   visibility: visible !important;
   opacity: 1 !important;
   z-index: 50 !important;
+  animation: etubu-ad-pulse-in 0.35s ease;
 }
 
 @media (max-width: 900px) {
@@ -522,12 +533,15 @@ body.drive-focus .panel-toggle {
   z-index: 40;
 }
 
-/* Tam ekran pulse: üst + sağ (sol banner tamamen kapalı) */
+/* Tam ekran pulse: üst + orta/alt (+ sağ) (sol banner tamamen kapalı) */
 body.drive-focus.ads-pulse .ad-rail--top,
+body.drive-focus.ads-pulse .ad-rail--middle,
 body.drive-focus.ads-pulse .ad-rail--right,
 body.tesla-browser.ads-pulse .ad-rail--top,
+body.tesla-browser.ads-pulse .ad-rail--middle,
 body.tesla-browser.ads-pulse .ad-rail--right,
 body.ephemeral-browser.ads-pulse .ad-rail--top,
+body.ephemeral-browser.ads-pulse .ad-rail--middle,
 body.ephemeral-browser.ads-pulse .ad-rail--right {
   display: flex !important;
   pointer-events: auto !important;
@@ -535,16 +549,28 @@ body.ephemeral-browser.ads-pulse .ad-rail--right {
   opacity: 1;
   animation: etubu-ad-pulse-in 0.35s ease;
 }
-body.drive-focus.ads-pulse .ad-rail--middle,
-body.tesla-browser.ads-pulse .ad-rail--middle,
-body.ephemeral-browser.ads-pulse .ad-rail--middle {
+body.drive-focus:not(.ads-pulse) .ad-rail,
+body.tesla-browser:not(.ads-pulse) .ad-rail,
+body.ephemeral-browser:not(.ads-pulse) .ad-rail {
   display: none !important;
+  pointer-events: none !important;
+  opacity: 0 !important;
 }
 body.drive-focus.ads-pulse .ad-rail--top,
 body.tesla-browser.ads-pulse .ad-rail--top,
 body.ephemeral-browser.ads-pulse .ad-rail--top {
   height: calc(50px + var(--safe-top));
   background: rgba(2, 4, 10, 0.55);
+}
+body.drive-focus.ads-pulse .ad-rail--middle,
+body.tesla-browser.ads-pulse .ad-rail--middle,
+body.ephemeral-browser.ads-pulse .ad-rail--middle {
+  height: 70px;
+  min-height: 50px;
+  bottom: calc(var(--safe-bottom) + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(728px, calc(100vw - 24px));
 }
 body.drive-focus.ads-pulse .ad-rail--right,
 body.tesla-browser.ads-pulse .ad-rail--right,
@@ -5330,9 +5356,16 @@ body.ephemeral-browser .btn-adfree-inline {
   display: none !important;
 }
 
-/* Tesla ekranında reklam bannerları */
-body.tesla-browser .ad-rail--top,
-body.ephemeral-browser .ad-rail--top {
+/* Tesla ekranında reklam bannerları (2 dakikada bir 10 saniye ads-pulse ile) */
+body.tesla-browser:not(.ads-pulse) .ad-rail,
+body.ephemeral-browser:not(.ads-pulse) .ad-rail {
+  display: none !important;
+  pointer-events: none !important;
+  opacity: 0 !important;
+}
+
+body.tesla-browser.ads-pulse .ad-rail--top,
+body.ephemeral-browser.ads-pulse .ad-rail--top {
   display: flex !important;
   pointer-events: auto !important;
   visibility: visible !important;
@@ -5340,10 +5373,11 @@ body.ephemeral-browser .ad-rail--top {
   top: 0 !important;
   height: calc(50px + var(--safe-top)) !important;
   z-index: 50 !important;
+  animation: etubu-ad-pulse-in 0.35s ease;
 }
 
-body.tesla-browser .ad-rail--middle,
-body.ephemeral-browser .ad-rail--middle {
+body.tesla-browser.ads-pulse .ad-rail--middle,
+body.ephemeral-browser.ads-pulse .ad-rail--middle {
   display: flex !important;
   pointer-events: auto !important;
   visibility: visible !important;
@@ -5354,10 +5388,11 @@ body.ephemeral-browser .ad-rail--middle {
   transform: translateX(-50%) !important;
   width: min(728px, calc(100vw - 24px)) !important;
   z-index: 50 !important;
+  animation: etubu-ad-pulse-in 0.35s ease;
 }
 
-body.tesla-browser .ad-rail--right,
-body.ephemeral-browser .ad-rail--right {
+body.tesla-browser.ads-pulse .ad-rail--right,
+body.ephemeral-browser.ads-pulse .ad-rail--right {
   display: flex !important;
   pointer-events: auto !important;
   visibility: visible !important;
@@ -5367,6 +5402,7 @@ body.ephemeral-browser .ad-rail--right {
   top: calc(50px + var(--safe-top) + 20px) !important;
   bottom: calc(70px + var(--safe-bottom) + 20px) !important;
   z-index: 50 !important;
+  animation: etubu-ad-pulse-in 0.35s ease;
 }
 
 /* Solda kesinlikle banner yok */
