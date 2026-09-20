@@ -23,7 +23,7 @@ const WarnVoice = (() => {
   let lastAt = 0;
 
   function ttsEnabled() {
-    return false;
+    return true;
   }
 
   function alertVolume() {
@@ -429,13 +429,16 @@ const WarnVoice = (() => {
 
     const key = opts.key || msg;
     const now = Date.now();
-    const gap = opts.urgent ? 12000 : 26000;
+    const gap = (key === lastKey) ? (opts.urgent ? 12000 : 20000) : (opts.urgent ? 2000 : 3000);
     if (key === lastKey && now - lastAt < gap) return true; // consumed debounce
     lastKey = key;
     lastAt = now;
 
     const keys = composeKeys(msg);
-    if (!keys || !keys.length) return false;
+    if (!keys || !keys.length) {
+      if (opts.fallback !== false) fallbackTts(msg, opts);
+      return true;
+    }
 
     // Cancel system TTS if any
     try {
@@ -443,7 +446,9 @@ const WarnVoice = (() => {
     } catch (_) {}
 
     playKeys(keys, opts).then((ok) => {
-      if (!ok && opts.fallback !== false) fallbackTts(msg, opts);
+      if (!ok) fallbackTts(msg, opts);
+    }).catch(() => {
+      fallbackTts(msg, opts);
     });
     return true;
   }
@@ -452,13 +457,17 @@ const WarnVoice = (() => {
     try {
       const synth = window.speechSynthesis;
       if (!synth || typeof SpeechSynthesisUtterance === "undefined") return;
-      synth.cancel();
-      const u = new SpeechSynthesisUtterance(String(msg || ""));
-      u.lang =
-        (typeof I18n !== "undefined" && I18n.speechLocale?.()) || "tr-TR";
-      u.rate = opts.urgent ? 1.05 : 1.0;
-      u.volume = 1;
-      synth.speak(u);
+      try { synth.cancel(); } catch (_) {}
+      setTimeout(() => {
+        try {
+          synth.resume?.();
+          const u = new SpeechSynthesisUtterance(String(msg || ""));
+          u.lang = (typeof I18n !== "undefined" && I18n.speechLocale?.()) || "tr-TR";
+          u.rate = opts.urgent ? 1.08 : 1.0;
+          u.volume = 1;
+          synth.speak(u);
+        } catch (_) {}
+      }, 25);
     } catch (_) {}
   }
 

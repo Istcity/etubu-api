@@ -5,8 +5,9 @@ import Foundation
 /// call sites feed samples; `blend` is a pure function.
 enum SpeedFusion {
     static let lockKmh = 2.0
-    static let freshSeconds: TimeInterval = 0.35
-    static let fallbackSeconds: TimeInterval = 8.0
+    /// BLE sample younger than this is trusted alone (tighter with faster drive poll).
+    static let freshSeconds: TimeInterval = 0.22
+    static let fallbackSeconds: TimeInterval = 5.0
     static let maxHorizontalAccuracyM: CLLocationAccuracy = 20
 
     struct Input {

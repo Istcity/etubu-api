@@ -279,13 +279,37 @@ final class EtubuNativeDriveAudio {
     private func urlForLoop(_ file: String) -> URL? {
         let name = (file as NSString).deletingPathExtension
         let ext = (file as NSString).pathExtension.isEmpty ? "wav" : (file as NSString).pathExtension
-        let candidates: [URL?] = [
-            Bundle.main.url(forResource: name, withExtension: ext, subdirectory: "public/assets/audio/loops"),
+        let subdirs = [
+            "public/assets/audio/loops",
+            "assets/audio/loops",
+            "public/assets/audio/avas",
+            "public/assets/audio",
+            ""
+        ]
+        for sub in subdirs {
+            if let u = sub.isEmpty ? Bundle.main.url(forResource: name, withExtension: ext) : Bundle.main.url(forResource: name, withExtension: ext, subdirectory: sub),
+               FileManager.default.fileExists(atPath: u.path) {
+                return u
+            }
+        }
+        let directCandidates: [URL?] = [
             Bundle.main.resourceURL?.appendingPathComponent("public/assets/audio/loops/\(file)"),
             Bundle.main.bundleURL.appendingPathComponent("public/assets/audio/loops/\(file)"),
+            Bundle.main.resourceURL?.appendingPathComponent("assets/audio/loops/\(file)"),
+            Bundle.main.bundleURL.appendingPathComponent("assets/audio/loops/\(file)"),
+            Bundle.main.resourceURL?.appendingPathComponent(file),
         ]
-        for c in candidates {
+        for c in directCandidates {
             if let u = c, FileManager.default.fileExists(atPath: u.path) { return u }
+        }
+        // Generic fallback to any available loop if specific sound isn't present
+        let fallbacks = ["id3.wav", "modely.wav", "ev_hum_sport_loop.wav"]
+        for fb in fallbacks where fb != file {
+            let fbName = (fb as NSString).deletingPathExtension
+            if let u = Bundle.main.url(forResource: fbName, withExtension: "wav", subdirectory: "public/assets/audio/loops") ?? Bundle.main.url(forResource: fbName, withExtension: "wav"),
+               FileManager.default.fileExists(atPath: u.path) {
+                return u
+            }
         }
         return nil
     }
@@ -299,62 +323,62 @@ final class EtubuNativeDriveAudio {
         lastAccel = accelKmhS
 
         func throttleFromAccel(_ a: Double) -> Double {
-            let dead = 0.12
+            let dead = 0.10
             if a <= dead { return 0 }
-            return max(0, min(1, pow((a - dead) / 4.4, 0.82)))
+            return max(0, min(1, pow((a - dead) / 4.2, 0.82)))
         }
         func regenFromAccel(_ a: Double) -> Double {
-            let dead = 0.16
+            let dead = 0.12
             if a >= -dead { return 0 }
-            return max(0, min(1, (-a - dead) / 5.1))
+            return max(0, min(1, (-a - dead) / 4.6))
         }
 
         var targetThrottle = throttleFromAccel(accelKmhS)
         var targetRegen = regenFromAccel(accelKmhS)
-        if powerKw > 8 {
-            targetThrottle = max(powerKw / 220.0, targetThrottle * 0.72)
+        if powerKw > 6 {
+            targetThrottle = max(powerKw / 190.0, targetThrottle * 0.75)
         } else if powerKw > 1 {
-            targetThrottle = max(targetThrottle, min(1, powerKw / 220.0))
-        } else if powerKw < -8 {
-            targetRegen = max(-powerKw / 80.0, targetRegen * 0.65)
-        } else if powerKw < -1 {
-            targetRegen = max(targetRegen, min(1, -powerKw / 80.0))
+            targetThrottle = max(targetThrottle, min(1, powerKw / 190.0))
+        } else if powerKw < -4 {
+            targetRegen = max(-powerKw / 65.0, targetRegen * 0.75)
+        } else if powerKw < -0.5 {
+            targetRegen = max(targetRegen, min(1, -powerKw / 65.0))
         }
 
         // Soft flywheel: accel fast, lift/coast slow
         let thrRise = targetThrottle >= smoothThrottle - 0.01
-        smoothThrottle += (targetThrottle - smoothThrottle) * (thrRise ? 0.62 : 0.16)
+        smoothThrottle += (targetThrottle - smoothThrottle) * (thrRise ? 0.65 : 0.18)
         let regRise = targetRegen >= smoothRegen - 0.01
-        smoothRegen += (targetRegen - smoothRegen) * (regRise ? 0.5 : 0.2)
+        smoothRegen += (targetRegen - smoothRegen) * (regRise ? 0.55 : 0.22)
 
         let throttle = smoothThrottle
         let regen = smoothRegen
 
         // Target RPM: throttle primary, speed secondary, regen blend
         let targetRpm = max(
-            0.08,
-            min(1.0, throttle * 0.72 + speedNorm * 0.28 + regen * 0.38)
+            0.09,
+            min(1.0, throttle * 0.70 + speedNorm * 0.30 + regen * 0.32)
         )
-        let rising = targetRpm >= engineRpm - 0.01 || throttle > regen + 0.05
-        let rpmLerp = rising ? 0.22 : 0.065
+        let rising = targetRpm >= engineRpm - 0.01 || throttle > regen + 0.04
+        let rpmLerp = rising ? 0.24 : 0.075
         engineRpm += (targetRpm - engineRpm) * rpmLerp
 
-        let targetRate = Float(min(c.rateMax, max(c.rateMin, c.rateBase + engineRpm * c.rateSpan + throttle * 0.06 + regen * 0.04)))
-        let rateLerp: Float = rising ? 0.14 : 0.05
+        let targetRate = Float(min(c.rateMax, max(c.rateMin, c.rateBase + engineRpm * c.rateSpan + throttle * 0.07 + regen * 0.05)))
+        let rateLerp: Float = rising ? 0.16 : 0.065
         smoothRate += (targetRate - smoothRate) * rateLerp
         smoothHumRate += (targetRate * c.humRateMul - smoothHumRate) * rateLerp
-        if abs((bodyPlayer?.rate ?? smoothRate) - smoothRate) > 0.004 {
+        if abs((bodyPlayer?.rate ?? smoothRate) - smoothRate) > 0.003 {
             bodyPlayer?.rate = smoothRate
         }
-        if abs((humPlayer?.rate ?? smoothHumRate) - smoothHumRate) > 0.004 {
+        if abs((humPlayer?.rate ?? smoothHumRate) - smoothHumRate) > 0.003 {
             humPlayer?.rate = smoothHumRate
         }
-        let regenRate = Float(min(c.rateMax, max(c.rateMin, Double(smoothRate) * 0.96 + regen * 0.08)))
-        if abs((regenPlayer?.rate ?? regenRate) - regenRate) > 0.004 {
+        let regenRate = Float(min(c.rateMax, max(c.rateMin, Double(smoothRate) * 0.97 + regen * 0.09)))
+        if abs((regenPlayer?.rate ?? regenRate) - regenRate) > 0.003 {
             regenPlayer?.rate = regenRate
         }
 
-        let moving = feel >= 3 || throttle > 0.04 || regen > 0.04
+        let moving = feel >= 2.5 || throttle > 0.03 || regen > 0.03
         if muted {
             bodyPlayer?.volume = 0
             humPlayer?.volume = 0
@@ -362,7 +386,6 @@ final class EtubuNativeDriveAudio {
             return
         }
 
-        let duck = Float(1.0 - regen * 0.55)
         let targetBody: Float
         let targetHum: Float
         let targetRegenVol: Float
@@ -371,13 +394,13 @@ final class EtubuNativeDriveAudio {
             targetHum = c.idleHum
             targetRegenVol = 0
         } else {
-            let loadMul = Float(0.72 + throttle * Double(c.throttleBoost))
-            targetBody = (c.bodyBase + Float(engineRpm) * c.bodySpeed + Float(throttle) * c.bodyLoad) * loadMul * duck
-            targetHum = (c.humBase + Float(engineRpm) * c.humSpeed) * Float(0.85 + throttle * 0.2) * duck
-            // Regen biases toward rev/body character
-            targetRegenVol = Float(regen * (0.32 + regen * 0.48)) * (c.regenBoost)
+            let loadMul = Float(0.80 + throttle * Double(c.throttleBoost))
+            targetBody = (c.bodyBase + Float(engineRpm) * c.bodySpeed + Float(throttle) * c.bodyLoad) * loadMul
+            targetHum = (c.humBase + Float(engineRpm) * c.humSpeed) * Float(0.88 + throttle * 0.22)
+            // Regen whir and recovery sound: smooth ramp during deceleration
+            targetRegenVol = Float(regen * (0.42 + regen * 0.58)) * (c.regenBoost)
         }
-        let volLerp: Float = rising ? 0.24 : 0.1
+        let volLerp: Float = rising ? 0.26 : 0.12
         smoothBodyVol += (targetBody - smoothBodyVol) * volLerp
         smoothHumVol += (targetHum - smoothHumVol) * volLerp
         smoothRegenVol += (targetRegenVol - smoothRegenVol) * volLerp
@@ -387,16 +410,16 @@ final class EtubuNativeDriveAudio {
         regenPlayer?.volume = max(0, smoothRegenVol * mixGain)
     }
 
-    /// Blend/under sit under ducked Music; solo is full. Slider = cabin level.
+    /// Cabin level gain with high-headroom presence in Tesla cabin.
     private static func cabinMixGain() -> Float {
-        let cabin = Float(max(0.2, min(1.0, UserDefaults.standard.object(forKey: "etubu.cluster.alertVolume") as? Double ?? 0.85)))
+        let cabin = Float(max(0.25, min(1.0, UserDefaults.standard.object(forKey: "etubu.cluster.alertVolume") as? Double ?? 0.90)))
         switch AppDelegate.storedMixMode {
         case "solo":
-            return 1
+            return 1.0
         case "under":
-            return max(0.28, cabin * 0.55)
+            return max(0.40, cabin * 0.65)
         default:
-            return max(0.5, cabin * 0.92)
+            return max(0.70, cabin * 1.05)
         }
     }
 
@@ -421,23 +444,23 @@ final class EtubuNativeDriveAudio {
         static let evSoft = VoiceCharacter(
             rateMin: 0.78, rateMax: 1.35, rateBase: 0.82, rateSpan: 0.48, humRateMul: 0.97,
             speedRefKmh: 140,
-            idleBody: 0.06, idleHum: 0.10,
-            bodyBase: 0.28, bodySpeed: 0.42, bodyLoad: 0.22,
-            humBase: 0.14, humSpeed: 0.20, throttleBoost: 0.42, regenBoost: 0.95
+            idleBody: 0.10, idleHum: 0.14,
+            bodyBase: 0.38, bodySpeed: 0.46, bodyLoad: 0.28,
+            humBase: 0.20, humSpeed: 0.26, throttleBoost: 0.45, regenBoost: 1.05
         )
         static let evSport = VoiceCharacter(
             rateMin: 0.80, rateMax: 1.42, rateBase: 0.86, rateSpan: 0.52, humRateMul: 0.98,
             speedRefKmh: 160,
-            idleBody: 0.07, idleHum: 0.11,
-            bodyBase: 0.30, bodySpeed: 0.48, bodyLoad: 0.26,
-            humBase: 0.15, humSpeed: 0.24, throttleBoost: 0.50, regenBoost: 1.05
+            idleBody: 0.12, idleHum: 0.15,
+            bodyBase: 0.42, bodySpeed: 0.52, bodyLoad: 0.32,
+            humBase: 0.22, humSpeed: 0.28, throttleBoost: 0.54, regenBoost: 1.15
         )
         static let evBoost = VoiceCharacter(
             rateMin: 0.84, rateMax: 1.48, rateBase: 0.90, rateSpan: 0.55, humRateMul: 0.99,
             speedRefKmh: 180,
-            idleBody: 0.08, idleHum: 0.10,
-            bodyBase: 0.34, bodySpeed: 0.52, bodyLoad: 0.30,
-            humBase: 0.14, humSpeed: 0.22, throttleBoost: 0.58, regenBoost: 1.12
+            idleBody: 0.14, idleHum: 0.15,
+            bodyBase: 0.46, bodySpeed: 0.56, bodyLoad: 0.36,
+            humBase: 0.22, humSpeed: 0.28, throttleBoost: 0.62, regenBoost: 1.25
         )
 
         static func forVoice(_ pack: String) -> VoiceCharacter {

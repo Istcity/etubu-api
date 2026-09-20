@@ -6,6 +6,18 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
     case neon, violetStorm, deepOcean, midnight, tunnel, warp
     /// Model S Plaid 0–100 launch screen — yellow → red heat with acceleration.
     case plaidBoost
+    /// Dinamik hava durumu ve açık gökyüzü teması
+    case weatherSky
+    /// Navigasyon ve haritayı ön plana çıkaran HUD teması
+    case mapFocus
+    /// Apple MapKit 3D Binalar, Yeryüzü Yükseltisi ve Kokpit Perspektifi Teması
+    case map3D
+    /// Siber fırtına ve şimşek teması
+    case cyberStorm
+    /// Çöl kumu ve gün batımı teması
+    case desertDune
+    /// Sadece 2 kadran ve zifiri siyah zemin (OLED / Stealth)
+    case stealthOled
 
     var id: String { rawValue }
 
@@ -17,7 +29,7 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
     var pickerTitle: String {
         switch self {
         case .tesla: return EtubuCutoutFX.duman.title
-        case .midnight, .plaidBoost: return title
+        case .midnight, .plaidBoost, .weatherSky, .mapFocus, .map3D, .cyberStorm, .desertDune, .stealthOled: return title
         default: return EtubuCutoutFX.forTheme(self).title
         }
     }
@@ -25,7 +37,7 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
     /// Scene hue degrees from ETUBU web themes.
     var hue: Double {
         switch self {
-        case .tesla: return 0
+        case .tesla, .stealthOled: return 0
         case .aurora: return 185
         case .plasma: return 295
         case .redline: return 358
@@ -39,6 +51,11 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
         case .tunnel: return 165
         case .warp: return 255
         case .plaidBoost: return 28
+        case .weatherSky: return 202
+        case .mapFocus: return 188
+        case .map3D: return 200
+        case .cyberStorm: return 275
+        case .desertDune: return 32
         }
     }
 
@@ -48,6 +65,7 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
         switch self {
         case .tesla: return Color(red: 0.92, green: 0.22, blue: 0.22) // Tesla red
         case .plaidBoost: return Color(red: 1.0, green: 0.42, blue: 0.05)
+        case .stealthOled: return Color(red: 0.92, green: 0.94, blue: 0.98)
         default: return Color(hue: h, saturation: 0.85, brightness: 0.95)
         }
     }
@@ -55,7 +73,7 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
     /// TPMS araç kontur rengi — dolgu yok, tema aksanı / yumuşak vurgu.
     var tpmsCarStroke: Color {
         switch self {
-        case .tesla:
+        case .tesla, .stealthOled:
             return Color.white.opacity(0.82)
         case .plaidBoost:
             return Color(red: 1.0, green: 0.78, blue: 0.35).opacity(0.9)
@@ -76,6 +94,7 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
         switch self {
         case .tesla: return Color(white: 0.72)
         case .plaidBoost: return Color(red: 1.0, green: 0.85, blue: 0.25)
+        case .stealthOled: return Color(white: 0.60)
         default: return Color(hue: h, saturation: 0.55, brightness: 0.7)
         }
     }
@@ -85,6 +104,7 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
         switch self {
         case .tesla: return Color(red: 0.04, green: 0.04, blue: 0.045)
         case .plaidBoost: return Color(red: 0.06, green: 0.03, blue: 0.01)
+        case .stealthOled: return Color.black
         default: return Color(hue: h, saturation: 0.55, brightness: 0.07)
         }
     }
@@ -93,6 +113,7 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
         switch self {
         case .tesla: return Color(red: 0.10, green: 0.10, blue: 0.11)
         case .plaidBoost: return Color(red: 0.18, green: 0.08, blue: 0.02)
+        case .stealthOled: return Color.black
         default: return Color(hue: h, saturation: 0.5, brightness: 0.14)
         }
     }
@@ -101,6 +122,7 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
         switch self {
         case .tesla: return Color.white.opacity(0.06)
         case .plaidBoost: return Color(red: 1.0, green: 0.35, blue: 0.05).opacity(0.12)
+        case .stealthOled: return Color.black
         default: return Color(hue: h, saturation: 0.35, brightness: 0.16).opacity(0.72)
         }
     }
@@ -109,7 +131,7 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
 
     var secondaryText: Color {
         switch self {
-        case .tesla: return Color.white.opacity(0.70)
+        case .tesla, .stealthOled: return Color.white.opacity(0.70)
         case .plaidBoost: return Color(red: 1.0, green: 0.9, blue: 0.7).opacity(0.75)
         default: return Color(hue: h, saturation: 0.12, brightness: 0.78).opacity(0.72)
         }
@@ -117,15 +139,20 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
 
     var mutedText: Color {
         switch self {
-        case .tesla: return Color.white.opacity(0.42)
+        case .tesla, .stealthOled: return Color.white.opacity(0.42)
         case .plaidBoost: return Color(red: 1.0, green: 0.75, blue: 0.4).opacity(0.45)
         default: return Color(hue: h, saturation: 0.1, brightness: 0.7).opacity(0.45)
         }
     }
 
+    /// Landscape right column over OSM/satellite — opaque ivory vs green/beige ground.
+    var mapHudText: Color { Color(red: 1.0, green: 0.97, blue: 0.82) }
+    var mapHudMuted: Color { Color(red: 0.78, green: 0.90, blue: 0.62) }
+    var mapHudFill: Color { Color.black.opacity(0.64) }
+
     var stroke: Color {
         switch self {
-        case .tesla: return Color.white.opacity(0.18)
+        case .tesla, .stealthOled: return Color.white.opacity(0.18)
         case .plaidBoost: return Color(red: 1.0, green: 0.55, blue: 0.1).opacity(0.35)
         default: return accent.opacity(0.28)
         }
@@ -135,6 +162,7 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
         switch self {
         case .tesla: return accent.opacity(0.28)
         case .plaidBoost: return Color.orange.opacity(0.45)
+        case .stealthOled: return Color.clear
         default: return accent.opacity(0.35)
         }
     }
@@ -142,6 +170,8 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
     /// Full-bleed atmospheric gradient.
     var canvasGradient: [Color] {
         switch self {
+        case .stealthOled:
+            return [Color.black, Color.black]
         case .tesla:
             return [
                 Color(red: 0.12, green: 0.12, blue: 0.13),
@@ -169,6 +199,8 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
     /// Portrait / landscape edge wash.
     var washColors: [Color] {
         switch self {
+        case .stealthOled:
+            return [Color.clear, Color.clear]
         case .tesla:
             return [Color.white.opacity(0.12), accent.opacity(0.35)]
         case .plaidBoost:
@@ -200,63 +232,61 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
     /// Font family for speed gauge / numbers — PostScript names that resolve on iOS.
     var gaugeFont: String {
         switch self {
-        case .tesla: return "HelveticaNeue-Bold"
+        case .tesla, .stealthOled: return "HelveticaNeue-Bold"
         case .aurora: return "Orbitron-Bold"
-        case .plasma: return "Menlo-Bold"
+        case .plasma, .cyberStorm: return "Menlo-Bold"
         case .redline: return "DINCondensed-Bold"
         case .cyberLime: return "CourierNewPS-BoldMT"
         case .electricIce: return "AvenirNext-Bold"
-        case .solarFlare, .plaidBoost: return "DINAlternate-Bold"
+        case .solarFlare, .plaidBoost, .desertDune: return "DINAlternate-Bold"
         case .neon: return "AvenirNextCondensed-Bold"
         case .violetStorm: return "Futura-Bold"
         case .deepOcean: return "GillSans-Bold"
         case .midnight: return "HelveticaNeue-Bold"
         case .tunnel: return "CourierNewPS-BoldMT"
         case .warp: return "Menlo-Bold"
+        case .weatherSky: return "AvenirNext-Bold"
+        case .mapFocus, .map3D: return "Orbitron-Bold"
         }
     }
 
     /// Font family for UI labels, nav column, cards.
     var uiFont: String {
         switch self {
-        case .tesla: return "HelveticaNeue"
-        case .aurora: return "DMSans-Regular"
-        case .plasma: return "Menlo-Regular"
-        case .redline: return "AvenirNext-Medium"
-        case .cyberLime: return "CourierNewPSMT"
+        case .tesla, .stealthOled: return "HelveticaNeue"
+        case .aurora, .midnight, .weatherSky, .mapFocus, .map3D: return "DMSans-Regular"
+        case .plasma, .warp, .cyberLime, .tunnel, .cyberStorm: return "Menlo-Regular"
+        case .redline, .desertDune: return "AvenirNext-Medium"
         case .electricIce: return "AvenirNext-Regular"
         case .solarFlare, .plaidBoost: return "AvenirNext-DemiBold"
         case .neon: return "AvenirNextCondensed-Medium"
         case .violetStorm: return "Futura-Medium"
         case .deepOcean: return "GillSans"
-        case .midnight: return "DMSans-Regular"
-        case .tunnel: return "CourierNewPSMT"
-        case .warp: return "Menlo-Regular"
         }
     }
 
     /// System design fallback when family missing — shapes typography character.
     var gaugeDesign: Font.Design {
         switch self {
-        case .tesla, .aurora, .electricIce, .deepOcean: return .rounded
-        case .plasma, .warp, .cyberLime, .tunnel: return .monospaced
-        case .redline, .solarFlare, .neon, .plaidBoost: return .default
+        case .tesla, .aurora, .electricIce, .deepOcean, .weatherSky: return .rounded
+        case .plasma, .warp, .cyberLime, .tunnel, .mapFocus, .map3D, .cyberStorm: return .monospaced
+        case .redline, .solarFlare, .neon, .plaidBoost, .desertDune, .stealthOled: return .default
         case .violetStorm, .midnight: return .serif
         }
     }
 
     var uiDesign: Font.Design {
         switch self {
-        case .tesla, .aurora, .midnight, .electricIce: return .default
-        case .plasma, .warp, .cyberLime, .tunnel: return .monospaced
-        case .redline, .solarFlare, .neon, .plaidBoost: return .rounded
+        case .tesla, .aurora, .midnight, .electricIce, .mapFocus, .map3D, .stealthOled: return .default
+        case .plasma, .warp, .cyberLime, .tunnel, .cyberStorm: return .monospaced
+        case .redline, .solarFlare, .neon, .plaidBoost, .weatherSky, .desertDune: return .rounded
         case .violetStorm, .deepOcean: return .serif
         }
     }
 
     var gaugeWeight: Font.Weight {
         switch self {
-        case .tesla: return .semibold
+        case .tesla, .stealthOled: return .semibold
         case .redline, .neon, .solarFlare, .plaidBoost: return .black
         case .cyberLime, .tunnel, .warp: return .bold
         case .plasma, .violetStorm: return .heavy
@@ -266,7 +296,7 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
 
     var gaugeTracking: CGFloat {
         switch self {
-        case .tesla: return 0.15
+        case .tesla, .stealthOled: return 0.15
         case .redline, .solarFlare, .plaidBoost: return 0.4
         case .neon: return 0.2
         case .cyberLime, .tunnel: return 1.6
@@ -279,7 +309,7 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
     /// Relative gauge digit scale vs baseline (shape feel: condensed vs expansive).
     var gaugeScale: CGFloat {
         switch self {
-        case .tesla: return 1.06
+        case .tesla, .stealthOled: return 1.06
         case .neon, .redline, .plaidBoost: return 1.08
         case .cyberLime, .tunnel: return 0.94
         case .plasma, .warp: return 0.97
@@ -300,13 +330,13 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
 
     var dialRingStyle: DialRingStyle {
         switch self {
-        case .tesla: return .thin
-        case .neon, .cyberLime, .warp: return .neonSweep
-        case .redline, .solarFlare: return .dualGlow
-        case .plasma, .violetStorm: return .plasmaRibbon
+        case .tesla, .stealthOled: return .thin
+        case .neon, .cyberLime, .warp, .mapFocus, .map3D: return .neonSweep
+        case .redline, .solarFlare, .desertDune: return .dualGlow
+        case .plasma, .violetStorm, .cyberStorm: return .plasmaRibbon
         case .tunnel: return .dashed
         case .plaidBoost: return .plaidHeat
-        case .aurora, .electricIce, .deepOcean, .midnight: return .thin
+        case .aurora, .electricIce, .deepOcean, .midnight, .weatherSky: return .thin
         }
     }
 
@@ -318,6 +348,19 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
         case .dualGlow: return base * 1.55
         case .dashed: return base * 1.25
         case .thin: return base * 1.15
+        }
+    }
+
+    /// Outward bloom of stroke + glow so landscape parents don't clip the ring.
+    func ringBloom(for dialSize: CGFloat) -> CGFloat {
+        let lw = ringLineWidth(for: dialSize)
+        switch dialRingStyle {
+        case .neonSweep: return lw * 0.80 + 12
+        case .dualGlow: return lw * 1.10 + 14
+        case .plasmaRibbon: return lw * 0.90 + 14
+        case .plaidHeat: return lw * 0.95 + 16
+        case .dashed: return lw * 0.62 + 4
+        case .thin: return lw * 0.60 + 10
         }
     }
 
@@ -338,6 +381,12 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
         case .deepOcean: return "deep-ocean"
         case .tesla: return "tesla"
         case .midnight: return "midnight"
+        case .weatherSky: return "weather-sky"
+        case .mapFocus: return "map-focus"
+        case .map3D: return "map-3d"
+        case .cyberStorm: return "cyber-storm"
+        case .desertDune: return "desert-dune"
+        case .stealthOled: return "stealth-oled"
         default: return rawValue
         }
     }
@@ -349,13 +398,13 @@ enum ClusterTheme: String, CaseIterable, Identifiable {
     /// EV karakter bankası — soft / sport / boost (paylaşılan WAV, farklı yük eğrisi).
     var driveBasePack: String {
         switch self {
-        case .tesla, .midnight, .deepOcean, .tunnel:
+        case .tesla, .midnight, .deepOcean, .tunnel, .weatherSky, .stealthOled:
             return "calm-ev"
-        case .aurora, .electricIce, .cyberLime:
+        case .aurora, .electricIce, .cyberLime, .mapFocus, .map3D:
             return "ion-whisper"
-        case .plasma, .neon, .violetStorm, .warp:
+        case .plasma, .neon, .violetStorm, .warp, .cyberStorm:
             return "sport-ev"
-        case .redline, .solarFlare, .plaidBoost:
+        case .redline, .solarFlare, .plaidBoost, .desertDune:
             return "boost-launch"
         }
     }
@@ -406,42 +455,46 @@ struct ClusterThemeBackdrop: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: theme.canvasGradient,
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-
-            if theme == .plaidBoost {
-                plaidBoostWash
+            if theme == .stealthOled {
+                Color.black
             } else {
-                RadialGradient(
-                    colors: [theme.accent.opacity(0.32), .clear],
-                    center: landscape ? .trailing : .topTrailing,
-                    startRadius: 20,
-                    endRadius: landscape ? 520 : 420
-                )
-
-                RadialGradient(
-                    colors: [theme.washColors.last?.opacity(0.55) ?? theme.glow, .clear],
-                    center: landscape ? .leading : .bottom,
-                    startRadius: 10,
-                    endRadius: landscape ? 480 : 360
-                )
-
                 LinearGradient(
-                    colors: [
-                        theme.accent.opacity(0.12),
-                        .clear,
-                        theme.accentSoft.opacity(0.1),
-                    ],
+                    colors: theme.canvasGradient,
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
-                .blendMode(.plusLighter)
-            }
 
-            EtubuWallpaperOverlay(theme: theme, style: wallpaper, landscape: landscape)
+                if theme == .plaidBoost {
+                    plaidBoostWash
+                } else {
+                    RadialGradient(
+                        colors: [theme.accent.opacity(0.32), .clear],
+                        center: landscape ? .trailing : .topTrailing,
+                        startRadius: 20,
+                        endRadius: landscape ? 520 : 420
+                    )
+
+                    RadialGradient(
+                        colors: [theme.washColors.last?.opacity(0.55) ?? theme.glow, .clear],
+                        center: landscape ? .leading : .bottom,
+                        startRadius: 10,
+                        endRadius: landscape ? 480 : 360
+                    )
+
+                    LinearGradient(
+                        colors: [
+                            theme.accent.opacity(0.12),
+                            .clear,
+                            theme.accentSoft.opacity(0.1),
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    .blendMode(.plusLighter)
+                }
+
+                EtubuWallpaperOverlay(theme: theme, style: wallpaper, landscape: landscape)
+            }
         }
         .ignoresSafeArea()
         .allowsHitTesting(false)
@@ -490,4 +543,63 @@ struct ClusterThemeBackdrop: View {
             .opacity(Double(i))
         }
     }
+}
+
+/// ETUBU speed unit (km/h vs mph) with automatic regional detection.
+enum EtubuSpeedUnit: String, CaseIterable, Identifiable {
+    case auto
+    case kmh
+    case mph
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .auto: return EtubuClusterL10n.t("unitAuto")
+        case .kmh: return "km/h"
+        case .mph: return "mph"
+        }
+    }
+
+    /// Conversion factor from km/h
+    static let kmhToMphMultiplier: Double = 0.621371192
+
+    static var stored: EtubuSpeedUnit {
+        get {
+            let raw = UserDefaults.standard.string(forKey: "etubu.speed.unit") ?? "auto"
+            return EtubuSpeedUnit(rawValue: raw) ?? .auto
+        }
+        set {
+            UserDefaults.standard.set(newValue.rawValue, forKey: "etubu.speed.unit")
+            NotificationCenter.default.post(name: .etubuSpeedUnitDidChange, object: nil)
+        }
+    }
+
+    /// Whether MPH is currently active based on selection or region.
+    var isMph: Bool {
+        switch self {
+        case .mph: return true
+        case .kmh: return false
+        case .auto:
+            let regionCode = Locale.current.region?.identifier
+                ?? Locale.current.regionCode
+                ?? "TR"
+            let mphRegions: Set<String> = ["US", "GB", "UK", "LR", "MM", "PR", "VI", "GU", "AS", "MP", "BS", "BZ"]
+            return mphRegions.contains(regionCode.uppercased())
+        }
+    }
+
+    var label: String { isMph ? "mph" : "km/h" }
+
+    func convert(kmh: Double) -> Double {
+        isMph ? kmh * Self.kmhToMphMultiplier : kmh
+    }
+
+    func format(kmh: Double) -> Int {
+        Int(convert(kmh: kmh).rounded())
+    }
+}
+
+extension Notification.Name {
+    static let etubuSpeedUnitDidChange = Notification.Name("etubuSpeedUnitDidChange")
 }

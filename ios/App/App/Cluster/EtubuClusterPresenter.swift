@@ -21,50 +21,13 @@ final class EtubuClusterPresenter: NSObject {
     func installOverCapacitor() {
         DispatchQueue.main.async {
             EtubuRuntimeProfile.hideLingeringSplashOverlays()
-
-            guard let scene = Self.activeWindowScene() else {
-                self.scheduleRetry()
-                return
-            }
-
-            let bounds = Self.sceneInterfaceBounds(scene)
-            guard bounds.width > 40, bounds.height > 40 else {
-                self.scheduleRetry()
-                return
-            }
-
-            self.detachHostingFromCapIfNeeded()
-            let hc = self.ensureHostingController()
-            let overlay = self.ensureOverlayWindow(scene: scene, bounds: bounds)
-
-            if overlay.rootViewController !== hc {
-                if hc.parent != nil {
-                    hc.willMove(toParent: nil)
-                    hc.view.removeFromSuperview()
-                    hc.removeFromParent()
-                }
-                overlay.rootViewController = hc
-            }
-
-            self.applyOverlayFrame(bounds, overlay: overlay, hosting: hc)
-            overlay.makeKeyAndVisible()
-
-            self.hideCapacitorChrome()
-            self.startWebKeepAlive()
             self.observeGeometryChanges()
             self.observeLegalAcceptance()
-            self.installAttempts = 0
-            NotificationCenter.default.post(name: .etubuClusterGeometryDidChange, object: nil)
-
-            for delay in [0.05, 0.2, 0.5, 1.0] as [Double] {
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                    EtubuRuntimeProfile.hideLingeringSplashOverlays()
-                    guard !self.isModalOrKeyboardActive() else { return }
-                    self.syncOverlayGeometry()
-                    self.hideCapacitorChrome()
-                    self.makeOverlayKeyIfSafe()
-                }
-            }
+            self.syncOverlayGeometry()
+            self.hideCapacitorChrome()
+            self.startWebKeepAlive()
+            self.makeOverlayKeyIfSafe()
+            EtubuCapBridgeViewController.armWebContent()
         }
     }
 
@@ -129,13 +92,19 @@ final class EtubuClusterPresenter: NSObject {
         let wantLand = orient == .landscapeLeft || orient == .landscapeRight
         let sizeLand = size.width > size.height + 1
         if wantLand == sizeLand || orient == .unknown {
-            final = size
+            // Live Activity dönüşünde Cap bazen ekrandan büyük bounds verir — asla büyütme.
+            final = CGSize(
+                width: min(size.width, screenBounds.width),
+                height: min(size.height, screenBounds.height)
+            )
         }
         if wantLand {
             final = CGSize(width: max(final.width, final.height), height: min(final.width, final.height))
         } else if orient == .portrait || orient == .portraitUpsideDown {
             final = CGSize(width: min(final.width, final.height), height: max(final.width, final.height))
         }
+        final.width = min(final.width, screenBounds.width)
+        final.height = min(final.height, screenBounds.height)
         guard final.width > 40, final.height > 40 else { return }
 
         detachHostingFromCapIfNeeded()
@@ -204,7 +173,19 @@ final class EtubuClusterPresenter: NSObject {
         overlay: EtubuOverlayWindow,
         hosting: UIHostingController<EtubuClusterRootView>
     ) {
-        let next = CGRect(origin: .zero, size: bounds.size)
+        let next: CGRect = {
+            guard let scene = overlay.windowScene else {
+                return CGRect(origin: .zero, size: bounds.size)
+            }
+            let screen = Self.sceneInterfaceBounds(scene)
+            return CGRect(
+                origin: .zero,
+                size: CGSize(
+                    width: min(max(bounds.width, 40), screen.width),
+                    height: min(max(bounds.height, 40), screen.height)
+                )
+            )
+        }()
         guard next.width > 40, next.height > 40 else { return }
 
         overlay.isHidden = false
@@ -292,26 +273,9 @@ final class EtubuClusterPresenter: NSObject {
             queue: .main
         ) { [weak self] _ in
             guard let self else { return }
-            // Tear down hosting VC entirely — assigning rootView alone left legal stuck.
-            if let old = self.hosting {
-                if let overlay = self.overlayWindow, overlay.rootViewController === old {
-                    overlay.rootViewController = nil
-                }
-                old.willMove(toParent: nil)
-                old.view.removeFromSuperview()
-                old.removeFromParent()
-            }
-            self.hosting = nil
             EtubuLegalGate.shared.accepted = true
-            let hc = self.ensureHostingController()
-            if let scene = Self.activeWindowScene() {
-                let bounds = Self.sceneInterfaceBounds(scene)
-                let overlay = self.ensureOverlayWindow(scene: scene, bounds: bounds)
-                overlay.rootViewController = hc
-                self.applyOverlayFrame(bounds, overlay: overlay, hosting: hc)
-                overlay.makeKeyAndVisible()
-            }
             self.hideCapacitorChrome()
+            EtubuCapBridgeViewController.armWebContent()
         }
     }
 
@@ -344,31 +308,18 @@ final class EtubuClusterPresenter: NSObject {
 
             if let cap = Self.findCapVC() {
                 cap.view.backgroundColor = self.canvasColor
-                cap.view.isUserInteractionEnabled = false
-                cap.view.accessibilityElementsHidden = true
-                // Critical: disabled Cap *view* still lets the Cap *window* swallow
-                // touches if it sits above/key — then legal/cluster taps never fire.
+                cap.view.isUserInteractionEnabled = true
+                cap.view.accessibilityElementsHidden = false
                 if let capWin = cap.view.window {
-                    capWin.isUserInteractionEnabled = false
-                    if capWin.windowLevel >= .normal + 1 {
-                        capWin.windowLevel = .normal
-                    }
+                    capWin.isUserInteractionEnabled = true
                 }
                 if let wv = cap.webView {
                     wv.isHidden = false
-                    wv.alpha = 0.02
-                    wv.isOpaque = false
-                    wv.backgroundColor = .clear
-                    wv.scrollView.backgroundColor = .clear
-                    wv.scrollView.isOpaque = false
-                    wv.isUserInteractionEnabled = false
-                    wv.scrollView.isUserInteractionEnabled = false
-                    wv.accessibilityElementsHidden = true
-                    if #available(iOS 15.0, *) {
-                        wv.underPageBackgroundColor = .clear
-                    }
-                    Self.installGeolocationGate(on: wv)
-                    wv.evaluateJavaScript(Self.geoGateJavaScript + Self.hidePageJavaScript, completionHandler: nil)
+                    wv.alpha = 1.0
+                    wv.isOpaque = true
+                    wv.isUserInteractionEnabled = true
+                    wv.scrollView.isUserInteractionEnabled = true
+                    wv.accessibilityElementsHidden = false
                 }
             }
 

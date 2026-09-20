@@ -24,6 +24,7 @@ final class EtubuTeslaBleSession: ObservableObject {
     private var reconnectTask: Task<Void, Never>?
     private var userStopped = false
     private var reconnectAttempt = 0
+    private var lastUserPresent: Bool?
     private var extrasTick = 0
     /// Consecutive extras polls still missing SoC/climate/TPMS — wake after ~8.
     private var extrasMissingStreak = 0
@@ -412,7 +413,7 @@ final class EtubuTeslaBleSession: ObservableObject {
         }
     }
 
-    /// Dual-loop Infotainment: drive HUD ~1 Hz when moving; GPS fills BLE gaps.
+    /// Dual-loop Infotainment: drive HUD ~4–5 Hz when moving; GPS fills BLE gaps.
     /// Charge/climate/TPMS ~60 s. Keepalive wake while moving. Failures never poison other loops.
     private func startPolling(_ client: TeslaVehicleClient) {
         pollTask?.cancel()
@@ -460,13 +461,13 @@ final class EtubuTeslaBleSession: ObservableObject {
                     try? await Task.sleep(nanoseconds: 1_500_000_000)
                     continue
                 }
-                // Drive HUD: ~0.7 s gap when moving → ~1 Hz with BLE RTT.
+                // Drive HUD: ~180 ms gap when moving → ~4–5 Hz with BLE RTT.
                 // Parked stays slower so extras/VCSEC keep the wire.
-                // Timeout is 2 s. Never 3 Hz (would starve charge/climate).
+                // Timeout is 2 s. Extras loop is separate — safe to raise drive rate.
                 let sleepNs: UInt64 = await MainActor.run {
                     let moving = self.telemetry.kmh >= 3 || self.telemetry.kmhFine >= 3
-                    if moving { return 700_000_000 }
-                    return 2_200_000_000
+                    if moving { return 180_000_000 }
+                    return 1_600_000_000
                 }
                 try? await Task.sleep(nanoseconds: sleepNs)
             }
@@ -896,6 +897,17 @@ final class EtubuTeslaBleSession: ObservableObject {
                 valet: c.valetMode,
                 present: c.isUserPresent
             )
+            let doorOpen = [c.frontDriverDoor, c.frontPassengerDoor, c.rearDriverDoor, c.rearPassengerDoor, c.frontTrunk, c.rearTrunk]
+                .contains { $0 == true }
+            if doorOpen || c.isUserPresent == true {
+                resumeAutoConnectIfNeeded()
+            }
+            if c.isUserPresent == false, lastUserPresent == true, telemetry.kmh < 3 {
+                EtubuVehicleLaunchNotifier.shared.scheduleLeaveCarSummary()
+            }
+            if let present = c.isUserPresent {
+                lastUserPresent = present
+            }
         }
         if snap.media != nil || snap.mediaDetail != nil {
             telemetry.applyTeslaMedia(
@@ -938,6 +950,7 @@ final class EtubuTeslaBleSession: ObservableObject {
                         EtubuVehicleLaunchNotifier.shared.notifyVehicleConnected(source: "tesla")
                     case .disconnected:
                         if !self.userStopped {
+                            EtubuVehicleLaunchNotifier.shared.scheduleLeaveCarSummary()
                             if self.pairStep == .waitingForCard {
                                 self.telemetry.connectionState = .waitingForCard
                             } else if let until = self.ignoreDisconnectUntil, Date() < until {
@@ -1009,6 +1022,7 @@ final class EtubuTeslaBleSession: ObservableObject {
             if pollTask == nil, let client { startPolling(client) }
             return
         }
+        didAutoBootstrapThisProcess = false
         reconnectAttempt = 0
         bootstrapIfPossible(reason: .userRequested)
     }

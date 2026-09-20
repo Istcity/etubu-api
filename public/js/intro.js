@@ -8,6 +8,8 @@ const SiteIntro = (() => {
   let index = 0;
   let startX = 0;
   let bound = false;
+  let booted = false;
+  let lastTap = 0;
 
   function t(key) {
     return typeof I18n !== "undefined" ? I18n.t(key) : key;
@@ -64,7 +66,21 @@ const SiteIntro = (() => {
   }
 
   function isOpen() {
-    return document.documentElement.classList.contains("etubu-intro");
+    const root = el();
+    if (document.documentElement.classList.contains("etubu-intro")) return true;
+    if (document.body.classList.contains("intro-open")) return true;
+    return !!(root && !root.hidden && root.style.display !== "none");
+  }
+
+  function hideConsentOverlay() {
+    try {
+      if (typeof Consent !== "undefined" && Consent.hide) Consent.hide();
+    } catch (_) {}
+    const c = document.getElementById("etubuConsent");
+    if (!c) return;
+    c.hidden = true;
+    c.style.setProperty("display", "none", "important");
+    c.style.pointerEvents = "none";
   }
 
   function setSlide(i) {
@@ -91,28 +107,53 @@ const SiteIntro = (() => {
 
   function close() {
     markSeen();
+    hideConsentOverlay();
     document.documentElement.classList.remove("etubu-intro");
     document.body.classList.remove("intro-open");
     const root = el();
     if (!root) return;
-    root.classList.add("is-leaving");
+    root.hidden = true;
     root.setAttribute("aria-hidden", "true");
-    setTimeout(() => {
-      root.hidden = true;
-      root.classList.remove("is-leaving");
-    }, 280);
+    root.style.setProperty("display", "none", "important");
+    root.classList.remove("is-leaving");
   }
 
   function open() {
     const root = el();
     if (!root) return;
+    hideConsentOverlay();
     index = 0;
     root.hidden = false;
+    root.removeAttribute("hidden");
+    root.style.removeProperty("display");
     root.setAttribute("aria-hidden", "false");
     document.documentElement.classList.add("etubu-intro");
     document.body.classList.add("intro-open");
     setSlide(0);
     typeof Ads !== "undefined" && Ads.renderIntroSlots?.();
+  }
+
+  function guardTap(fn) {
+    return (e) => {
+      const now = Date.now();
+      if (now - lastTap < 350) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+      lastTap = now;
+      e.preventDefault();
+      e.stopPropagation();
+      fn(e);
+    };
+  }
+
+  function bindTap(node, fn) {
+    if (!node) return;
+    const run = guardTap(fn);
+    node.addEventListener("click", run);
+    node.addEventListener("pointerup", run);
+    node.addEventListener("touchend", run, { passive: false });
   }
 
   function onKey(e) {
@@ -136,15 +177,15 @@ const SiteIntro = (() => {
     const root = el();
     if (!root) return;
 
-    root.querySelector("#introSkipBtn")?.addEventListener("click", close);
-    root.querySelector("#introStartSkipBtn")?.addEventListener("click", close);
-    root.querySelector("#introNextBtn")?.addEventListener("click", () => {
+    bindTap(root.querySelector("#introSkipBtn"), close);
+    bindTap(root.querySelector("#introStartSkipBtn"), close);
+    bindTap(root.querySelector("#introNextBtn"), () => {
       if (index >= SLIDE_COUNT - 1) close();
       else setSlide(index + 1);
     });
-    root.querySelector("#introBackBtn")?.addEventListener("click", () => setSlide(index - 1));
+    bindTap(root.querySelector("#introBackBtn"), () => setSlide(index - 1));
     root.querySelectorAll(".intro-dot").forEach((dot) => {
-      dot.addEventListener("click", () => {
+      bindTap(dot, () => {
         const n = parseInt(dot.getAttribute("data-intro-dot"), 10);
         if (Number.isFinite(n)) setSlide(n);
       });
@@ -152,9 +193,11 @@ const SiteIntro = (() => {
 
     const stage = root.querySelector(".intro-stage");
     stage?.addEventListener("pointerdown", (e) => {
+      if (e.target.closest("button, a")) return;
       startX = e.clientX;
     });
     stage?.addEventListener("pointerup", (e) => {
+      if (e.target.closest("button, a")) return;
       const dx = e.clientX - startX;
       if (dx < -48) {
         if (index >= SLIDE_COUNT - 1) close();
@@ -163,7 +206,7 @@ const SiteIntro = (() => {
     });
 
     document.addEventListener("keydown", onKey);
-    document.getElementById("introReopenBtn")?.addEventListener("click", (e) => {
+    bindTap(document.getElementById("introReopenBtn"), (e) => {
       e.preventDefault();
       open();
     });
@@ -176,11 +219,14 @@ const SiteIntro = (() => {
     if (root) {
       root.hidden = true;
       root.setAttribute("aria-hidden", "true");
+      root.style.setProperty("display", "none", "important");
     }
   }
 
   function init() {
     bind();
+    if (booted) return;
+    booted = true;
     if (shouldSkipAuto()) {
       hideShell();
       return;
@@ -188,7 +234,7 @@ const SiteIntro = (() => {
     if (typeof Consent !== "undefined" && !Consent.hasChoice()) {
       hideShell();
       Consent.onChange(() => {
-        if (shouldSkipAuto() || hasSeen() || isOpen()) return;
+        if (shouldSkipAuto() || hasSeen()) return;
         open();
       });
       return;
@@ -200,5 +246,16 @@ const SiteIntro = (() => {
     open();
   }
 
+  function start() {
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", init, { once: true });
+    } else {
+      init();
+    }
+  }
+
+  start();
+
   return { init, open, close };
 })();
+window.SiteIntro = SiteIntro;

@@ -1,15 +1,36 @@
 # ETUBU — EV Driving Sounds
-# Eski AI-karşılaştırma URL'leri → ana sayfa
+# PayTR / mağaza: DirectoryIndex + hukuki URL alias'ları
+
+DirectoryIndex index.html index.htm app.html
 
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
 
+  # Eski AI-karşılaştırma URL'leri → ana sayfa
   RewriteRule ^blog\.html$ / [L,R=301]
   RewriteRule ^blog-.*\.html$ / [L,R=301]
   RewriteRule ^api\.php$ / [L,R=301]
   RewriteRule ^etubuson_logo\.png$ /assets/brand/logo-dark.png [L,R=301]
+
+  # PayTR / Türkçe hukuki URL alias'ları
+  RewriteRule ^mesafeli-satis-sozlesmesi/?$ /distance-sales.html [L,R=301]
+  RewriteRule ^mesafeli-satis/?$ /distance-sales.html [L,R=301]
+  RewriteRule ^iade-kosullari/?$ /returns.html [L,R=301]
+  RewriteRule ^iptal-ve-iade/?$ /returns.html [L,R=301]
+  RewriteRule ^refund-policy/?$ /returns.html [L,R=301]
+  RewriteRule ^gizlilik-politikasi/?$ /privacy.html [L,R=301]
+  RewriteRule ^kvkk/?$ /privacy.html [L,R=301]
+  RewriteRule ^teslimat-kosullari/?$ /shipping-delivery.html [L,R=301]
+  RewriteRule ^shipping-delivery/?$ /shipping-delivery.html [L,R=301]
+  RewriteRule ^fiyatlandirma/?$ /pricing.html [L,R=301]
+  RewriteRule ^iletisim/?$ /contact.html [L,R=301]
+  RewriteRule ^terms/?$ /terms.html [L,R=301]
+  RewriteRule ^privacy/?$ /privacy.html [L,R=301]
 </IfModule>
+
+# Dizin listeleme kapalı; index yoksa 403 yerine güvenli fallback
+Options -Indexes
 
 # php -- BEGIN cPanel-generated handler, do not edit
 # “ea-php73” paketini varsayılan “PHP” programlama dili olarak ayarlayın.

@@ -52,13 +52,34 @@ struct EtubuThemeStoreView: View {
 
     private let columns = [GridItem(.adaptive(minimum: 92), spacing: 8)]
 
+    @AppStorage("etubu.cluster.layoutStyle") private var storedLayoutStyleRaw = EtubuClusterLayoutStyle.dualDial.rawValue
+
+    private var currentLayoutStyle: EtubuClusterLayoutStyle {
+        get { EtubuClusterLayoutStyle(rawValue: storedLayoutStyleRaw) ?? .dualDial }
+        set { storedLayoutStyleRaw = newValue.rawValue }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
+            // MARK: - Layout Style
+            Text(EtubuClusterL10n.t("layoutStyle"))
+                .font(EtubuClusterFonts.ui(11, weight: .heavy))
+                .tracking(0.8)
+                .foregroundStyle(theme.mutedText)
+                .textCase(.uppercase)
+
+            HStack(spacing: 10) {
+                ForEach(EtubuClusterLayoutStyle.allCases) { style in
+                    layoutStyleCard(style)
+                }
+            }
+
             Text(EtubuClusterL10n.t("themeStoreThemes"))
                 .font(EtubuClusterFonts.ui(11, weight: .heavy))
                 .tracking(0.8)
                 .foregroundStyle(theme.mutedText)
                 .textCase(.uppercase)
+                .padding(.top, 4)
 
             LazyVGrid(columns: columns, spacing: 10) {
                 ForEach(ClusterTheme.allCases) { t in
@@ -84,6 +105,54 @@ struct EtubuThemeStoreView: View {
                 .foregroundStyle(theme.mutedText)
         }
         .padding(.vertical, 4)
+    }
+
+    private func layoutStyleCard(_ style: EtubuClusterLayoutStyle) -> some View {
+        let selected = currentLayoutStyle == style
+        return Button {
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                storedLayoutStyleRaw = style.rawValue
+            }
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Image(systemName: style.icon)
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(selected ? theme.accent : theme.mutedText)
+                    Text(style.title)
+                        .font(EtubuClusterFonts.ui(12, weight: .bold))
+                        .foregroundStyle(selected ? theme.primaryText : theme.secondaryText)
+                    Spacer(minLength: 0)
+                    if selected {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(theme.accent)
+                    }
+                }
+
+                Text(style.description)
+                    .font(EtubuClusterFonts.ui(10, weight: .medium))
+                    .foregroundStyle(theme.mutedText)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 9)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(selected ? theme.accent.opacity(0.12) : theme.surface)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(
+                                selected ? theme.accent : theme.stroke.opacity(0.6),
+                                lineWidth: selected ? 1.5 : 1
+                            )
+                    )
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     private func themeLocked(_ t: ClusterTheme) -> Bool {

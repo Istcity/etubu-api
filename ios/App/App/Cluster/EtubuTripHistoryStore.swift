@@ -196,6 +196,10 @@ final class EtubuTripHistoryStore: ObservableObject {
         active = nil
     }
 
+    func lastCompleted() -> EtubuTripRecord? {
+        trips.first
+    }
+
     func clearAll() {
         trips = []
         active = nil

@@ -1,9 +1,20 @@
 /**
  * Banner reklamlar — web: Yandex RTB (+ isteğe bağlı AdSense)
- * Üst / sağ / alt (orta) şeritler — sol reklam yok
- * Native ad-free IAP varsa gizlenir; web’de her zaman gösterilir.
+ * Normal: üst / sağ / alt (orta)
+ * Tam ekran (drive-focus): üst + sağ + sol, ~2 dk’da bir en fazla 10 sn pulse
  */
 const Ads = (() => {
+  const PULSE_INTERVAL_MS = 2 * 60 * 1000; // 2 dk
+  const PULSE_SHOW_MS = 10 * 1000; // 10 sn
+  const PULSE_RAILS = [".ad-rail--top", ".ad-rail--middle", ".ad-rail--right"];
+  const REFRESH_INTERVAL_PULSES = 2; // Her 2 darbede bir (ortalama 4 dakikada bir) yenileme
+
+  let pulseTimer = null;
+  let pulseHideTimer = null;
+  let driveFocus = false;
+  let rendered = false;
+  let pulseCount = 0;
+
   function loadAdSenseScript(client) {
     return new Promise((resolve, reject) => {
       if (document.querySelector(`script[data-ad-client="${client}"]`)) {
@@ -34,7 +45,24 @@ const Ads = (() => {
     s.async = true;
     s.src = "https://yandex.ru/ads/system/context.js";
     s.dataset.yandexRtb = "1";
+    s.onerror = () => {
+      const s2 = document.createElement("script");
+      s2.async = true;
+      s2.src = "https://yandex.com/ads/system/context.js";
+      document.head.appendChild(s2);
+    };
     document.head.appendChild(s);
+  }
+
+  /** Araç içi güvenlik: video/sesli reklamların sesini zorla kapat */
+  function muteAdMedia() {
+    try {
+      document.querySelectorAll(".ad-inner video, .ad-inner audio").forEach((el) => {
+        el.muted = true;
+        el.volume = 0;
+        el.setAttribute("muted", "");
+      });
+    } catch (_) {}
   }
 
   function renderAdSenseSlot(containerId, client, slot, format = "horizontal") {
@@ -67,8 +95,8 @@ const Ads = (() => {
     } catch (_) {}
   }
 
-  /** Yandex RTB — blockId + benzersiz renderTo konteyneri */
-  function renderYandexSlot(containerId, blockId) {
+  /** Yandex RTB — blockId + benzersiz renderTo (yenilemede id çakışmasın) */
+  function renderYandexSlot(containerId, blockId, forceRefresh = false) {
     const wrap = document.getElementById(containerId);
     if (!wrap) return false;
     if (!blockId) {
@@ -80,8 +108,14 @@ const Ads = (() => {
       return false;
     }
 
-    const renderTo = `yandex_rtb_${blockId}_${containerId}`;
+    if (!forceRefresh && wrap.querySelector(".yandex-rtb") && wrap.dataset.rendered === "1") {
+      return true;
+    }
+
+    const renderTo = `yandex_rtb_${blockId}_${containerId}_${Date.now().toString(36)}`;
+    wrap.dataset.rendered = "1";
     wrap.innerHTML = "";
+
     const box = document.createElement("div");
     box.id = renderTo;
     box.className = "yandex-rtb";
@@ -96,10 +130,23 @@ const Ads = (() => {
           blockId,
           renderTo,
         });
+        setTimeout(muteAdMedia, 400);
       } catch (e) {
         console.warn("Yandex RTB render hatası", containerId, e);
       }
     });
+    return true;
+  }
+
+  function canShowAds() {
+    if (typeof Paywall !== "undefined" && Paywall.isAdFree()) return false;
+    const cfg = window.ETUBU_CONFIG || {};
+    if (cfg.ADS_ENABLED === false) return false;
+    try {
+      if (window.__ETUBU_NATIVE_CLUSTER__ || window.Capacitor?.isNativePlatform?.()) {
+        return false;
+      }
+    } catch (_) {}
     return true;
   }
 
@@ -111,7 +158,8 @@ const Ads = (() => {
   }
 
   function hideAll() {
-    document.body.classList.remove("ads-ready");
+    stopPulse();
+    document.body.classList.remove("ads-ready", "ads-pulse");
     setRailsVisible(false);
     document.querySelectorAll(".intro-ad").forEach((el) => {
       el.hidden = true;
@@ -120,97 +168,203 @@ const Ads = (() => {
   }
 
   function showRails() {
+    if (!canShowAds()) return;
+    document.body.classList.remove("ads-hidden");
     document.body.classList.add("ads-ready");
     setRailsVisible(true);
     document.querySelectorAll(".intro-ad").forEach((el) => {
       el.hidden = false;
     });
+    const leftRail = document.querySelector(".ad-rail--left");
+    if (leftRail) leftRail.hidden = true;
+    if (!rendered) {
+      rendered = true;
+      renderMainSlots(false);
+    }
     if (window.EtubuNative?.showBannerAds) window.EtubuNative.showBannerAds();
   }
 
-  async function init() {
-    if (typeof Paywall !== "undefined" && Paywall.isAdFree()) {
-      hideAll();
-      return;
-    }
-
+  function renderMainSlots(forceRefresh = false) {
     const cfg = window.ETUBU_CONFIG || {};
-    if (!cfg.ADS_ENABLED) {
-      setRailsVisible(false);
-      return;
-    }
-
-    // Native cluster / Cap: AdMob is not wired — never show stub “ads” or call dead plugin.
-    try {
-      if (
-        window.__ETUBU_NATIVE_CLUSTER__ ||
-        window.Capacitor?.isNativePlatform?.()
-      ) {
-        hideAll();
-        return;
-      }
-    } catch (_) {}
-
-    if (typeof Consent !== "undefined") {
-      if (!init._consentBound) {
-        init._consentBound = true;
-        Consent.onChange(() => {
-          if (Consent.allows("marketing")) init();
-          else hideAll();
-        });
-      }
-      if (!Consent.hasChoice() || !Consent.allows("marketing")) {
-        hideAll();
-        return;
-      }
-    }
-
-    showRails();
-
-    // Sol rail her zaman kapalı
-    const leftRail = document.querySelector(".ad-rail--left");
-    if (leftRail) leftRail.hidden = true;
-
-    const useYandex = cfg.YANDEX_RTB_ENABLED !== false && (
-      cfg.YANDEX_RTB_BLOCK_TOP ||
-      cfg.YANDEX_RTB_BLOCK_MIDDLE ||
-      cfg.YANDEX_RTB_BLOCK_RIGHT ||
-      cfg.YANDEX_RTB_BLOCK_LEFT ||
-      cfg.YANDEX_RTB_BLOCK_BOTTOM
-    );
+    const useYandex =
+      cfg.YANDEX_RTB_ENABLED !== false &&
+      (cfg.YANDEX_RTB_BLOCK_TOP ||
+        cfg.YANDEX_RTB_BLOCK_MIDDLE ||
+        cfg.YANDEX_RTB_BLOCK_RIGHT ||
+        cfg.YANDEX_RTB_BLOCK_LEFT);
 
     if (useYandex) {
-      try {
-        ensureYandexLoader();
-        renderYandexSlot("adTopInner", cfg.YANDEX_RTB_BLOCK_TOP);
-        renderYandexSlot("adMiddleInner", cfg.YANDEX_RTB_BLOCK_MIDDLE);
-        renderYandexSlot("adRightInner", cfg.YANDEX_RTB_BLOCK_RIGHT);
-        renderIntroSlots();
-      } catch (e) {
-        console.warn("Yandex RTB yüklenemedi", e);
-      }
+      ensureYandexLoader();
+      renderYandexSlot("adTopInner", cfg.YANDEX_RTB_BLOCK_TOP, forceRefresh);
+      renderYandexSlot("adMiddleInner", cfg.YANDEX_RTB_BLOCK_MIDDLE, forceRefresh);
+      renderYandexSlot("adRightInner", cfg.YANDEX_RTB_BLOCK_RIGHT, forceRefresh);
+      renderYandexSlot(
+        "adLeftInner",
+        cfg.YANDEX_RTB_BLOCK_LEFT || cfg.YANDEX_RTB_BLOCK_RIGHT || cfg.YANDEX_RTB_BLOCK_TOP,
+        forceRefresh
+      );
       return;
     }
 
     if (!cfg.ADSENSE_CLIENT) return;
+    const c = cfg.ADSENSE_CLIENT;
+    renderAdSenseSlot("adTopInner", c, cfg.ADSENSE_SLOT_TOP, "horizontal");
+    renderAdSenseSlot("adRightInner", c, cfg.ADSENSE_SLOT_RIGHT, "vertical");
+    renderAdSenseSlot("adMiddleInner", c, cfg.ADSENSE_SLOT_MIDDLE, "horizontal");
+    renderAdSenseSlot(
+      "adLeftInner",
+      c,
+      cfg.ADSENSE_SLOT_LEFT || cfg.ADSENSE_SLOT_RIGHT,
+      "vertical"
+    );
+  }
+
+  function endPulseShow() {
+    if (pulseHideTimer) {
+      clearTimeout(pulseHideTimer);
+      pulseHideTimer = null;
+    }
+    document.body.classList.remove("ads-pulse");
+    const leftRail = document.querySelector(".ad-rail--left");
+    if (leftRail) leftRail.hidden = true;
+    if (driveFocus) {
+      PULSE_RAILS.forEach((sel) => {
+        const el = document.querySelector(sel);
+        if (el) el.setAttribute("hidden", "");
+      });
+    }
+  }
+
+  function runPulseShow() {
+    if (!canShowAds() || !driveFocus) return;
+
+    pulseCount++;
+
+    document.body.classList.add("ads-pulse", "ads-ready");
+    PULSE_RAILS.forEach((sel) => {
+      const el = document.querySelector(sel);
+      if (el) {
+        el.hidden = false;
+        el.removeAttribute("hidden");
+      }
+    });
+
+    if (!rendered) {
+      rendered = true;
+      try {
+        renderMainSlots(false);
+      } catch (e) {
+        console.warn("Ad pulse render", e);
+      }
+    } else if (pulseCount > 1 && (pulseCount - 1) % REFRESH_INTERVAL_PULSES === 0) {
+      // Her 2 darbede bir (~4 dakikada bir) reklamları güvenli şekilde tazele (Ad Refresh)
+      try {
+        renderMainSlots(true);
+      } catch (e) {
+        console.warn("Ad pulse refresh", e);
+      }
+    }
+
+    muteAdMedia();
+
+    if (pulseHideTimer) clearTimeout(pulseHideTimer);
+    pulseHideTimer = setTimeout(endPulseShow, PULSE_SHOW_MS);
+  }
+
+  function stopPulse() {
+    if (pulseTimer) {
+      clearInterval(pulseTimer);
+      pulseTimer = null;
+    }
+    endPulseShow();
+  }
+
+  function startPulse() {
+    stopPulse();
+    if (!canShowAds() || !driveFocus) return;
+    // Önceden DOM'a yüklenmemişse hemen render et
+    if (!rendered) {
+      rendered = true;
+      try {
+        renderMainSlots(false);
+      } catch (e) {
+        console.warn("Ad pulse pre-render", e);
+      }
+    }
+    // Panel kapandığında sürücünün reklamı teyit edebilmesi için ilk 10 sn pulse'u hemen göster
+    runPulseShow();
+    // Ardından her 2 dakikada bir 10 saniye göster
+    pulseTimer = setInterval(runPulseShow, PULSE_INTERVAL_MS);
+  }
+
+  /** Panel kapalı / tam ekran — pulse döngüsünü aç/kapat */
+  function setDriveFocus(on) {
+    driveFocus = !!on;
+    if (driveFocus) {
+      if (canShowAds()) startPulse();
+      else stopPulse();
+    } else {
+      stopPulse();
+      if (canShowAds()) {
+        showRails();
+        if (!rendered) {
+          rendered = true;
+          renderMainSlots();
+        }
+      }
+    }
+  }
+
+  async function init() {
+    if (!canShowAds()) {
+      hideAll();
+      if (typeof Consent !== "undefined" && !init._consentBound) {
+        init._consentBound = true;
+        Consent.onChange(() => {
+          if (canShowAds()) init();
+          else hideAll();
+        });
+      }
+      return;
+    }
+
+    if (typeof Consent !== "undefined" && !init._consentBound) {
+      init._consentBound = true;
+      Consent.onChange(() => {
+        if (canShowAds()) init();
+        else hideAll();
+      });
+    }
+
+    document.body.classList.add("ads-ready");
+    const cfg = window.ETUBU_CONFIG || {};
 
     try {
-      await loadAdSenseScript(cfg.ADSENSE_CLIENT);
-      const c = cfg.ADSENSE_CLIENT;
-      renderAdSenseSlot("adTopInner", c, cfg.ADSENSE_SLOT_TOP, "horizontal");
-      renderAdSenseSlot("adRightInner", c, cfg.ADSENSE_SLOT_RIGHT, "vertical");
-      renderAdSenseSlot("adMiddleInner", c, cfg.ADSENSE_SLOT_MIDDLE, "horizontal");
+      if (cfg.YANDEX_RTB_ENABLED !== false) {
+        ensureYandexLoader();
+      } else if (cfg.ADSENSE_CLIENT) {
+        await loadAdSenseScript(cfg.ADSENSE_CLIENT);
+      }
+      renderMainSlots();
+      rendered = true;
       renderIntroSlots();
     } catch (e) {
-      console.warn("AdSense yüklenemedi", e);
+      console.warn("Reklam yüklenemedi", e);
+    }
+
+    const leftRail = document.querySelector(".ad-rail--left");
+    if (leftRail) leftRail.hidden = true;
+
+    if (driveFocus) {
+      startPulse();
+    } else {
+      showRails();
     }
   }
 
   function renderIntroSlots() {
-    if (typeof Paywall !== "undefined" && Paywall.isAdFree()) return;
-    if (typeof Consent !== "undefined" && !Consent.allows("marketing")) return;
+    if (!canShowAds()) return;
     const cfg = window.ETUBU_CONFIG || {};
-    if (!cfg.ADS_ENABLED) return;
     const top = cfg.YANDEX_RTB_BLOCK_TOP || cfg.YANDEX_RTB_BLOCK_MIDDLE;
     const side = cfg.YANDEX_RTB_BLOCK_RIGHT || cfg.YANDEX_RTB_BLOCK_LEFT || top;
     const bottom = cfg.YANDEX_RTB_BLOCK_BOTTOM || cfg.YANDEX_RTB_BLOCK_MIDDLE || top;
@@ -232,5 +386,16 @@ const Ads = (() => {
     }
   }
 
-  return { init, hideAll, showRails, renderIntroSlots };
+  return {
+    init,
+    hideAll,
+    showRails,
+    renderIntroSlots,
+    setDriveFocus,
+    refresh: () => renderMainSlots(true),
+    getPulseCount: () => pulseCount,
+    /** test / debug */
+    _pulseNow: runPulseShow,
+  };
 })();
+window.Ads = Ads;

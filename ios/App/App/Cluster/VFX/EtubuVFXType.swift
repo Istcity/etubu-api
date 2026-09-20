@@ -28,18 +28,17 @@ enum EtubuVFXType: String, CaseIterable, Identifiable, Codable {
     /// Theme → VFX (1 theme maps to one of the 11 photoreal modules).
     static func forTheme(_ theme: ClusterTheme) -> EtubuVFXType {
         switch theme {
-        case .cyberLime, .violetStorm: return .elektrik
-        case .redline: return .ates
-        case .midnight, .tesla: return .duman
+        case .cyberLime, .violetStorm, .cyberStorm: return .elektrik
+        case .redline, .desertDune, .plaidBoost: return .ates
+        case .midnight, .tesla, .stealthOled: return .duman
         case .neon: return .patlama
         case .deepOcean: return .dalga
-        case .electricIce: return .su
-        case .warp: return .ruzgar
+        case .electricIce, .weatherSky: return .su
+        case .warp, .mapFocus, .map3D: return .ruzgar
         case .tunnel: return .hiz
         case .solarFlare: return .havaFisek
         case .aurora: return .yildizKaymasi
         case .plasma: return .yanardag
-        case .plaidBoost: return .ates
         }
     }
 

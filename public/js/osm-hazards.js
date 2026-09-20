@@ -277,10 +277,23 @@ const OsmHazards = (() => {
     }
   }
 
+  const osmPassedIds = new Set();
+  const osmMinDist = new Map();
+
   function formatDist(m) {
-    if (!Number.isFinite(m)) return "—";
-    if (m < 1000) return `${Math.round(m)} m`;
-    return `${(m / 1000).toFixed(m < 10000 ? 1 : 0)} km`;
+    if (!Number.isFinite(m) || m <= 0) return "—";
+    if (typeof I18n !== "undefined" && typeof I18n.convertDistanceM === "function") {
+      return I18n.convertDistanceM(m);
+    }
+    if (m >= 1000) return `${(m / 1000).toFixed(m < 10000 ? 1 : 0)} km`;
+    if (m > 100) {
+      // 500 mt öncesinde ve 100 mt'ye kadar: 100 mt 100 mt azalsın
+      const hundreds = Math.min(900, Math.max(100, Math.round(m / 100) * 100));
+      return `${hundreds} m`;
+    }
+    // 100 mt den sonra: 10 mt 10 mt azalsın
+    const tens = Math.max(10, Math.round(m / 10) * 10);
+    return `${tens} m`;
   }
 
   function activePoints() {
@@ -289,16 +302,44 @@ const OsmHazards = (() => {
   }
 
   function listNearby(lat, lng, heading, limit = 4) {
+    if (typeof RadarAlert !== "undefined" && typeof RadarAlert.getAlertConfig === "function") {
+      const cfg = RadarAlert.getAlertConfig();
+      if (cfg && !cfg.roadHazards) return [];
+    }
     const headingOk = Number.isFinite(heading);
     const scored = [];
     for (const p of activePoints()) {
       const type = p.type || p.kind;
       const distM = haversineM(lat, lng, p.lat, p.lng);
       const rule = RULES[type];
-      if (!rule || distM > rule.warn * 1.4) continue;
+      if (!rule || distM > rule.warn * 1.4) {
+        if (distM > 600) {
+          osmPassedIds.delete(p.id);
+          osmMinDist.delete(p.id);
+        }
+        continue;
+      }
+
+      if (osmPassedIds.has(p.id)) continue;
+
+      const lastMin = osmMinDist.get(p.id) ?? Infinity;
+      if (distM < lastMin) {
+        osmMinDist.set(p.id, distM);
+      }
+
       const brg = bearingDeg(lat, lng, p.lat, p.lng);
-      const ahead = !headingOk || angleDiff(heading, brg) <= 75;
-      if (!ahead && distM > 40) continue;
+      const diff = headingOk ? angleDiff(heading, brg) : 0;
+      const ahead = !headingOk || diff <= 75;
+
+      const wasNear = lastMin < 60 || distM < 70;
+      const passedByAngle = headingOk && wasNear && diff > 80;
+      const passedByReceding = lastMin < 40 && distM > lastMin + 8;
+
+      if (!ahead || passedByAngle || passedByReceding) {
+        osmPassedIds.add(p.id);
+        continue;
+      }
+
       scored.push({
         ...p,
         type,
@@ -327,17 +368,36 @@ const OsmHazards = (() => {
     if (
       top.critical &&
       top.id !== lastSpokenId &&
-      now - lastSpokenAt > 14000 &&
-      typeof I18n !== "undefined" &&
-      I18n.speak &&
+      now - lastSpokenAt > 10000 &&
       !window.__ETUBU_NATIVE_CLUSTER__
     ) {
       lastSpokenId = top.id;
       lastSpokenAt = now;
-      I18n.speak(`${rule.label}. ${formatDist(top.distM)}.`, {
-        key: `osm-${top.id}`,
-        urgent: true,
-      });
+      const phrase = `${rule.label}. ${formatDist(top.distM)}.`;
+      if (typeof I18n !== "undefined" && I18n.speak) {
+        I18n.speak(phrase, {
+          key: `osm-${top.id}`,
+          urgent: true,
+        });
+      } else if (window.WarnVoice && typeof window.WarnVoice.speak === "function") {
+        window.WarnVoice.speak(phrase, { key: `osm-${top.id}`, urgent: true });
+      } else {
+        try {
+          const synth = window.speechSynthesis;
+          if (synth && typeof SpeechSynthesisUtterance !== "undefined") {
+            try { synth.cancel(); } catch(_) {}
+            setTimeout(() => {
+              try {
+                synth.resume?.();
+                const u = new SpeechSynthesisUtterance(phrase);
+                u.lang = "tr-TR";
+                u.rate = 1.05;
+                synth.speak(u);
+              } catch (_) {}
+            }, 25);
+          }
+        } catch (_) {}
+      }
     }
 
     return {
@@ -423,3 +483,7 @@ const OsmHazards = (() => {
     DEDUPE_M,
   };
 })();
+
+try {
+  window.OsmHazards = OsmHazards;
+} catch (_) {}

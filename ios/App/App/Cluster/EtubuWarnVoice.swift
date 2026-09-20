@@ -14,7 +14,8 @@ enum EtubuWarnVoice {
     private static var lastAt = Date.distantPast
     private static var toneEngines: [AVAudioEngine] = []
 
-    /// TTS kaldırıldı — çağıranlar kırılmasın diye no-op.
+    private static let speechSynth = AVSpeechSynthesizer()
+
     @discardableResult
     static func speak(
         _ text: String,
@@ -22,11 +23,35 @@ enum EtubuWarnVoice {
         urgent: Bool = false,
         completion: (() -> Void)? = nil
     ) -> Bool {
-        _ = text
-        _ = key
-        _ = urgent
+        let voiceOn = UserDefaults.standard.object(forKey: "etubu_radar_voice") as? Bool ?? true
+        guard voiceOn else {
+            completion?()
+            return false
+        }
+        let phrase = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !phrase.isEmpty else {
+            completion?()
+            return false
+        }
+        let now = Date()
+        let k = key ?? phrase
+        if k == lastKey && now.timeIntervalSince(lastAt) < (urgent ? 3.0 : 6.0) {
+            completion?()
+            return false
+        }
+        lastKey = k
+        lastAt = now
+
+        AppDelegate.activateAlertDuckSession()
+        let utterance = AVSpeechUtterance(string: phrase)
+        let lang = EtubuAppLanguage.current.rawValue
+        let voiceLang = lang.hasPrefix("tr") ? "tr-TR" : (lang.hasPrefix("de") ? "de-DE" : (lang.hasPrefix("fr") ? "fr-FR" : (lang.hasPrefix("es") ? "es-ES" : "en-US")))
+        utterance.rate = urgent ? 0.53 : 0.49
+        let vol = max(0.2, min(1.0, UserDefaults.standard.object(forKey: "etubu.cluster.alertVolume") as? Double ?? 0.95))
+        utterance.volume = Float(max(0.75, vol))
+        speechSynth.speak(utterance)
         completion?()
-        return false
+        return true
     }
 
     /// Native beeps (no Cap AudioContext) — works over BT A2DP with duck session.
@@ -39,7 +64,7 @@ enum EtubuWarnVoice {
         let beepsOn = UserDefaults.standard.object(forKey: "etubu_radar_beeps") as? Bool ?? true
         guard beepsOn else { return }
         AppDelegate.activateAlertDuckSession()
-        let vol = max(0.18, min(1.0, UserDefaults.standard.object(forKey: "etubu.cluster.alertVolume") as? Double ?? 0.9))
+        let vol = max(0.25, min(1.0, UserDefaults.standard.object(forKey: "etubu.cluster.alertVolume") as? Double ?? 0.95))
         let tones = countOverride != nil
             ? Array(repeating: (urgent ? 1180.0 : 880.0, urgent ? 0.09 : 0.11), count: max(1, countOverride!))
             : Self.tonePattern(kind: kind, urgent: urgent)
@@ -51,11 +76,11 @@ enum EtubuWarnVoice {
             DispatchQueue.main.asyncAfter(deadline: .now() + d) {
                 guard token == playToken else { return }
                 AppDelegate.activateAlertDuckSession()
-                playTone(frequency: spec.0, duration: spec.1, volume: Float(vol * (urgent ? 0.95 : 0.78)))
+                playTone(frequency: spec.0, duration: spec.1, volume: Float(vol * (urgent ? 1.0 : 0.92)))
             }
             delay += spec.1 + (urgent ? 0.09 : 0.12)
             if i == tones.count - 1 {
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay + 1.15) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay + 1.25) {
                     guard token == playToken else { return }
                     AppDelegate.deactivateAlertDuckSession()
                 }
@@ -141,7 +166,7 @@ enum EtubuWarnVoice {
     }
 
     private static func playTone(frequency: Double, duration: TimeInterval, volume: Float) {
-        let sampleRate: Double = 22_050
+        let sampleRate: Double = 24_000
         let frameCount = Int(duration * sampleRate)
         guard frameCount > 16, let wav = pcmWav(frequency: frequency, frames: frameCount, sampleRate: sampleRate) else {
             AudioServicesPlaySystemSound(1057)
@@ -149,7 +174,7 @@ enum EtubuWarnVoice {
         }
         do {
             let player = try AVAudioPlayer(data: wav)
-            player.volume = volume
+            player.volume = min(1.0, max(0.1, volume))
             player.prepareToPlay()
             let box = PlayerBox(player: player)
             playerBoxes.append(box)
@@ -160,6 +185,8 @@ enum EtubuWarnVoice {
         }
     }
 
+    /// Generates rich multi-harmonic acoustic tone with attack/decay envelope and soft saturation.
+    /// Cuts through road noise and ducked media over Tesla Bluetooth.
     private static func pcmWav(frequency: Double, frames: Int, sampleRate: Double) -> Data? {
         var data = Data()
         func appendU32(_ v: UInt32) {
@@ -173,7 +200,7 @@ enum EtubuWarnVoice {
         let dataBytes = UInt32(frames * 2)
         data.append(contentsOf: [0x52, 0x49, 0x46, 0x46]) // RIFF
         appendU32(36 + dataBytes)
-        data.append(contentsOf: [0x57, 0x41, 0x56, 0x45, 0x66, 0x6D, 0x74, 0x20]) // WAVEfmt
+        data.append(contentsOf: [0x57, 0x41, 0x56, 0x66, 0x6D, 0x74, 0x20]) // WAVEfmt
         appendU32(16)
         appendU16(1)
         appendU16(1)
@@ -186,10 +213,16 @@ enum EtubuWarnVoice {
         let twoPi = 2.0 * Double.pi
         for i in 0..<frames {
             let t = Double(i) / sampleRate
-            var sample = sin(twoPi * frequency * t)
-            let fade = min(1, Double(i) / 200) * min(1, Double(frames - i) / 400)
-            sample *= fade
-            var s = Int16(max(-1, min(1, sample)) * 32767)
+            let f1 = sin(twoPi * frequency * t)
+            let f2 = 0.36 * sin(twoPi * frequency * 2.0 * t)
+            let f3 = 0.16 * sin(twoPi * frequency * 3.0 * t)
+            var sample = f1 + f2 + f3
+            let attack = min(1.0, Double(i) / (sampleRate * 0.008))
+            let release = min(1.0, Double(frames - i) / (sampleRate * 0.015))
+            sample *= (attack * release)
+            // Soft saturation / acoustic compression for punch & clarity over car audio
+            sample = tanh(sample * 1.35)
+            var s = Int16(max(-32767, min(32767, sample * 32760.0)))
             var le = s.littleEndian
             data.append(Data(bytes: &le, count: 2))
         }

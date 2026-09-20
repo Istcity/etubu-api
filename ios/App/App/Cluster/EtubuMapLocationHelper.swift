@@ -42,12 +42,12 @@ enum EtubuGpsIndicator: String {
         m.pausesLocationUpdatesAutomatically = false
         return m
     }()
-    /// Second watch (web watchIdB) — extra callbacks when the primary stream hiccups.
+    /// High-frequency complementary manager for dense sub-second signal capture
     private lazy var backupManager: CLLocationManager = {
         let m = CLLocationManager()
         m.delegate = self
-        m.desiredAccuracy = kCLLocationAccuracyBest
-        m.distanceFilter = 1
+        m.desiredAccuracy = kCLLocationAccuracyBestForNavigation
+        m.distanceFilter = kCLDistanceFilterNone
         m.activityType = .automotiveNavigation
         m.pausesLocationUpdatesAutomatically = false
         return m
@@ -92,6 +92,7 @@ enum EtubuGpsIndicator: String {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             guard EtubuLegalGate.shared.accepted else { return }
+            EtubuRoadFix.shared.startIfNeeded()
             guard self.isLocationEnabled else {
                 self.pauseUpdatesKeepingFix()
                 self.publishIndicator(.denied)
@@ -270,17 +271,11 @@ enum EtubuGpsIndicator: String {
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard isLocationEnabled else { return }
         guard let loc = locations.last else { return }
-        // Ignore stale / absurd accuracy while sim is intentional fallback.
-        guard loc.horizontalAccuracy >= 0, loc.horizontalAccuracy < 2_000 else { return }
+        // Ignore stale / absurd accuracy
+        guard loc.horizontalAccuracy >= 0, loc.horizontalAccuracy < 1_500 else { return }
         let isBackup = manager === backupManager
-        if isBackup, lastPrimaryFixAt.map({ Date().timeIntervalSince($0) < 0.28 }) == true {
-            // Primary is live — still ingest backup if the timestamp is newer (web watchB).
-            if let stamp = lastIngestStamp, loc.timestamp.timeIntervalSince(stamp) < 0.04 {
-                return
-            }
-        }
         if !isBackup { lastPrimaryFixAt = Date() }
-        if let stamp = lastIngestStamp, loc.timestamp == stamp { return }
+        if let stamp = lastIngestStamp, loc.timestamp < stamp { return }
         lastIngestStamp = loc.timestamp
         let lat = loc.coordinate.latitude
         let lng = loc.coordinate.longitude
@@ -288,6 +283,7 @@ enum EtubuGpsIndicator: String {
             guard self.shouldRunLocationUpdates else { return }
             // Demo kendi rota koordinatlarını yazar — gerçek GPS ile ezme.
             if EtubuDemoDrive.isActive { return }
+            EtubuRoadFix.shared.ingest(loc)
             self.receivedRealFix = true
             self.stopSim()
             self.publishIndicator(.ok)
@@ -458,7 +454,7 @@ enum EtubuGpsIndicator: String {
 
     private func startPredictLoop() {
         guard predictTimer == nil else { return }
-        let t = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
+        let t = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
             self?.predictStep()
         }
         RunLoop.main.add(t, forMode: .common)
@@ -508,7 +504,7 @@ enum EtubuGpsIndicator: String {
         }
         let now = Date()
         let changing = abs(gpsAccelKmhS) > 0.12 || abs(accelBoostKmh) > 0.35
-        if let prev = lastPredictEmitAt, now.timeIntervalSince(prev) < (changing ? 0.018 : 0.032) {
+        if let prev = lastPredictEmitAt, now.timeIntervalSince(prev) < (changing ? 0.010 : 0.016) {
             return
         }
         lastPredictEmitAt = now
@@ -526,7 +522,7 @@ enum EtubuGpsIndicator: String {
     private func startMotionIfNeeded() {
         guard motion.isAccelerometerAvailable else { return }
         guard !motion.isAccelerometerActive else { return }
-        motion.accelerometerUpdateInterval = 1.0 / 30.0
+        motion.accelerometerUpdateInterval = 1.0 / 60.0
         motion.startAccelerometerUpdates(to: .main) { [weak self] data, _ in
             guard let self, let a = data?.acceleration else { return }
             self.ingestMotion(ax: a.x, ay: a.y, az: a.z)

@@ -26,6 +26,9 @@ enum EtubuLegalAcceptance {
         UserDefaults.standard.set(true, forKey: acceptedKey)
         EtubuLegalGate.shared.accepted = true
         NotificationCenter.default.post(name: .etubuLegalAccepted, object: nil)
+        Task { @MainActor in
+            EtubuVehicleLaunchNotifier.shared.requestAuthorizationIfNeeded()
+        }
     }
 }
 

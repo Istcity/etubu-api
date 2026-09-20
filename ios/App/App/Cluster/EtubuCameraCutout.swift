@@ -213,9 +213,7 @@ enum EtubuCameraCutout {
             let shortAxis = islandH
             let longAxis = islandW
             let y = (size.height - longAxis) / 2
-            let x: CGFloat = edge == .leading
-                ? islandEdgePad
-                : size.width - islandEdgePad - shortAxis
+            let x = landscapeNotchX(edge: edge, gutter: gutter, shortAxis: shortAxis, sizeWidth: size.width)
             pill = CGRect(x: x, y: y, width: shortAxis, height: longAxis)
         case .notch:
             let shortAxis = min(33, max(28, gutter * 0.48))

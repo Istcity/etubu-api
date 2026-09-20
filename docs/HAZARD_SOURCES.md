@@ -2,18 +2,24 @@
 
 > Tam ürün kuralları (canlı telemetri, uyarı kapısı, Ev/İş, ses): [`docs/LIVE_ROUTE_RULES.md`](LIVE_ROUTE_RULES.md)
 
-Etubu yol uyarılarını **OpenStreetMap Overpass** üzerinden alır. **EGM / resmi kritik nokta kullanılmaz.**
+Etubu yol uyarılarını **OpenStreetMap Overpass** üzerinden alır.
 
-Türkçe UI’da Türkiye hız koridorları uygulama içinde gömülü + **haftalık OSM yenileme** ile tutulur.
+Türkiye hız koridorları **ulusal cache** ile gelir (rota başına EGM createRoute yok):
+
+1. Gömülü `etubu-tr-corridors.json` — EGM SpeedTunnels (omurga harvest) + Overpass `average_speed` + seed
+2. Haftalık Overpass tile yenileme (arka plan)
+3. createRoute başarılı olursa SpeedTunnels **bonus** olarak cache’e yazılır (zorunlu değil)
+
+Aynı-il / OSRM rotalarında da `EtubuTrCorridorStore.alongRoute` koridorları yapıştırır.
 
 ## Priority rules
 
 | Situation | Mode | Behavior |
 |-----------|------|----------|
-| Her bölge | **OSM led** | Radar, koridor, ışık, yaya, tünel, viraj, tırmanış, yol şartı, şarj OSM’den. |
-| Dil = TR | **TR corridor cache** | Bundled + weekly OSM average_speed noktaları (id `osm-trcor-*`). |
+| Her bölge | **OSM led** | Radar, koridor, ışık, tünel, viraj, tırmanış, yol şartı, şarj OSM’den. |
+| TR dil veya GPS TR | **TR corridor cache** | Ulusal EGM+OSM koridor pinleri (`egm-cor-*` / `osm-trcor-*`). |
 
-**Dedupe:** same-type family within **~70 m**.
+**Dedupe:** same-type family within **~120 m** (EGM tercih).
 
 ## Live OSM refresh
 

@@ -39,15 +39,20 @@ const Scene = (() => {
   // picker and paywall copy don't need to change.
   // ---------------------------------------------------------------------
   const MODE_HUE = {
-    aurora: 185, tesla: 0, midnight: 210, "plaid-boost": 28,
-    particles: 200, vortex: 275, horizon: 205, pulse: 345,
+    aurora: 185, particles: 200, vortex: 275, horizon: 205, pulse: 345,
     plasma: 295, warp: 255, streak: 18, chrome: 210, tunnel: 165,
     grid: 145, circuit: 132, telemetry: 175, neon: 318, matrix: 118,
     "night-city": 305, "solar-flare": 36, "deep-ocean": 204,
     "electric-ice": 188, redline: 358, "violet-storm": 268, "cyber-lime": 92,
+    "weather-sky": 202, "map-focus": 188, "map-3d": 200, "cyber-storm": 275, "desert-dune": 32,
   };
 
   const MODES = [
+    { key: "weather-sky", labelKey: "visualWeatherSky", label: "Hava Durumu", group: "ambient" },
+    { key: "map-focus", labelKey: "visualMapFocus", label: "Harita Ufku", group: "ambient" },
+    { key: "map-3d", labelKey: "visualMap3D", label: "3D Harita Kokpit", group: "ambient" },
+    { key: "cyber-storm", labelKey: "visualCyberStorm", label: "Siber Fırtına", group: "sport" },
+    { key: "desert-dune", labelKey: "visualDesertDune", label: "Çöl Rüzgarı", group: "sport" },
     { key: "aurora", labelKey: "visualAurora", group: "ambient" },
     { key: "particles", labelKey: "visualParticles", group: "ambient" },
     { key: "vortex", labelKey: "visualVortex", group: "ambient" },

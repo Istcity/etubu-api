@@ -2,8 +2,9 @@
 
 ## Product
 
-Single-screen SwiftUI cluster over Capacitor (EV audio / IAP stay in the hidden WebView).
+Single-screen SwiftUI cluster over Capacitor (EV audio in the hidden WebView).
 
+- **Distribution (v1.1+):** Paid App Store download (**$6.99** / **249 TL**) — all features unlocked; no freemium IAP gates
 - **Primary data:** Tesla BLE via VIN ([swift-tesla-ble](https://github.com/shoujiaxin/swift-tesla-ble)) — read-only
 - **Fallback:** OBD ELM327 BLE (menu → OBD fallback)
 - **Disclaimer:** Third-party app; not affiliated with Tesla, Inc.
@@ -12,9 +13,10 @@ Single-screen SwiftUI cluster over Capacitor (EV audio / IAP stay in the hidden 
 
 - [ ] Open `ios/App/App.xcworkspace`
 - [ ] Resolve packages (TeslaBLE + SwiftProtobuf)
-- [ ] App + Widgets `CURRENT_PROJECT_VERSION` = **9**
+- [ ] App + Widgets `MARKETING_VERSION` = **1.1**, `CURRENT_PROJECT_VERSION` = **74**
 - [ ] Deployment: iOS **17.0**+
-- [ ] Archive → TestFlight
+- [ ] App Store Connect: set paid price ($6.99 / 249 TL) before release
+- [ ] Archive → TestFlight / App Store
 
 ## Permissions / Review notes
 

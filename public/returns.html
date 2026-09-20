@@ -25,22 +25,25 @@
   <link rel="icon" type="image/png" href="/assets/brand/app-icon.png" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Syne:wght@700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/content.css" />
+  <link rel="stylesheet" href="css/paytr-storefront.css" />
 </head>
-<body>
+<body class="content-page">
   <p><a href="/">← ETUBU</a></p>
-    <nav class="nav-legal" aria-label="Site menüsü">
-    <a href="/">Uygulama</a>
-    <a href="/blog/">Rehber</a>
+  <nav class="nav-legal" aria-label="Site menüsü">
+    <a href="/">Ana sayfa</a>
+    <a href="/app.html">Uygulama</a>
+    <a href="pricing.html">Fiyatlandırma</a>
     <a href="about.html">Hakkımızda</a>
     <a href="contact.html">İletişim</a>
     <a href="privacy.html">Gizlilik</a>
-    <a href="terms.html">Kullanım şartları</a>
-    <a href="disclaimer.html">Sorumluluk reddi</a>
+    <a href="distance-sales.html">Mesafeli satış</a>
+    <a href="returns.html" class="is-active">İade</a>
+    <a href="shipping-delivery.html">Teslimat</a>
     <button type="button" class="link-btn" data-consent-open>Çerez ayarları</button>
   </nav>
 
-  <h1>Teslimat ve İade Şartları</h1>
-  <p class="muted">Son güncelleme: 16 Temmuz 2026</p>
+  <h1>İptal ve İade Koşulları</h1>
+  <p class="muted">Son güncelleme: 19 Eylül 2026</p>
 
   <h2>1. Ürün niteliği</h2>
   <p>ETUBU üzerinden satılan ürünler <strong>fiziksel kargo gerektirmeyen dijital hizmetlerdir</strong>
@@ -49,7 +52,7 @@
   <h2>2. Teslimat</h2>
   <ul>
     <li>Ödeme başarıyla tamamlandığında dijital erişim <strong>anında</strong> (veya en geç birkaç dakika içinde) hesabınıza / tarayıcı oturumunuza tanımlanır.</li>
-    <li>Fiziksel teslimat, kargo veya kapıda ödeme yoktur.</li>
+    <li>Fiziksel teslimat, kargo veya kapıda ödeme yoktur. Ayrıntı: <a href="shipping-delivery.html">Teslimat Koşulları</a>.</li>
     <li>iOS satın almalarında teslimat App Store / StoreKit kurallarına tabidir.</li>
   </ul>
 
@@ -70,12 +73,43 @@
   </ol>
 
   <div class="payment-badges" aria-label="Ödeme yöntemleri">
+    <img src="assets/payment/ssl-secure.svg" alt="256-bit SSL Güvenli Ödeme" width="140" height="36" />
     <img src="assets/payment/visa.svg" alt="Visa" width="90" height="29" />
     <img src="assets/payment/mastercard.svg" alt="Mastercard" width="90" height="29" />
+    <img src="assets/payment/troy.svg" alt="Troy" width="90" height="36" />
   </div>
 
-  <p class="muted">Ayrıca bakınız: <a href="distance-sales.html">Mesafeli Satış Sözleşmesi</a></p>
-  <footer class="legal-footer">© 2026 ETUBU · etubu.com</footer>
-  <script src="js/consent.js?v=20260814e"></script>
+  <p class="muted">Ayrıca bakınız: <a href="distance-sales.html">Mesafeli Satış Sözleşmesi</a> · <a href="shipping-delivery.html">Teslimat Koşulları</a> · <a href="privacy.html">Gizlilik / KVKK</a></p>
+
+  <footer class="site-legal-footer">
+    <div class="site-legal-footer__grid">
+      <div>
+        <strong>ETUBU</strong>
+        <p>Yetkili: Sinan Nergiz</p>
+        <p><a href="mailto:destek@etubu.com">destek@etubu.com</a></p>
+        <p><a href="tel:+905305115800">+90 530 511 58 00</a></p>
+        <p>Adres: İstasyon Mah. TOKİ Göl Konutları B1-3 Blok No: 28, Küçükçekmece / İstanbul</p>
+      </div>
+      <div>
+        <strong>Yasal</strong>
+        <p><a href="distance-sales.html">Mesafeli Satış Sözleşmesi</a></p>
+        <p><a href="returns.html">İptal ve İade Koşulları</a></p>
+        <p><a href="privacy.html">Gizlilik Politikası ve KVKK</a></p>
+        <p><a href="shipping-delivery.html">Teslimat Koşulları</a></p>
+      </div>
+      <div>
+        <strong>Güvenli ödeme</strong>
+        <p>256-bit SSL Güvenli Ödeme</p>
+        <div class="payment-badges payment-badges--compact">
+          <img src="assets/payment/ssl-secure.svg" alt="256-bit SSL" width="120" height="32" />
+          <img src="assets/payment/visa.svg" alt="Visa" width="72" height="24" />
+          <img src="assets/payment/mastercard.svg" alt="Mastercard" width="72" height="24" />
+          <img src="assets/payment/troy.svg" alt="Troy" width="72" height="28" />
+        </div>
+      </div>
+    </div>
+    <p class="muted">© 2026 ETUBU · etubu.com</p>
+  </footer>
+  <script src="js/consent.js?v=20260919a"></script>
 </body>
 </html>

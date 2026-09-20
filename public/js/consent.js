@@ -14,11 +14,12 @@ const Consent = (() => {
   let ui = null;
   const listeners = [];
   let analyticsLoaded = false;
+  let vercelAnalyticsLoaded = false;
 
   const COPY = {
     tr: {
       title: "Çerezler ve gizlilik",
-      body: "Zorunlu çerezler sitenin çalışması içindir. Analitik (Google) ve reklam (Yandex) çerezleri yalnızca siz izin verirseniz kullanılır. Tercih çerezleri dil, tema ve tanıtım turunu hatırlar.",
+      body: "Zorunlu çerezler sitenin çalışması içindir. Analitik (Vercel / Google) ve reklam (Yandex) yalnızca siz izin verirseniz kullanılır. Tercih çerezleri dil, tema ve tanıtım turunu hatırlar.",
       privacy: "Gizlilik politikası",
       reject: "Yalnızca zorunlu",
       settings: "Ayarlar",
@@ -29,14 +30,14 @@ const Consent = (() => {
       pref: "Tercihler",
       prefH: "Dil, ses/tema, tanıtım turunun tekrar gösterilmemesi.",
       ana: "Analitik",
-      anaH: "Google Analytics — ziyaret ölçümü, IP kısmi maskeleme.",
+      anaH: "Vercel Analytics ve Google Analytics — ziyaret ve performans ölçümü.",
       mkt: "Reklam",
       mktH: "Yandex RTB / Google reklamları — kişiselleştirilmiş veya bağlamsal reklam.",
       reopen: "Çerez ayarları",
     },
     en: {
       title: "Cookies and privacy",
-      body: "Necessary cookies make the site work. Analytics (Google) and ads (Yandex) run only with your permission. Preference cookies remember language, theme and the intro tour.",
+      body: "Necessary cookies make the site work. Analytics (Vercel / Google) and ads (Yandex) run only with your permission. Preference cookies remember language, theme and the intro tour.",
       privacy: "Privacy policy",
       reject: "Necessary only",
       settings: "Settings",
@@ -47,10 +48,100 @@ const Consent = (() => {
       pref: "Preferences",
       prefH: "Language, sound/theme, hiding the intro tour.",
       ana: "Analytics",
-      anaH: "Google Analytics — visit measurement with IP anonymization.",
+      anaH: "Vercel Analytics and Google Analytics — visit and performance measurement.",
       mkt: "Advertising",
       mktH: "Yandex RTB / Google ads — contextual or personalized ads.",
       reopen: "Cookie settings",
+    },
+    de: {
+      title: "Cookies und Datenschutz",
+      body: "Erforderliche Cookies ermöglichen die Grundfunktionen. Analytik (Vercel / Google) und Werbung (Yandex) werden nur mit Ihrer Zustimmung verwendet.",
+      privacy: "Datenschutzerklärung",
+      reject: "Nur notwendige",
+      settings: "Einstellungen",
+      accept: "Alle akzeptieren",
+      save: "Auswahl speichern",
+      nec: "Notwendig",
+      necH: "Sicherheit, Sitzung und diese Einwilligung. Immer aktiv.",
+      pref: "Präferenzen",
+      prefH: "Sprache, Sound/Design und Einführungstour.",
+      ana: "Analytik",
+      anaH: "Vercel Analytics und Google Analytics — Besuch und Performance.",
+      mkt: "Werbung",
+      mktH: "Werbung — personalisierte oder kontextbezogene Anzeigen.",
+      reopen: "Cookie-Einstellungen",
+    },
+    fr: {
+      title: "Cookies et confidentialité",
+      body: "Les cookies nécessaires assurent le bon fonctionnement du site. Les mesures d'audience (Vercel / Google) et publicités ne sont activées qu'avec votre accord.",
+      privacy: "Politique de confidentialité",
+      reject: "Essentiels uniquement",
+      settings: "Paramètres",
+      accept: "Tout accepter",
+      save: "Enregistrer",
+      nec: "Essentiels",
+      necH: "Sécurité, session et consentement. Toujours actif.",
+      pref: "Préférences",
+      prefH: "Langue, thème et visite guidée.",
+      ana: "Analytique",
+      anaH: "Vercel Analytics et Google Analytics — audience et performance.",
+      mkt: "Publicité",
+      mktH: "Publicités contextuelles ou personnalisées.",
+      reopen: "Paramètres des cookies",
+    },
+    es: {
+      title: "Cookies y privacidad",
+      body: "Las cookies necesarias hacen que el sitio funcione. Analítica (Vercel / Google) y publicidad solo se utilizan con su consentimiento.",
+      privacy: "Política de privacidad",
+      reject: "Solo necesarias",
+      settings: "Ajustes",
+      accept: "Aceptar todas",
+      save: "Guardar opciones",
+      nec: "Necesarias",
+      necH: "Seguridad, sesión y este registro. Siempre activo.",
+      pref: "Preferencias",
+      prefH: "Idioma, tema y tour de bienvenida.",
+      ana: "Analítica",
+      anaH: "Vercel Analytics y Google Analytics — visitas y rendimiento.",
+      mkt: "Publicidad",
+      mktH: "Anuncios contextuales o personalizados.",
+      reopen: "Configuración de cookies",
+    },
+    ja: {
+      title: "Cookieとプライバシー",
+      body: "必須Cookieはサイトの基本機能に必要です。アクセス解析（Vercel / Google）および広告は、お客様の同意を得た場合のみ有効になります。",
+      privacy: "プライバシーポリシー",
+      reject: "必須のみ",
+      settings: "設定",
+      accept: "すべて同意",
+      save: "設定を保存",
+      nec: "必須",
+      necH: "セキュリティ、セッション、同意記録。常に有効。",
+      pref: "設定の保存",
+      prefH: "言語、サウンド/テーマ、ガイドの非表示。",
+      ana: "アクセス解析",
+      anaH: "Vercel Analytics と Google Analytics — 訪問とパフォーマンス測定。",
+      mkt: "広告",
+      mktH: "関連広告の表示。",
+      reopen: "Cookie設定",
+    },
+    ru: {
+      title: "Файлы cookie и конфиденциальность",
+      body: "Необходимые файлы cookie обеспечивают работу сайта. Аналитика (Vercel / Google) и реклама используются только с вашего согласия.",
+      privacy: "Политика конфиденциальности",
+      reject: "Только обязательные",
+      settings: "Настройки",
+      accept: "Принять все",
+      save: "Сохранить выбор",
+      nec: "Обязательные",
+      necH: "Безопасность, сессия и запись согласия. Всегда включено.",
+      pref: "Предпочтения",
+      prefH: "Язык, тема звука и скрытие обучающего тура.",
+      ana: "Аналитика",
+      anaH: "Vercel Analytics и Google Analytics — посещаемость и производительность.",
+      mkt: "Реклама",
+      mktH: "Контекстная или персонализированная реклама.",
+      reopen: "Настройки cookie",
     },
   };
 
@@ -167,6 +258,38 @@ const Consent = (() => {
     return window.gtag;
   }
 
+  function injectScriptOnce(id, src, attrs = {}) {
+    if (document.getElementById(id)) return;
+    const s = document.createElement("script");
+    s.id = id;
+    s.defer = true;
+    s.src = src;
+    Object.keys(attrs).forEach((k) => {
+      s.setAttribute(k, attrs[k]);
+    });
+    document.head.appendChild(s);
+  }
+
+  /** Vercel Web Analytics + Speed Insights (site Vercel'de yayınlandığında aktif olur) */
+  function loadVercelAnalytics() {
+    if (vercelAnalyticsLoaded) return;
+    vercelAnalyticsLoaded = true;
+    try {
+      window.va =
+        window.va ||
+        function () {
+          (window.vaq = window.vaq || []).push(arguments);
+        };
+      window.si =
+        window.si ||
+        function () {
+          (window.siq = window.siq || []).push(arguments);
+        };
+    } catch (_) {}
+    injectScriptOnce("etubu-vercel-insights", "/_vercel/insights/script.js");
+    injectScriptOnce("etubu-vercel-speed", "/_vercel/speed-insights/script.js");
+  }
+
   function loadAnalytics() {
     const gtag = gtagFn();
     gtag("consent", "update", {
@@ -178,6 +301,7 @@ const Consent = (() => {
       personalization_storage: allows("preferences") ? "granted" : "denied",
       security_storage: "granted",
     });
+    loadVercelAnalytics();
     if (analyticsLoaded) {
       gtag("event", "consent_update");
       return;
@@ -257,7 +381,7 @@ const Consent = (() => {
     css.id = "etubuConsentCss";
     css.textContent = `
 #etubuConsent{position:fixed;inset:0;z-index:13000;display:flex;align-items:center;justify-content:center;padding:12px;background:rgba(2,4,10,.55);font-family:"DM Sans",Inter,system-ui,sans-serif}
-#etubuConsent[hidden]{display:none!important}
+#etubuConsent[hidden]{display:none!important;pointer-events:none!important}
 .etubu-consent-card{width:min(560px,100%);max-height:min(72dvh,72vh,560px);overflow:auto;background:#0c1422;color:#e8f4ff;border:1px solid rgba(255,255,255,.14);border-radius:16px;padding:16px 16px 14px;box-shadow:0 16px 48px rgba(0,0,0,.45)}
 .etubu-consent-card h2{margin:0 0 8px;font-size:18px}
 .etubu-consent-card p{margin:0 0 12px;font-size:13px;line-height:1.45;color:#9bb4c8}
@@ -352,10 +476,17 @@ const Consent = (() => {
     const wrap = ensureUi();
     showPanel(false);
     wrap.hidden = false;
+    wrap.removeAttribute("hidden");
+    wrap.style.removeProperty("display");
+    wrap.style.pointerEvents = "";
   }
 
   function hideBanner() {
-    if (ui) ui.hidden = true;
+    if (!ui) return;
+    ui.hidden = true;
+    ui.setAttribute("hidden", "");
+    ui.style.setProperty("display", "none", "important");
+    ui.style.pointerEvents = "none";
   }
 
   function open() {
@@ -368,6 +499,9 @@ const Consent = (() => {
     }
     showPanel(true);
     wrap.hidden = false;
+    wrap.removeAttribute("hidden");
+    wrap.style.removeProperty("display");
+    wrap.style.pointerEvents = "";
   }
 
   function init() {
@@ -429,6 +563,7 @@ const Consent = (() => {
     allows,
     onChange,
     open,
+    hide: hideBanner,
     acceptAll,
     rejectOptional,
     get: () => state,

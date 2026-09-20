@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="140" height="36" viewBox="0 0 140 36" role="img" aria-label="256-bit SSL Guvenli Odeme">
+  <rect width="140" height="36" rx="6" fill="#062016"/>
+  <rect x="1" y="1" width="138" height="34" rx="5" fill="none" stroke="#19e56f" stroke-width="1.5"/>
+  <path d="M14 18.5v-3.2a5 5 0 0 1 10 0v3.2" fill="none" stroke="#19e56f" stroke-width="1.8" stroke-linecap="round"/>
+  <rect x="12.5" y="18.2" width="13" height="9.5" rx="2" fill="#19e56f"/>
+  <text x="34" y="16" font-family="Arial, Helvetica, sans-serif" font-size="9" font-weight="700" fill="#19e56f">256-bit SSL</text>
+  <text x="34" y="27" font-family="Arial, Helvetica, sans-serif" font-size="8" fill="#b7f5d0">Guvenli Odeme</text>
+</svg>

@@ -66,6 +66,11 @@ struct EtubuRoutePickerView: View {
                                 suggestionsList
                                     .padding(.horizontal, 16)
                                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                            } else if toText.count < 2 {
+                                recentRoutesBlock
+                                    .padding(.horizontal, 16)
+                                    .padding(.top, 6)
+                                Spacer(minLength: 0)
                             } else {
                                 Spacer(minLength: 0)
                             }
@@ -81,6 +86,7 @@ struct EtubuRoutePickerView: View {
                             }
                             ScrollView {
                                 VStack(alignment: .leading, spacing: 10) {
+                                    recentRoutesBlock
                                     if routeStatus.active || !routeStatus.briefText.isEmpty {
                                         activeRouteCard
                                     }
@@ -387,6 +393,56 @@ struct EtubuRoutePickerView: View {
             }
         }
         .etubuSheetCard(theme)
+    }
+
+    @ViewBuilder
+    private var recentRoutesBlock: some View {
+        let recents = EtubuRecentRoutes.places()
+        if !recents.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(EtubuClusterL10n.t("recentRoutes"))
+                    .font(EtubuClusterFonts.ui(11, weight: .bold))
+                    .foregroundStyle(theme.mutedText)
+                    .textCase(.uppercase)
+                ForEach(recents) { place in
+                    Button {
+                        select(place)
+                    } label: {
+                        HStack(alignment: .center, spacing: 10) {
+                            Image(systemName: "clock.arrow.circlepath")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(theme.accent.opacity(0.85))
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(place.label)
+                                    .font(EtubuClusterFonts.ui(15, weight: .medium))
+                                    .foregroundStyle(theme.primaryText)
+                                    .multilineTextAlignment(.leading)
+                                    .lineLimit(2)
+                                if !place.cityName.isEmpty || !place.districtName.isEmpty {
+                                    Text([
+                                        place.cityName.isEmpty ? nil : place.cityName.uppercased(with: appLocale),
+                                        place.districtName.isEmpty ? nil : place.districtName
+                                    ]
+                                    .compactMap { $0 }
+                                    .joined(separator: " · "))
+                                        .font(EtubuClusterFonts.ui(11, weight: .semibold))
+                                        .foregroundStyle(theme.mutedText)
+                                        .lineLimit(1)
+                                }
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.vertical, 8)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("etubu.route.recent.\(place.id)")
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .etubuSheetCard(theme)
+        }
     }
 
 

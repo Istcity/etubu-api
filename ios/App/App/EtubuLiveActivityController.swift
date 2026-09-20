@@ -87,34 +87,23 @@ enum EtubuLiveActivityController {
         source: String? = nil
     ) -> EtubuDriveAttributes.ContentState {
         let t = EtubuVehicleTelemetry.shared
-        let w = EtubuDriveWarnings.shared
-        let routeOn = t.routeActive
-        let rb = routeOn ? w.remainingBrief : EtubuRouteBriefSummary()
-        let remaining = routeOn ? w.remainingHazards : []
-        let warnPrimary: String = {
-            guard routeOn else { return "" }
-            if let p = w.primary {
-                let dist = p.distanceLabel.isEmpty ? "" : " · \(p.distanceLabel)"
-                return String(("\(p.title)\(dist)").prefix(52))
-            }
-            if let h = remaining.first {
-                let dist = h.distanceLabel.isEmpty ? "" : " · \(h.distanceLabel)"
-                let name = h.label.isEmpty ? h.kindTitle : h.label
-                return String(("\(h.kindTitle): \(name)\(dist)").prefix(52))
-            }
-            return ""
-        }()
-        let warn2: String = {
-            guard routeOn, remaining.count > 1 else { return "" }
-            let h = remaining[1]
-            let dist = h.distanceLabel.isEmpty ? "" : " · \(h.distanceLabel)"
-            let name = h.label.isEmpty ? h.kindTitle : h.label
-            return String(("\(h.kindTitle): \(name)\(dist)").prefix(48))
-        }()
         let theme = ClusterTheme.stored
         let accent = Self.rgb(theme.accent)
         let canvas = Self.rgb(theme.canvas)
-        let plan = EtubuEvRoutePlanner.shared.plan
+        let last = EtubuTripHistoryStore.shared.lastCompleted()
+        let lastLine: String? = {
+            guard let last, last.distanceKm > 0.05 else { return nil }
+            let km = last.distanceKm >= 10
+                ? String(format: "%.0f km", last.distanceKm)
+                : String(format: "%.1f km", last.distanceKm)
+            if let kwh = last.energyKwh, kwh > 0.05 {
+                return "\(km) · \(String(format: "%.1f kWh", kwh))"
+            }
+            return km
+        }()
+        let dest = t.routeTo.trimmingCharacters(in: .whitespacesAndNewlines)
+        let navOn = t.routeActive && !dest.isEmpty
+        let wx = EtubuWeatherMonitor.shared
         return EtubuDriveAttributes.ContentState(
             kmh: kmh ?? t.kmh,
             gear: gear ?? t.gear,
@@ -125,24 +114,24 @@ enum EtubuLiveActivityController {
             tpmsFR: t.tpmsFR.psi.map { Int($0.rounded()) },
             tpmsRL: t.tpmsRL.psi.map { Int($0.rounded()) },
             tpmsRR: t.tpmsRR.psi.map { Int($0.rounded()) },
-            routeActive: routeOn,
-            routeFrom: t.routeFrom.isEmpty ? EtubuClusterL10n.myLocation : t.routeFrom,
-            routeTo: t.routeTo,
-            radarCount: rb.radarCount,
-            corridorCount: rb.corridorCount,
-            chargeCount: rb.chargeCount,
-            controlCount: rb.controlCount,
-            weatherCount: rb.weatherCount,
-            primaryWarn: warnPrimary,
-            aheadWarn2: warn2,
-            remainingPoints: remaining.count,
+            routeActive: navOn,
+            routeFrom: navOn ? t.routeFrom : "",
+            routeTo: navOn ? dest : "",
+            radarCount: 0,
+            corridorCount: 0,
+            chargeCount: 0,
+            controlCount: 0,
+            weatherCount: 0,
+            primaryWarn: "",
+            aheadWarn2: "",
+            remainingPoints: 0,
             socPercent: t.displaySocPercent ?? t.socPercent,
             rangeKm: t.displayRangeKm ?? t.rangeKm,
-            remainKm: t.effectiveRemainKm,
-            etaMinutes: t.navEtaMinutes.map { Int($0.rounded()) },
-            arrivalSocPercent: plan?.destSocPlanned ?? t.energyAtArrivalPercent,
-            islandEtaLabel: EtubuClusterL10n.t("islandEtaRemain"),
-            islandKmRemainLabel: EtubuClusterL10n.t("islandKmRemain"),
+            remainKm: nil,
+            etaMinutes: nil,
+            arrivalSocPercent: nil,
+            islandEtaLabel: "",
+            islandKmRemainLabel: "",
             limitKmh: EtubuOsmSpeedLimit.shared.limitKmh,
             overLimit: {
                 guard let lim = EtubuOsmSpeedLimit.shared.limitKmh, lim > 0 else { return false }
@@ -155,11 +144,16 @@ enum EtubuLiveActivityController {
             canvasG: canvas.1,
             canvasB: canvas.2,
             outsideC: t.outsideC.map { Int($0.rounded()) },
-            powerKw: t.powerKw,
-            planSummary: plan?.summaryLine,
-            planStop1: plan?.legs.first.map { String($0.compactLine.prefix(52)) },
-            planStop2: plan?.legs.dropFirst().first.map { String($0.compactLine.prefix(52)) },
-            planWhPerKm: plan.map { Int($0.whPerKm.rounded()) }
+            powerKw: nil,
+            planSummary: nil,
+            planStop1: nil,
+            planStop2: nil,
+            planWhPerKm: nil,
+            lastTripLine: lastLine,
+            batteryCaption: EtubuClusterL10n.t("islandBattery"),
+            limitCaption: EtubuClusterL10n.t("islandLimit"),
+            destWeatherSymbol: navOn ? wx.arrivalSymbol : "",
+            destWeatherTempC: navOn ? wx.arrivalTempC : nil
         )
     }
 
@@ -269,17 +263,13 @@ enum EtubuLiveActivityController {
 
     /// Gear / SoC / warn / nav — never live speed. Apple ActivityKit budget.
     private static func meaningfulSignature(_ s: EtubuDriveAttributes.ContentState) -> String {
-        let remain = s.remainKm.map { Int(($0 * 10).rounded()) } ?? -1
         let soc = s.socPercent ?? -1
-        let range = s.rangeKm ?? -1
-        let eta = s.etaMinutes ?? -1
-        let arrival = s.arrivalSocPercent ?? -1
         let limit = s.limitKmh ?? -1
         let over = (s.overLimit ?? false) ? 1 : 0
-        let routeFlag = s.routeActive ? 1 : 0
         let tpms = "\(s.tpmsFL ?? -1),\(s.tpmsFR ?? -1),\(s.tpmsRL ?? -1),\(s.tpmsRR ?? -1)"
-        let counts = "\(s.radarCount),\(s.corridorCount),\(s.chargeCount),\(s.controlCount),\(s.weatherCount),\(s.remainingPoints)"
-        return "\(s.gear)|\(s.source)|\(soc)|\(range)|\(remain)|\(eta)|\(arrival)|\(routeFlag)|\(s.routeTo)|\(counts)|\(s.primaryWarn)|\(s.aheadWarn2)|\(limit)|\(over)|\(tpms)|\(s.planSummary ?? "")|\(s.outsideC ?? -1)"
+        let dest = s.routeActive ? s.routeTo : ""
+        let wx = "\(s.destWeatherSymbol)|\(s.destWeatherTempC ?? -99)"
+        return "\(s.source)|\(soc)|\(limit)|\(over)|\(tpms)|\(s.lastTripLine ?? "")|\(dest)|\(wx)|\(s.batteryCaption)"
     }
 
     private static func publishState(

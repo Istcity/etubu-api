@@ -58,7 +58,6 @@ enum EtubuRuntimeProfile {
         let keys = [
             "etubu.legal.accepted.v1",
             "etubuSkipOnboarding",
-            "etubuForcePremium",
             "etubuForceLangEn",
             "etubuForceLangTr",
             "etubuForceRemotePin",

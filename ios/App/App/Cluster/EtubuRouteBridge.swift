@@ -596,13 +596,36 @@ enum EtubuRouteBridge {
         if t.routeActive, !routeFromVehicleNav { return }
         if let until = suppressVehicleNavAdaptUntil, Date() < until { return }
 
+        let pin = EtubuRoadFix.shared.predictedCoordinate
+        let road = EtubuRoadFix.shared
+        let hereLat = pin?.lat ?? road.latitude ?? t.latitude
+        let hereLng = pin?.lng ?? road.longitude ?? t.longitude
+
+        func distKm(_ la: Double, _ ln: Double) -> Double? {
+            guard let hereLat, let hereLng else { return nil }
+            return EtubuTrafikAPI.haversineKm(hereLat, hereLng, la, ln)
+        }
+
+        // Tesla leftover miles (ör. 3550 km) evdeyken hayalet rota açmasın.
+        if let destLat, let destLng, destLat.isFinite, destLng.isFinite,
+           let d = distKm(destLat, destLng), d < 0.40 {
+            return
+        }
+        var remainToApply = remainKm
+        if let destLat, let destLng, destLat.isFinite, destLng.isFinite,
+           let d = distKm(destLat, destLng), let remainKm, remainKm > 80, remainKm > d * 4 {
+            remainToApply = d
+        } else if destLat == nil || destLng == nil, let remainKm, remainKm > 250 {
+            remainToApply = nil
+        }
+
         // UI’yi hemen güncelle.
         t.navDestination = dest
         t.routeTo = dest
-        if let remainKm, remainKm > 0 {
-            t.applyCapRouteRemain(active: true, remainKm: remainKm)
+        if let remainToApply, remainToApply > 0 {
+            t.applyCapRouteRemain(active: true, remainKm: remainToApply)
         }
-        if let etaMinutes, etaMinutes >= 0 {
+        if let etaMinutes, etaMinutes >= 0, (remainToApply ?? remainKm ?? 0) < 250 {
             t.navEtaMinutes = etaMinutes
         }
 
@@ -619,33 +642,42 @@ enum EtubuRouteBridge {
         // Resolve coordinates: Tesla route pin → Home/Work saved pins → geocode.
         // Never invent Home/Work via Nominatim (wrong cities).
         let coordPlace: EtubuRoutePlace? = {
-            if let destLat, let destLng,
-               destLat.isFinite, destLng.isFinite,
-               abs(destLat) > 0.01 || abs(destLng) > 0.01 {
+            let tesla: EtubuRoutePlace? = {
+                guard let destLat, let destLng,
+                      destLat.isFinite, destLng.isFinite,
+                      abs(destLat) > 0.01 || abs(destLng) > 0.01 else { return nil }
                 return EtubuRoutePlace(
-                    label: dest,
-                    cityName: "",
-                    districtName: "",
-                    isMyLocation: false,
-                    lat: destLat,
-                    lng: destLng
+                    label: dest, cityName: "", districtName: "",
+                    isMyLocation: false, lat: destLat, lng: destLng
                 )
-            }
-            if let pin = EtubuVehicleTelemetry.savedPin(for: dest) {
+            }()
+            let saved: EtubuRoutePlace? = {
+                guard let pin = EtubuVehicleTelemetry.savedPin(for: dest) else { return nil }
                 return EtubuRoutePlace(
-                    label: dest,
-                    cityName: "",
-                    districtName: "",
-                    isMyLocation: false,
-                    lat: pin.lat,
-                    lng: pin.lng
+                    label: dest, cityName: "", districtName: "",
+                    isMyLocation: false, lat: pin.lat, lng: pin.lng
                 )
+            }()
+            if let tesla, let tla = tesla.lat, let tln = tesla.lng, let td = distKm(tla, tln) {
+                if td > 25, let saved, let sla = saved.lat, let sln = saved.lng,
+                   let sd = distKm(sla, sln), sd < 3 {
+                    return saved
+                }
+                return tesla
             }
-            return nil
+            return saved
         }()
 
+        if let la = coordPlace?.lat, let ln = coordPlace?.lng, let d = distKm(la, ln), d < 0.40 {
+            return
+        }
         if isAmbiguousVehicleDest(dest), coordPlace == nil {
             // Label + remain only — do not plan garbage Home/Work routes.
+            return
+        }
+        if isAmbiguousVehicleDest(dest),
+           let la = coordPlace?.lat, let ln = coordPlace?.lng,
+           let d = distKm(la, ln), d > 25 {
             return
         }
 
@@ -827,8 +859,14 @@ enum EtubuRouteBridge {
 
             let fromIsMine = {
                 let f = from.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-                return f.isEmpty || f == "konumum" || f == "my location" || f.contains("konum")
+                let here = EtubuClusterL10n.t("fromHere").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                return f.isEmpty || f == here
+                    || f == "konumum" || f == "my location" || f.contains("konum")
                     || f == "mylocation" || f == "location"
+                    || f.contains("buradan") || f.contains("from here") || f.contains("von hier")
+                    || f.contains("d’ici") || f.contains("d'ici") || f.contains("desde aquí")
+                    || f.contains("desde aqui") || f.contains("ここから") || f.contains("отсюда")
+                    || (f.contains("here") && f.count < 16) || (f.contains("hier") && f.count < 16)
             }()
 
             var fromLat: Double?
@@ -837,9 +875,14 @@ enum EtubuRouteBridge {
             var fromResolvedLabel = from
 
             if fromIsMine {
-                let t = EtubuVehicleTelemetry.shared
-                fromLat = t.latitude
-                fromLng = t.longitude
+                let snap = await MainActor.run { () -> (Double?, Double?) in
+                    let road = EtubuRoadFix.shared
+                    let pin = road.predictedCoordinate
+                    let t = EtubuVehicleTelemetry.shared
+                    return (pin?.lat ?? road.latitude ?? t.latitude, pin?.lng ?? road.longitude ?? t.longitude)
+                }
+                fromLat = snap.0
+                fromLng = snap.1
                 fromResolvedLabel = EtubuClusterL10n.myLocation
                 if fromLat == nil || fromLng == nil {
                     await MainActor.run {
@@ -867,9 +910,26 @@ enum EtubuRouteBridge {
                 return
             }
 
-            guard let fLat = fromLat, let fLng = fromLng else {
+            guard var fLat = fromLat, var fLng = fromLng else {
                 await MainActor.run { completion?(false, EtubuClusterL10n.t("routeLocFailed")) }
                 return
+            }
+
+            let gps = await MainActor.run { () -> (Double?, Double?) in
+                let road = EtubuRoadFix.shared
+                let pin = road.predictedCoordinate
+                let t = EtubuVehicleTelemetry.shared
+                return (pin?.lat ?? road.latitude ?? t.latitude, pin?.lng ?? road.longitude ?? t.longitude)
+            }
+            if let gpsLat = gps.0, let gpsLng = gps.1 {
+                let dKm = EtubuTrafikAPI.haversineKm(gpsLat, gpsLng, fLat, fLng)
+                if dKm > 25 {
+                    fLat = gpsLat
+                    fLng = gpsLng
+                    fromLat = gpsLat
+                    fromLng = gpsLng
+                    fromResolvedLabel = EtubuClusterL10n.myLocation
+                }
             }
 
             EtubuRegion.updateFrom(lat: fLat, lng: fLng)
@@ -945,8 +1005,22 @@ enum EtubuRouteBridge {
             }
 
             var hazards: [EtubuRouteHazard] = []
-            if domestic {
+            // Koridorlar ulusal cache’ten — createRoute/EGM’e bağlı değil (aynı il OSRM dahil).
+            let inTR = EtubuRegion.inTurkeyBounds(lat: fLat, lng: fLng)
+                || EtubuRegion.inTurkeyBounds(lat: toLat, lng: toLng)
+            if inTR || domestic {
                 hazards = EtubuTrCorridorStore.alongRoute(coords: latLngCoords)
+                if let routeData {
+                    let egmBonus = EtubuTrafikAPI.parseOfficialHazards(
+                        data: routeData,
+                        coords: latLngCoords,
+                        includeSeeds: false
+                    )
+                    if !egmBonus.isEmpty {
+                        EtubuTrCorridorStore.ingestOfficial(egmBonus.filter { $0.kind == "corridor" })
+                        hazards = EtubuHazardMerge.dedupePreferOfficial(egmBonus + hazards)
+                    }
+                }
             } else {
                 hazards = []
             }
@@ -977,6 +1051,8 @@ enum EtubuRouteBridge {
                 t.applyCapRouteRemain(active: true, remainKm: remainKm > 0 ? remainKm : nil)
                 EtubuEvRoutePlanner.shared.refreshFromLiveState()
                 EtubuMapLocationHelper.shared.syncWithVehicleSession()
+                EtubuWeatherMonitor.shared.prefetchArrival(lat: toLat, lng: toLng)
+                EtubuRecentRoutes.remember(place: toPlace, lat: toLat, lng: toLng)
 
                 let w = EtubuDriveWarnings.shared
                 w.hazards = hazards
@@ -1370,6 +1446,7 @@ enum EtubuRouteBridge {
             t.capRouteRemainKm = nil
             t.refreshEnergyPlan()
             EtubuDriveWarnings.shared.clearCriticalAlerts()
+            EtubuWeatherMonitor.shared.clearArrival()
             EtubuMapLocationHelper.shared.disableBackgroundUpdates()
             EtubuMapLocationHelper.shared.syncWithVehicleSession()
         }
@@ -1439,6 +1516,7 @@ enum EtubuRouteBridge {
         let planner = EtubuEvRoutePlanner.shared
         let warnings = EtubuDriveWarnings.shared
         let candidates: [EtubuRouteHazard] = {
+            if let n = warnings.nearestCharge { return [n] }
             if !planner.suggestedStops.isEmpty { return planner.suggestedStops }
             let pool = warnings.remainingHazards.isEmpty ? warnings.hazards : warnings.remainingHazards
             return pool.filter { $0.kind == "charge" }
@@ -1773,5 +1851,67 @@ enum EtubuRouteBridge {
             .replacingOccurrences(of: "'", with: "\\'")
             .replacingOccurrences(of: "\n", with: " ")
             .replacingOccurrences(of: "\r", with: "")
+    }
+}
+
+/// Last 3 user-planned destinations (route picker).
+enum EtubuRecentRoutes {
+    private static let defaultsKey = "etubu.recentRoutes.v1"
+    private static let maxCount = 3
+
+    struct Item: Codable {
+        var label: String
+        var cityName: String
+        var districtName: String
+        var lat: Double
+        var lng: Double
+    }
+
+    static func remember(place: EtubuRoutePlace, lat: Double, lng: Double) {
+        remember(
+            label: place.label,
+            cityName: place.cityName,
+            districtName: place.districtName,
+            lat: lat,
+            lng: lng
+        )
+    }
+
+    static func remember(label: String, cityName: String, districtName: String, lat: Double, lng: Double) {
+        let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, lat != 0, lng != 0 else { return }
+        var items = load()
+        items.removeAll {
+            abs($0.lat - lat) < 0.0004 && abs($0.lng - lng) < 0.0004
+        }
+        items.removeAll { $0.label.caseInsensitiveCompare(trimmed) == .orderedSame }
+        items.insert(
+            Item(label: trimmed, cityName: cityName, districtName: districtName, lat: lat, lng: lng),
+            at: 0
+        )
+        if items.count > maxCount { items = Array(items.prefix(maxCount)) }
+        if let data = try? JSONEncoder().encode(items) {
+            UserDefaults.standard.set(data, forKey: defaultsKey)
+        }
+    }
+
+    static func places() -> [EtubuRoutePlace] {
+        load().map {
+            EtubuRoutePlace(
+                label: $0.label,
+                cityName: $0.cityName,
+                districtName: $0.districtName,
+                isMyLocation: false,
+                lat: $0.lat,
+                lng: $0.lng
+            )
+        }
+    }
+
+    private static func load() -> [Item] {
+        guard let data = UserDefaults.standard.data(forKey: defaultsKey),
+              let items = try? JSONDecoder().decode([Item].self, from: data)
+        else { return [] }
+        return items
     }
 }

@@ -18,59 +18,34 @@ struct EtubuLiveActivityWidget: Widget {
                 state: context.state,
                 style: .lockScreen
             )
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
             .activityBackgroundTint(context.state.canvasColor)
             .activitySystemActionForegroundColor(context.state.accentColor)
         } dynamicIsland: { context in
             let accent = context.state.accentColor
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(String(context.state.shortDestination.prefix(12)))
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.55)
-                        Text(context.state.gear)
-                            .font(.system(size: 11, weight: .bold, design: .rounded))
-                            .foregroundStyle(accent)
-                            .lineLimit(1)
-                    }
-                    .frame(maxWidth: 86, alignment: .leading)
+                    Image("EtubuLogo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 22, height: 22)
+                        .padding(.leading, 6)
+                        .frame(maxWidth: 56, alignment: .leading)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    VStack(alignment: .trailing, spacing: 1) {
-                        if let eta = context.state.etaClockLabel {
-                            Text(eta)
-                                .font(.system(size: 12, weight: .bold).monospacedDigit())
-                                .foregroundStyle(accent)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.6)
-                        } else if let km = context.state.remainKm, km > 0 {
-                            Text(km >= 10 ? String(format: "%.0f km", km) : String(format: "%.1f km", km))
-                                .font(.system(size: 12, weight: .bold).monospacedDigit())
-                                .foregroundStyle(.white)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.6)
-                        }
-                        if let soc = context.state.socPercent {
-                            Text("\(soc)%")
-                                .font(.system(size: 11, weight: .semibold).monospacedDigit())
-                                .foregroundStyle(Color(red: 0.40, green: 0.95, blue: 0.55))
-                                .lineLimit(1)
-                        }
-                    }
-                    .frame(maxWidth: 72, alignment: .trailing)
+                    labeledBattery(context.state, compact: true)
+                        .padding(.trailing, 6)
+                        .frame(maxWidth: 110, alignment: .trailing)
                 }
                 DynamicIslandExpandedRegion(.center) {
                     Color.clear.frame(height: 1)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     EtubuIslandCanvas(state: context.state, style: .island)
-                        .padding(.horizontal, 2)
-                        .padding(.top, 1)
-                        .padding(.bottom, 2)
+                        .padding(.horizontal, 10)
+                        .padding(.top, 2)
+                        .padding(.bottom, 6)
                 }
             } compactLeading: {
                 Image("EtubuLogo")
@@ -80,18 +55,10 @@ struct EtubuLiveActivityWidget: Widget {
             } compactTrailing: {
                 compactTrailing(context.state)
             } minimal: {
-                if let soc = context.state.socPercent {
-                    Text("\(soc)")
-                        .font(.system(size: 10, weight: .bold).monospacedDigit())
-                        .foregroundStyle(Color(red: 0.35, green: 0.95, blue: 0.55))
-                        .minimumScaleFactor(0.6)
-                        .lineLimit(1)
-                } else {
-                    Image("EtubuLogo")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 14, height: 14)
-                }
+                Image("EtubuLogo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 14, height: 14)
             }
             .keylineTint(accent)
             .widgetURL(URL(string: "com.etubu.app://drive"))
@@ -102,24 +69,39 @@ struct EtubuLiveActivityWidget: Widget {
     private func compactTrailing(_ state: EtubuDriveAttributes.ContentState) -> some View {
         let accent = state.accentColor
         Group {
-            if state.overLimit == true {
-                Text("\(min(state.kmh, 999))")
-                    .foregroundStyle(.orange)
-            } else if state.kmh >= 5 {
-                Text("\(min(state.kmh, 999))")
-                    .foregroundStyle(accent)
-            } else if let soc = state.socPercent {
-                Text("\(soc)%")
-                    .foregroundStyle(Color(red: 0.35, green: 0.95, blue: 0.55))
+            if let soc = state.socPercent {
+                Text(Self.labeled(state.batteryCaption, "%\(soc)"))
+                    .foregroundStyle(soc <= 15 ? .orange : Color(red: 0.35, green: 0.95, blue: 0.55))
+            } else if let lim = state.limitKmh, lim > 0 {
+                Text(Self.labeled(state.limitCaption, "\(lim)"))
+                    .foregroundStyle(state.overLimit == true ? .orange : accent)
             } else {
-                Text(state.gear)
-                    .foregroundStyle(.white.opacity(0.85))
+                Text("—")
+                    .foregroundStyle(.white.opacity(0.7))
             }
         }
-        .font(.system(size: 12, weight: .bold, design: .rounded).monospacedDigit())
-        .minimumScaleFactor(0.45)
+        .font(.system(size: 11, weight: .bold, design: .rounded).monospacedDigit())
+        .minimumScaleFactor(0.4)
         .lineLimit(1)
-        .frame(maxWidth: 36, alignment: .trailing)
+        .frame(maxWidth: 72, alignment: .trailing)
+    }
+
+    @ViewBuilder
+    private func labeledBattery(_ state: EtubuDriveAttributes.ContentState, compact: Bool) -> some View {
+        if let soc = state.socPercent {
+            Text(Self.labeled(state.batteryCaption, "%\(soc)"))
+                .font(.system(size: compact ? 12 : 13, weight: .bold, design: .rounded).monospacedDigit())
+                .foregroundStyle(soc <= 15 ? .orange : Color(red: 0.40, green: 0.95, blue: 0.55))
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+                .multilineTextAlignment(.trailing)
+        }
+    }
+
+    static func labeled(_ caption: String, _ value: String) -> String {
+        let cap = caption.trimmingCharacters(in: .whitespacesAndNewlines)
+        if cap.isEmpty { return value }
+        return "\(cap): \(value)"
     }
 }
 
@@ -136,59 +118,25 @@ private struct EtubuIslandCanvas: View {
     let state: EtubuDriveAttributes.ContentState
     let style: EtubuIslandStyle
 
-    private var accent: Color { state.accentColor }
-    private var urgent: Bool {
-        !state.primaryWarn.isEmpty || state.overLimit == true || (state.socPercent.map { $0 <= 15 } ?? false)
-    }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: style == .lockScreen ? 6 : 3) {
+        VStack(alignment: .leading, spacing: style == .lockScreen ? 6 : 4) {
             if style == .lockScreen {
                 headerRow
             }
 
             hudRow
 
-            routeRow
+            if state.routeActive {
+                destWeatherRow
+            }
 
-            if !state.primaryWarn.isEmpty {
-                Text(state.primaryWarn)
-                    .font(.system(size: style == .lockScreen ? 11 : 10, weight: .semibold))
-                    .foregroundStyle(.orange)
+            if let trip = state.lastTripLine, !trip.isEmpty, !state.routeActive {
+                Text(trip)
+                    .font(.system(size: style == .lockScreen ? 11 : 10, weight: .medium).monospacedDigit())
+                    .foregroundStyle(.white.opacity(0.7))
                     .lineLimit(1)
                     .minimumScaleFactor(0.65)
                     .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            if style == .lockScreen, !state.aheadWarn2.isEmpty {
-                Text(state.aheadWarn2)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.orange.opacity(0.75))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
-            if let plan = state.planSummary, !plan.isEmpty {
-                Text(plan)
-                    .font(.system(size: style == .lockScreen ? 11 : 10, weight: .medium))
-                    .foregroundStyle(accent)
-                    .lineLimit(style == .lockScreen ? 2 : 1)
-                    .minimumScaleFactor(0.65)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            if style == .lockScreen, let s = state.planStop1, !s.isEmpty {
-                Text(s)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.62))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-            }
-            if style == .lockScreen, let s = state.planStop2, !s.isEmpty {
-                Text(s)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.5))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
             }
 
             if style == .lockScreen {
@@ -199,23 +147,16 @@ private struct EtubuIslandCanvas: View {
     }
 
     private var headerRow: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 8) {
             Image("EtubuLogo")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 16, height: 16)
-            Text(state.shortDestination)
+            Text("Etubu")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.white)
                 .lineLimit(1)
-                .minimumScaleFactor(0.7)
             Spacer(minLength: 4)
-            if let c = state.outsideC {
-                Text("\(c)°")
-                    .font(.system(size: 12, weight: .medium).monospacedDigit())
-                    .foregroundStyle(.white.opacity(0.7))
-                    .lineLimit(1)
-            }
             Text(Self.clock24())
                 .font(.system(size: 12, weight: .medium).monospacedDigit())
                 .foregroundStyle(.white.opacity(0.75))
@@ -224,95 +165,70 @@ private struct EtubuIslandCanvas: View {
     }
 
     private var hudRow: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text("\(min(state.kmh, 999))")
-                .font(.system(size: style == .lockScreen ? 28 : 22, weight: .bold, design: .rounded).monospacedDigit())
-                .foregroundStyle(state.overLimit == true ? .orange : .white)
-                .lineLimit(1)
-                .minimumScaleFactor(0.55)
-                .layoutPriority(2)
-            VStack(alignment: .leading, spacing: 0) {
-                Text(state.gear)
-                    .font(.system(size: style == .lockScreen ? 13 : 11, weight: .bold, design: .rounded))
-                    .foregroundStyle(accent)
-                    .lineLimit(1)
-                Text("km/h")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.45))
-                    .lineLimit(1)
-            }
-            if let lim = state.limitKmh, lim > 0 {
-                Text("\(lim)")
-                    .font(.system(size: style == .lockScreen ? 13 : 11, weight: .bold, design: .rounded).monospacedDigit())
-                    .foregroundStyle(state.overLimit == true ? .orange : .white.opacity(0.8))
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .overlay(
-                        Circle().strokeBorder(state.overLimit == true ? Color.orange : Color.white.opacity(0.45), lineWidth: 1.4)
-                            .padding(-3)
-                    )
-                    .lineLimit(1)
-            }
-            Spacer(minLength: 4)
-            VStack(alignment: .trailing, spacing: 0) {
-                if let soc = state.socPercent {
-                    Text("\(soc)%")
-                        .font(.system(size: style == .lockScreen ? 16 : 13, weight: .bold, design: .rounded).monospacedDigit())
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            if let soc = state.socPercent {
+                VStack(alignment: .leading, spacing: 1) {
+                    if !state.batteryCaption.isEmpty {
+                        Text(state.batteryCaption)
+                            .font(.system(size: style == .lockScreen ? 10 : 9, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.55))
+                            .lineLimit(1)
+                    }
+                    Text("%\(soc)")
+                        .font(.system(size: style == .lockScreen ? 26 : 20, weight: .bold, design: .rounded).monospacedDigit())
                         .foregroundStyle(soc <= 15 ? .orange : Color(red: 0.40, green: 0.95, blue: 0.55))
                         .lineLimit(1)
-                        .minimumScaleFactor(0.7)
+                        .minimumScaleFactor(0.55)
                 }
-                HStack(spacing: 4) {
-                    if let range = state.rangeKm {
-                        Text("\(range) km")
-                            .lineLimit(1)
-                    }
-                    if let kw = state.powerKw, abs(kw) >= 4 {
-                        Text("\(kw) kW")
-                            .foregroundStyle(kw < 0 ? Color(red: 0.35, green: 0.92, blue: 0.55) : accent)
-                            .lineLimit(1)
-                    }
-                }
-                .font(.system(size: 10, weight: .semibold).monospacedDigit())
-                .foregroundStyle(.white.opacity(0.55))
-                .minimumScaleFactor(0.65)
+                .layoutPriority(2)
             }
+            if let lim = state.limitKmh, lim > 0 {
+                VStack(alignment: .leading, spacing: 1) {
+                    if !state.limitCaption.isEmpty {
+                        Text(state.limitCaption)
+                            .font(.system(size: style == .lockScreen ? 10 : 9, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.55))
+                            .lineLimit(1)
+                    }
+                    Text("\(lim)")
+                        .font(.system(size: style == .lockScreen ? 16 : 13, weight: .bold, design: .rounded).monospacedDigit())
+                        .foregroundStyle(state.overLimit == true ? .orange : .white.opacity(0.88))
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .overlay(
+                            Circle().strokeBorder(state.overLimit == true ? Color.orange : Color.white.opacity(0.45), lineWidth: 1.4)
+                                .padding(-3)
+                        )
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 4)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var routeRow: some View {
-        HStack(spacing: 8) {
-            if let eta = state.etaClockLabel {
-                labeled(state.islandEtaLabel.isEmpty ? "ETA" : state.islandEtaLabel, eta)
+    @ViewBuilder
+    private var destWeatherRow: some View {
+        let dest = state.routeTo.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !dest.isEmpty {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(dest)
+                    .font(.system(size: style == .lockScreen ? 13 : 12, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.92))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                if !state.destWeatherSymbol.isEmpty, let temp = state.destWeatherTempC {
+                    HStack(spacing: 5) {
+                        Image(systemName: state.destWeatherSymbol)
+                            .font(.system(size: style == .lockScreen ? 12 : 11, weight: .semibold))
+                            .symbolRenderingMode(.hierarchical)
+                        Text("\(temp)°C")
+                            .font(.system(size: style == .lockScreen ? 12 : 11, weight: .semibold).monospacedDigit())
+                    }
+                    .foregroundStyle(.white.opacity(0.78))
+                }
             }
-            if let km = state.remainKm, km > 0 {
-                labeled(
-                    state.islandKmRemainLabel.isEmpty ? "km" : state.islandKmRemainLabel,
-                    km >= 10 ? String(format: "%.0f", km) : String(format: "%.1f", km)
-                )
-            }
-            if let arr = state.arrivalSocPercent {
-                labeled("SoC", "\(arr)%")
-            }
-            if let wh = state.planWhPerKm, style == .lockScreen {
-                labeled("Wh", "\(wh)")
-            }
-            Spacer(minLength: 0)
-        }
-        .font(.system(size: style == .lockScreen ? 11 : 10, weight: .semibold).monospacedDigit())
-        .lineLimit(1)
-        .minimumScaleFactor(0.65)
-    }
-
-    private func labeled(_ title: String, _ value: String) -> some View {
-        HStack(spacing: 3) {
-            Text(title)
-                .foregroundStyle(.white.opacity(0.42))
-                .lineLimit(1)
-            Text(value)
-                .foregroundStyle(.white.opacity(0.88))
-                .lineLimit(1)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 

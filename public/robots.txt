@@ -1,6 +1,9 @@
 User-agent: *
 Allow: /
 Disallow: /api/
-Disallow: /archive/
+
+# Googlebot specific
+User-agent: Googlebot
+Allow: /
 
 Sitemap: https://etubu.com/sitemap.xml

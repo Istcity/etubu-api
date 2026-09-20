@@ -121,10 +121,16 @@ final class EtubuVehicleTelemetry: ObservableObject {
     var hasActiveNavigation: Bool {
         if routeActive { return true }
         if EtubuDemoDrive.isActive { return true }
-        let dest = navDestination.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !dest.isEmpty { return true }
-        if let rem = navRemainKm, rem > 0.15 { return true }
-        return false
+        guard let rem = navRemainKm, rem > 0.15 else { return false }
+        if let dla = routeDestLat, let dln = routeDestLng,
+           let lat = latitude, let lng = longitude {
+            let d = EtubuTrafikAPI.haversineKm(lat, lng, dla, dln)
+            if d < 0.40 { return false }
+            if rem > 80, rem > d * 4 { return false }
+        } else if rem > 250 {
+            return false
+        }
+        return true
     }
 
     // TPMS (psi)
@@ -625,7 +631,21 @@ final class EtubuVehicleTelemetry: ObservableObject {
             if !destTrim.isEmpty {
                 self.navDestination = destTrim
                 if let navRemainKm, navRemainKm >= 0, navRemainKm < 20_000 {
-                    self.navRemainKm = navRemainKm
+                    if let dla = navDestLat ?? routeDestLat, let dln = navDestLng ?? routeDestLng,
+                       let lat = latitude, let lng = longitude {
+                        let d = EtubuTrafikAPI.haversineKm(lat, lng, dla, dln)
+                        if d < 0.40 {
+                            self.navRemainKm = nil
+                        } else if navRemainKm > max(80, d * 4) {
+                            self.navRemainKm = d
+                        } else {
+                            self.navRemainKm = navRemainKm
+                        }
+                    } else if navRemainKm > 250 {
+                        self.navRemainKm = nil
+                    } else {
+                        self.navRemainKm = navRemainKm
+                    }
                 }
                 if let navEtaMinutes, navEtaMinutes >= 0, navEtaMinutes < 10_000 {
                     self.navEtaMinutes = navEtaMinutes

@@ -1,7 +1,7 @@
 {
 	"appId": "com.etubu.app",
 	"appName": "Etubu",
-	"webDir": "www",
+	"webDir": "public",
 	"server": {
 		"iosScheme": "https"
 	},

@@ -38,6 +38,10 @@ enum EtubuCutoutFX: String, CaseIterable, Identifiable {
         case .tunnel: return .tunelCizgi
         case .tesla: return .duman
         case .plaidBoost: return .ates
+        case .weatherSky: return .isikHuzmesi
+        case .mapFocus, .map3D: return .tunelCizgi
+        case .cyberStorm: return .yildirimMor
+        case .desertDune, .stealthOled: return .solarCorona
         }
     }
 

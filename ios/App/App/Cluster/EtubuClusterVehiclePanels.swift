@@ -8,6 +8,7 @@ struct EtubuTPMSGridView: View {
     var maxWidth: CGFloat = 128
     var maxHeight: CGFloat = 112
     private var theme: ClusterTheme { ClusterTheme.stored }
+    @AppStorage("etubu.tpms.unit.bar") private var showBarUnit = false
 
     /// Asset intrinsic ratio (EtubuCarTopUp 680×1408).
     private static let noseUpRatio: CGFloat = 680.0 / 1408.0
@@ -25,6 +26,13 @@ struct EtubuTPMSGridView: View {
             }
             .frame(width: fit.totalW, height: fit.totalH, alignment: .center)
             .clipped()
+            .contentShape(Rectangle())
+            .onTapGesture {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showBarUnit.toggle()
+                }
+            }
             .accessibilityIdentifier("etubu.tpms.grid")
 
             if telemetry.isAwaitingTPMS {
@@ -110,16 +118,23 @@ struct EtubuTPMSGridView: View {
 
     private func psiText(_ tire: EtubuTireReading, corner: String) -> some View {
         let label: String = {
-            if let psi = tire.psi { return String(format: "%.0f", psi) }
+            if showBarUnit {
+                if let bar = tire.bar { return String(format: "%.1f", bar) }
+                if let psi = tire.psi { return String(format: "%.1f", psi * 0.0689476) }
+            } else {
+                if let psi = tire.psi { return "\(Int(psi.rounded()))" }
+                if let bar = tire.bar { return "\(Int((bar / 0.0689476).rounded()))" }
+            }
             return "-"
         }()
         let warn = tire.warning || (tire.psi.map { $0 < 32 || $0 > 48 } ?? false)
         return Text(label)
-            .font(.system(size: compact ? 11 : 13, weight: warn ? .bold : .semibold, design: .rounded).monospacedDigit())
+            .font(.system(size: compact ? (showBarUnit ? 9.5 : 11) : (showBarUnit ? 11 : 12.5), weight: warn ? .bold : .semibold, design: .rounded).monospacedDigit())
             .foregroundStyle(warn ? Color.orange : Color.white.opacity(0.92))
             .shadow(color: .black.opacity(0.7), radius: 2, y: 1)
             .lineLimit(1)
             .minimumScaleFactor(0.7)
+            .fixedSize(horizontal: true, vertical: false)
             .frame(maxWidth: .infinity)
             .clipped()
             .accessibilityLabel("\(corner) \(label)")
@@ -393,5 +408,70 @@ struct EtubuRadarSettingsView: View {
           } catch(e) {}
         })();
         """)
+    }
+}
+
+/// Landscape right rail over the map — SoC, remain, consumption in ground-contrast ink.
+struct EtubuMapDriveReadout: View {
+    let theme: ClusterTheme
+    var soc: Int?
+    var rangeKm: Int?
+    var remainLabel: String
+    var whPerKm: Double?
+    var tripKwh: Double?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Image(systemName: "bolt.car.fill")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(theme.mapHudMuted)
+                Text(soc.map { "\($0)%" } ?? "—")
+                    .font(EtubuClusterFonts.ui(18, weight: .bold))
+                    .monospacedDigit()
+                    .foregroundStyle(theme.mapHudText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                if let rangeKm {
+                    Text("\(rangeKm) km")
+                        .font(EtubuClusterFonts.ui(13, weight: .semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(theme.mapHudMuted)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.65)
+                }
+            }
+            if !remainLabel.isEmpty {
+                labeled(EtubuClusterL10n.distance, remainLabel)
+            }
+            if let whPerKm, whPerKm > 0 {
+                let kwhBit: String = {
+                    guard let tripKwh, tripKwh > 0.05 else { return "" }
+                    return String(format: " · %.1f kWh", tripKwh)
+                }()
+                labeled(
+                    EtubuClusterL10n.t("tripStatAvgWh"),
+                    String(format: "%.0f Wh/km", whPerKm) + kwhBit
+                )
+            }
+        }
+        .shadow(color: .black.opacity(0.85), radius: 1.4, y: 1)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("etubu.map.driveReadout")
+    }
+
+    private func labeled(_ title: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(title)
+                .font(EtubuClusterFonts.ui(10, weight: .semibold))
+                .foregroundStyle(theme.mapHudMuted)
+                .lineLimit(1)
+            Text(value)
+                .font(EtubuClusterFonts.ui(15, weight: .bold))
+                .monospacedDigit()
+                .foregroundStyle(theme.mapHudText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
     }
 }

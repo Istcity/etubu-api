@@ -6,8 +6,6 @@ enum EtubuMaestroLaunch {
         let args = ProcessInfo.processInfo.arguments
         return args.contains("-etubuSkipOnboarding")
             || args.contains("etubuSkipOnboarding")
-            || args.contains("-etubuForcePremium")
-            || args.contains("etubuForcePremium")
             || args.contains("etubuForceLangEn")
             || UserDefaults.standard.bool(forKey: "etubuSkipOnboarding")
     }
@@ -68,16 +66,18 @@ struct EtubuStealthSpeedView: View {
         .accessibilityValue("\(max(0, kmh)) km/h")
     }
 
+    private var speedUnit: EtubuSpeedUnit { EtubuSpeedUnit.stored }
+
     private var digitalReadout: some View {
         VStack(spacing: 6) {
-            Text("\(Int(needleKmh.rounded()))")
+            Text("\(speedUnit.format(kmh: needleKmh))")
                 .font(.system(size: 128, weight: .semibold, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(Color.white)
                 .minimumScaleFactor(0.4)
                 .lineLimit(1)
                 .accessibilityIdentifier("etubu.stealth.speed")
-            Text("km/h")
+            Text(speedUnit.label)
                 .font(.system(size: 22, weight: .medium, design: .rounded))
                 .foregroundStyle(Color.white.opacity(0.45))
                 .tracking(4)

@@ -98,13 +98,16 @@ struct EtubuClusterSpeedDialHost: View, Equatable {
         .onReceive(telemetry.$kmh) { _ in refreshOsm() }
         .onReceive(telemetry.$latitude) { _ in refreshOsm() }
         .onReceive(telemetry.$longitude) { _ in refreshOsm() }
+        .onReceive(EtubuRoadFix.shared.$updatedAt) { _ in refreshOsm() }
     }
 
     private func refreshOsm() {
+        let road = EtubuRoadFix.shared
+        let pin = road.predictedCoordinate
         EtubuOsmSpeedLimit.shared.refreshIfNeeded(
-            lat: telemetry.latitude,
-            lng: telemetry.longitude,
-            speedKmh: telemetry.kmh
+            lat: pin?.lat ?? road.latitude ?? telemetry.latitude,
+            lng: pin?.lng ?? road.longitude ?? telemetry.longitude,
+            speedKmh: Int((road.speedKmh ?? Double(telemetry.kmh)).rounded())
         )
     }
 }
@@ -146,5 +149,44 @@ struct EtubuCorridorChipIsolated: View, Equatable {
             compact: compact,
             contentScale: contentScale
         )
+    }
+}
+
+/// Arrival weather under destination — observes monitor here so RootView body stays light.
+struct EtubuArrivalWeatherIsolated: View, Equatable {
+    let theme: ClusterTheme
+    var compact: Bool = false
+    var mapHud: Bool = false
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.theme == rhs.theme && lhs.compact == rhs.compact && lhs.mapHud == rhs.mapHud
+    }
+
+    var body: some View {
+        EtubuArrivalWeatherRow(theme: theme, compact: compact, mapHud: mapHud)
+    }
+}
+
+private struct EtubuArrivalWeatherRow: View {
+    @ObservedObject private var wx = EtubuWeatherMonitor.shared
+    let theme: ClusterTheme
+    var compact: Bool = false
+    var mapHud: Bool = false
+
+    var body: some View {
+        if let temp = wx.arrivalTempC, !wx.arrivalSymbol.isEmpty {
+            HStack(spacing: compact ? 4 : 5) {
+                Image(systemName: wx.arrivalSymbol)
+                    .font(.system(size: compact ? 11 : 13, weight: .semibold))
+                    .symbolRenderingMode(.hierarchical)
+                Text("\(temp)°C")
+                    .font(EtubuClusterFonts.ui(compact ? 12 : 13, weight: .semibold))
+                    .monospacedDigit()
+            }
+            .foregroundStyle(mapHud ? theme.mapHudText : theme.primaryText.opacity(0.9))
+            .shadow(color: .black.opacity(mapHud ? 0.75 : 0), radius: 1.2, y: 1)
+            .accessibilityLabel("\(temp)°C")
+            .accessibilityIdentifier("etubu.route.arrivalWeather")
+        }
     }
 }

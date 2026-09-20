@@ -1,24 +1,180 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="tr">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#0a1528" />
-  <title>Etubu</title>
-  <style>
-    html, body { margin: 0; background: #0a1528; height: 100%; }
-  </style>
-  <script>
-    // Native SwiftUI cluster owns launch / legal / location. Cap app loads only after arm.
-    window.__ETUBU_NATIVE_CLUSTER__ = true;
-    window.__ETUBU_GPS_ARMED__ = false;
-    window.__ETUBU_LOAD_APP__ = function () {
-      try {
-        window.__ETUBU_GPS_ARMED__ = true;
-        location.replace('index-app.html');
-      } catch (e) {}
-    };
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ETUBU — Elektrikli Araç Sürüş Sesleri | GPS Senkron Motor Sesi</title>
+  <meta name="description" content="ETUBU ile EV'nize GPS hızına senkron gerçekçi motor sesleri. Ücretsiz başlayın; Premium 149 ₺/ay veya Ömür Boyu 1.499 ₺. Visa, Mastercard, Troy. 256-bit SSL." />
+  <meta name="robots" content="index, follow" />
+  <link rel="canonical" href="https://etubu.com/" />
+  <link rel="icon" type="image/png" href="/assets/brand/app-icon.png" />
+  <meta property="og:title" content="ETUBU — EV Driving Sounds" />
+  <meta property="og:description" content="GPS hızına senkron motor sesleri. Tesla tarayıcısı ve telefonda çalışır." />
+  <meta property="og:url" content="https://etubu.com/" />
+  <meta property="og:image" content="https://etubu.com/assets/brand/logo-dark.png" />
+  <meta property="og:type" content="website" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Syne:wght@700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/content.css" />
+  <link rel="stylesheet" href="css/paytr-storefront.css" />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "ETUBU",
+    "applicationCategory": "EntertainmentApplication",
+    "operatingSystem": "Web, iOS",
+    "offers": [
+      { "@type": "Offer", "name": "Ücretsiz", "price": "0", "priceCurrency": "TRY" },
+      { "@type": "Offer", "name": "Aylık Premium", "price": "149", "priceCurrency": "TRY" },
+      { "@type": "Offer", "name": "Ömür Boyu", "price": "1499", "priceCurrency": "TRY" }
+    ],
+    "url": "https://etubu.com/",
+    "publisher": {
+      "@type": "Person",
+      "name": "Sinan Nergiz",
+      "email": "destek@etubu.com"
+    }
+  }
   </script>
 </head>
-<body></body>
+<body class="landing-page">
+  <div class="landing-wrap">
+    <header class="landing-nav">
+      <a class="landing-nav__brand" href="/">
+        <img src="assets/brand/logo-dark.png" alt="ETUBU" width="120" height="36" />
+      </a>
+      <nav class="landing-nav__links" aria-label="Ana menü">
+        <a href="/" class="is-active">Ana sayfa</a>
+        <a href="pricing.html">Fiyatlandırma</a>
+        <a href="/app.html">Uygulama</a>
+        <a href="about.html">Hakkımızda</a>
+        <a href="contact.html">İletişim</a>
+      </nav>
+    </header>
+
+    <section class="landing-hero">
+      <h1>ETUBU</h1>
+      <p class="lede">Elektrikli aracınıza GPS hızına senkron gerçekçi motor sesleri. Tesla tarayıcısı ve telefonda çalışır — dijital hizmet, anında erişim.</p>
+      <div class="landing-cta-row">
+        <a class="btn-primary" href="/app.html">Uygulamayı başlat</a>
+        <a class="btn-ghost" href="pricing.html">Paketler ve fiyatlar</a>
+      </div>
+      <p class="ssl-line">
+        <img src="assets/payment/ssl-secure.svg" alt="" width="120" height="32" />
+        256-bit SSL Güvenli Ödeme · Visa · Mastercard · Troy
+      </p>
+    </section>
+
+    <section class="landing-section" id="ozellikler" aria-labelledby="feat-title">
+      <h2 id="feat-title">Ne sunuyoruz?</h2>
+      <p class="section-sub">Eğlence odaklı dijital yazılım. Konum verisi yalnızca cihazınızda işlenir; sürüş rotası sunucuya gönderilmez.</p>
+      <div class="feature-grid">
+        <article class="feature-card">
+          <h3>GPS senkron ses</h3>
+          <p>Hızlandıkça motor devri yükselir, yavaşladıkça rölantiye döner — anlık tepki.</p>
+        </article>
+        <article class="feature-card">
+          <h3>Tesla &amp; mobil</h3>
+          <p>Model 3 / Y / S / X tarayıcısı ve iOS / Android telefonlarla uyumlu.</p>
+        </article>
+        <article class="feature-card">
+          <h3>Yol uyarıları</h3>
+          <p>Radar ve hız koridoru farkındalığı ile sürüşe odaklanmayı destekler.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="landing-section" id="fiyatlandirma" aria-labelledby="price-title">
+      <h2 id="price-title">Paketler ve fiyatlar</h2>
+      <p class="section-sub">Fiyatlar KDV dahil TL olarak gösterilir. Ödeme anında görünen tutar geçerlidir. Detay: <a href="pricing.html">Fiyatlandırma</a>.</p>
+      <div class="price-grid" aria-label="Ürün paketleri">
+        <article class="price-card">
+          <h2>Ücretsiz</h2>
+          <p class="price-amount">0 ₺</p>
+          <p class="price-note">Süresiz · temel özellikler</p>
+          <ul>
+            <li>GPS senkron motor sesleri</li>
+            <li>Temel temalar</li>
+            <li>Radar / hız uyarıları</li>
+          </ul>
+          <a class="price-cta" href="/app.html">Hemen kullan</a>
+        </article>
+        <article class="price-card price-card--featured">
+          <p class="price-badge">Popüler</p>
+          <h2>Aylık Premium</h2>
+          <p class="price-amount">149 ₺ <small>/ ay</small></p>
+          <p class="price-note">~ $3 / ay · abonelik</p>
+          <ul>
+            <li>Tüm ses motorları</li>
+            <li>Tüm görsel temalar</li>
+            <li>İstediğiniz zaman iptal</li>
+          </ul>
+          <a class="price-cta" href="/app.html">Satın al</a>
+        </article>
+        <article class="price-card">
+          <h2>Ömür Boyu</h2>
+          <p class="price-amount">1.499 ₺</p>
+          <p class="price-note">~ $30 · tek seferlik</p>
+          <ul>
+            <li>Tüm katalog</li>
+            <li>Reklamların kaldırılması</li>
+            <li>Süresiz erişim</li>
+          </ul>
+          <a class="price-cta" href="/app.html">Satın al</a>
+        </article>
+      </div>
+      <div class="payment-badges" aria-label="Güvenlik ve kartlar">
+        <img src="assets/payment/ssl-secure.svg" alt="256-bit SSL Güvenli Ödeme" width="140" height="36" />
+        <img src="assets/payment/visa.svg" alt="Visa" width="90" height="29" />
+        <img src="assets/payment/mastercard.svg" alt="Mastercard" width="90" height="29" />
+        <img src="assets/payment/troy.svg" alt="Troy" width="90" height="36" />
+      </div>
+    </section>
+
+    <section class="landing-section" aria-labelledby="legal-title">
+      <h2 id="legal-title">Yasal ve güvenli alışveriş</h2>
+      <p class="section-sub">Mesafeli satış, iade, gizlilik ve teslimat koşulları aşağıda ve footer’da her zaman erişilebilir.</p>
+      <ul>
+        <li><a href="distance-sales.html">Mesafeli Satış / Hizmet Sözleşmesi</a></li>
+        <li><a href="returns.html">İptal ve İade Koşulları</a></li>
+        <li><a href="privacy.html">Gizlilik Politikası ve KVKK</a></li>
+        <li><a href="shipping-delivery.html">Teslimat Koşulları</a></li>
+        <li><a href="contact.html">İletişim bilgileri</a></li>
+      </ul>
+    </section>
+
+    <footer class="site-legal-footer">
+      <div class="site-legal-footer__grid">
+        <div>
+          <strong>ETUBU</strong>
+          <p>Yetkili: Sinan Nergiz</p>
+          <p><a href="mailto:destek@etubu.com">destek@etubu.com</a></p>
+          <p><a href="tel:+905305115800">+90 530 511 58 00</a></p>
+          <p>Adres: İstasyon Mah. TOKİ Göl Konutları<br />B1-3 Blok No: 28, Küçükçekmece / İstanbul</p>
+        </div>
+        <div>
+          <strong>Yasal</strong>
+          <p><a href="distance-sales.html">Mesafeli Satış Sözleşmesi</a></p>
+          <p><a href="returns.html">İptal ve İade Koşulları</a></p>
+          <p><a href="privacy.html">Gizlilik Politikası ve KVKK</a></p>
+          <p><a href="shipping-delivery.html">Teslimat Koşulları</a></p>
+          <p><a href="terms.html">Kullanım Şartları</a></p>
+          <p><a href="pricing.html">Fiyatlandırma</a></p>
+        </div>
+        <div>
+          <strong>Güvenli ödeme</strong>
+          <p>256-bit SSL Güvenli Ödeme</p>
+          <div class="payment-badges payment-badges--compact">
+            <img src="assets/payment/ssl-secure.svg" alt="256-bit SSL" width="120" height="32" />
+            <img src="assets/payment/visa.svg" alt="Visa" width="72" height="24" />
+            <img src="assets/payment/mastercard.svg" alt="Mastercard" width="72" height="24" />
+            <img src="assets/payment/troy.svg" alt="Troy" width="72" height="28" />
+          </div>
+        </div>
+      </div>
+      <p class="muted">© 2026 ETUBU · etubu.com · Dijital hizmet · Fiziksel kargo yoktur</p>
+    </footer>
+  </div>
+  <script src="js/consent.js?v=20260919a"></script>
+</body>
 </html>

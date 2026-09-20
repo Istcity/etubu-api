@@ -84,8 +84,11 @@ struct EtubuClusterLayoutMetrics {
             if style == .none || camInset < 20 { return max(camInset, 8) }
             return max(camInset, style == .dynamicIsland ? 44 : 36)
         }()
-        let leadPad = edge == .leading ? max(camGutter + 4, 10) : max(leadIns + 4, 8)
-        let trailPad = edge == .trailing ? max(camGutter + 4, 10) : max(trailIns + 4, 8)
+        let rawLeadPad = edge == .leading ? max(camGutter + 8, 16) : max(leadIns + 8, 14)
+        let rawTrailPad = edge == .trailing ? max(camGutter + 8, 16) : max(trailIns + 8, 14)
+        let symPad = max(rawLeadPad, rawTrailPad)
+        let leadPad = symPad
+        let trailPad = symPad
 
         let usableW = max(200, size.width - leadPad - trailPad - 4)
         let usableH = max(120, size.height - topIns - botIns - 4)
@@ -94,18 +97,18 @@ struct EtubuClusterLayoutMetrics {
         var scale = min(usableW / 820, usableH / 360)
         scale = min(1.14, max(0.62, scale))
 
-        var dialChrome = min(usableH * 0.74, usableW * 0.36) * scale
-        dialChrome = min(320, max(132, dialChrome))
-        var dialSize = min(usableH * 0.90, dialChrome * 1.15)
-        var boxW = min(usableW * 0.17, dialChrome * 0.58)
-        boxW = min(180, max(84, boxW))
-        var sideW = min(usableW * 0.145, max(80, (usableW - dialSize - boxW - 16) * 0.48))
-        sideW = min(152, max(72, sideW))
+        // Dual symmetrical dials (Left Speedometer & Right Multi-Function Gauge)
+        var dialChrome = min(usableH * 0.84, usableW * 0.30) * scale
+        dialChrome = min(295, max(130, dialChrome))
+        var dialSize = dialChrome
+        var boxW = min(usableW * 0.26, max(120, usableW * 0.22 * scale))
+        boxW = min(200, max(110, boxW))
+        var sideW = min(68, max(44, usableW * 0.08 * scale))
 
-        // Fit-to-width: independent floors can overflow SE landscape — shrink together.
-        let gaps: CGFloat = 16
+        // Fit-to-width: [Left Dial] + [Left Flank] + [Center Cards] + [Right Flank] + [Right Dial]
+        let gaps: CGFloat = 20
         let budget = usableW - gaps
-        var total = dialSize + boxW + sideW * 2
+        var total = dialSize * 2 + boxW + sideW * 2
         if total > budget, total > 1 {
             let k = budget / total
             dialSize *= k
@@ -115,9 +118,10 @@ struct EtubuClusterLayoutMetrics {
             scale *= k
         }
 
-        // Fit-to-height vs dial (top/bottom bars claim ~70–90pt).
-        let barReserve = min(96, max(56, usableH * 0.22))
-        let dialBudget = max(110, usableH - barReserve)
+        // Fit-to-height vs dial (top/bottom bars + ring glow bloom).
+        let barReserve = min(72, max(42, usableH * 0.16))
+        let glowReserve: CGFloat = 10
+        let dialBudget = max(110, usableH - barReserve - glowReserve)
         if dialSize > dialBudget {
             let k = dialBudget / dialSize
             dialSize *= k
@@ -127,20 +131,11 @@ struct EtubuClusterLayoutMetrics {
         let compactH = usableH < 300 || size.height < 390
         let compactW = usableW < 560 || size.width < 700
         let fontScale = min(1.22, max(0.78, scale * 1.12))
-        var signSize = min(40, max(24, dialChrome * 0.14))
-        let middle = max(120, usableW - sideW * 2 - 10)
-        let midTotal = dialSize + boxW + signSize + 12
-        if midTotal > middle, midTotal > 1 {
-            let k = middle / midTotal
-            dialSize *= k
-            dialChrome *= k
-            boxW *= k
-            signSize *= k
-        }
-        let tpmsMaxW = max(56, sideW - 8)
+        var signSize = min(36, max(22, dialChrome * 0.13))
+        let tpmsMaxW = max(44, sideW)
         let tpmsMaxH = min(
             compactH ? 108 : 132,
-            max(68, min(usableH * 0.48, usableH - 92))
+            max(68, min(usableH * 0.52, usableH - 80))
         )
         let chromeCompact = true
         let chromeGap: CGFloat = compactW ? 3 : 5
@@ -266,7 +261,7 @@ struct EtubuClusterLayoutMetrics {
             max(insets.leading, 6) + bottomClusterLead + tpmsMaxW + 8
         )
 
-        let bottomReserve: CGFloat = compactH ? (186 + tpmsMaxH) : (168 + tpmsMaxH)
+        let bottomReserve: CGFloat = compactH ? (132 + tpmsMaxH) : (148 + tpmsMaxH)
         let dialHBudget = max(130, usableH - bottomReserve)
         if dialSize > dialHBudget {
             dialSize = dialHBudget
@@ -305,10 +300,10 @@ struct EtubuClusterLayoutMetrics {
             boxW: boxW.rounded(.toNearestOrAwayFromZero),
             sideW: 0,
             signSize: signSize.rounded(.toNearestOrAwayFromZero),
-            leadPad: max(insets.leading, 6),
-            trailPad: max(insets.trailing, 6),
+            leadPad: max(insets.leading, 10),
+            trailPad: max(insets.trailing, 10),
             topChrome: topChrome,
-            contentHPad: compactW ? 10 : 12,
+            contentHPad: compactW ? 14 : 16,
             contentVGap: compactH ? 2 : 6,
             isCompactHeight: compactH,
             isCompactWidth: compactW,

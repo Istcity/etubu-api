@@ -1,7 +1,7 @@
 import SwiftUI
 import CoreLocation
 
-/// Gidilen yolun hız limiti — yalnızca TR tarzı yuvarlak levha ikonu (Tesla tarzı).
+/// Gidilen yolun hız limiti. TR/AB Viyana yuvarlak levha; ABD’de MUTCD dikdörtgen “SPEED LIMIT”.
 /// Kaynak sırası: aktif koridor → yakındaki radar/koridor maxspeed → OSM yol limiti.
 /// Dururken gizlenir; limit aşımında kırmızı dolar.
 struct EtubuRoadSpeedLimitSign: View {
@@ -11,8 +11,20 @@ struct EtubuRoadSpeedLimitSign: View {
     @ObservedObject private var demo = EtubuDemoDrive.shared
     @ObservedObject private var warnings = EtubuDriveWarnings.shared
 
-    /// Yaygın TR limitleri + ara değerler (ör. 82).
+    /// Vienna-style round plate (TR / EU) + US MUTCD “SPEED LIMIT” when GPS is in the United States.
     private static let knownLimits = [20, 30, 40, 50, 60, 70, 80, 82, 90, 100, 110, 120, 130, 140]
+    private static let knownMph = [15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80]
+
+    private var isMph: Bool {
+        EtubuSpeedUnit.stored.isMph
+    }
+
+    private var useMutcd: Bool {
+        if let lat = telemetry.latitude, let lng = telemetry.longitude, lat != 0, lng != 0 {
+            if EtubuOsmSpeedLimit.isUnitedStates(lat: lat, lng: lng) { return true }
+        }
+        return isMph || Locale.current.region?.identifier == "US"
+    }
 
     private var currentSpeed: Int {
         demo.isRunning ? demo.displayKmh : telemetry.kmh
@@ -20,8 +32,6 @@ struct EtubuRoadSpeedLimitSign: View {
 
     /// Yoldaki hız durumu — öncelik: koridor / yaklaşan radar → OSM.
     private var roadLimit: Int? {
-        guard currentSpeed >= EtubuOsmSpeedLimit.movingKmhThreshold else { return nil }
-
         if warnings.corridorActive, let lim = warnings.corridorLimit, lim > 0 {
             return lim
         }
@@ -34,10 +44,25 @@ struct EtubuRoadSpeedLimitSign: View {
 
     private var displayLimit: Int? {
         guard let lim = roadLimit else { return nil }
+        if isMph || useMutcd {
+            let mph = Int((Double(lim) / 1.60934).rounded())
+            if let near = Self.knownMph.first(where: { abs($0 - mph) <= 2 }) {
+                return near
+            }
+            return min(85, max(5, mph))
+        }
         if let near = Self.knownLimits.first(where: { abs($0 - lim) <= 2 }) {
             return near
         }
         return min(160, max(5, lim))
+    }
+
+    private var compareLimitKmh: Int? {
+        guard let shown = displayLimit else { return nil }
+        if isMph || useMutcd {
+            return Int((Double(shown) * 1.60934).rounded())
+        }
+        return shown
     }
 
     /// 2.5 km içindeki radar / hız koridoru levha limiti.
@@ -70,19 +95,25 @@ struct EtubuRoadSpeedLimitSign: View {
     }
 
     private var isOverLimit: Bool {
-        guard let lim = displayLimit else { return false }
-        return currentSpeed > lim + 5
+        guard let lim = compareLimitKmh else { return false }
+        return currentSpeed > lim + 3
     }
 
     var body: some View {
         Group {
             if let limit = displayLimit {
-                signCircle(limit: limit, over: isOverLimit)
-                    .accessibilityLabel(
-                        isOverLimit
-                            ? "Hız limiti aşıldı \(currentSpeed) / \(limit)"
-                            : "Hız limiti \(limit) kilometre"
-                    )
+                Group {
+                    if useMutcd {
+                        signMutcd(limit: limit, over: isOverLimit)
+                    } else {
+                        signCircle(limit: limit, over: isOverLimit)
+                    }
+                }
+                .accessibilityLabel(
+                    isOverLimit
+                        ? "Hız limiti aşıldı \(currentSpeed) / \(limit)"
+                        : (useMutcd ? "Speed limit \(limit) miles per hour" : "Hız limiti \(limit) kilometre")
+                )
             } else {
                 Color.clear.frame(width: size, height: size)
                     .accessibilityHidden(true)
@@ -90,6 +121,45 @@ struct EtubuRoadSpeedLimitSign: View {
         }
         .frame(width: size, height: size)
         .animation(.easeInOut(duration: 0.2), value: displayLimit)
+        .animation(.easeInOut(duration: 0.2), value: useMutcd)
+    }
+
+    private func signMutcd(limit: Int, over: Bool) -> some View {
+        let w = size * 0.92
+        let h = size
+        let border = max(1.6, size * 0.055)
+        let caption = EtubuClusterL10n.t("speedLimitMutcd")
+        let numSize = limit >= 100 ? size * 0.38 : size * 0.46
+        let capSize = size * 0.13
+        let fill = over ? Color(red: 0.90, green: 0.12, blue: 0.14) : Color.white
+        let ink = over ? Color.white : Color.black
+        return ZStack {
+            RoundedRectangle(cornerRadius: size * 0.08, style: .continuous)
+                .fill(fill)
+            RoundedRectangle(cornerRadius: size * 0.08, style: .continuous)
+                .strokeBorder(ink, lineWidth: border)
+            VStack(spacing: size * 0.02) {
+                Text(caption)
+                    .font(.system(size: capSize, weight: .heavy, design: .default))
+                    .tracking(size * 0.012)
+                    .foregroundStyle(ink)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.45)
+                    .allowsTightening(true)
+                Text("\(limit)")
+                    .font(.system(size: numSize, weight: .bold, design: .rounded))
+                    .foregroundStyle(ink)
+                    .monospacedDigit()
+                    .minimumScaleFactor(0.55)
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, border + 1)
+            .padding(.vertical, border)
+        }
+        .frame(width: w, height: h)
+        .shadow(color: .black.opacity(over ? 0.55 : 0.35), radius: over ? 5 : 3, y: 1)
+        .scaleEffect(over ? 1.06 : 1.0)
+        .animation(.easeInOut(duration: 0.22), value: over)
     }
 
     private func signCircle(limit: Int, over: Bool) -> some View {

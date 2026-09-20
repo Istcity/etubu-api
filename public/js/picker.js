@@ -1,5 +1,6 @@
 /**
- * Özel seçici — ortada modal liste (Tesla / overflow / native select sorunları için).
+ * ETUBU Custom Modal Picker (Language, Sound Profile, Visual Theme)
+ * Works seamlessly across Mobile, Desktop, and Tesla in-car browser.
  */
 const Picker = (() => {
   let openMenu = null;
@@ -9,7 +10,7 @@ const Picker = (() => {
   let ignoreCloseUntil = 0;
 
   function ensureBackdrop() {
-    if (backdrop) return backdrop;
+    if (backdrop && document.body.contains(backdrop)) return backdrop;
     backdrop = document.createElement("div");
     backdrop.className = "picker-backdrop";
     backdrop.hidden = true;
@@ -26,7 +27,6 @@ const Picker = (() => {
   function open(btn, menu, select) {
     ensureBackdrop();
     fillMenu(select, menu, btn);
-    // CSS kaçsa bile ortada görünsün
     menu.style.cssText = [
       "position:fixed",
       "z-index:10050",
@@ -34,29 +34,34 @@ const Picker = (() => {
       "top:50%",
       "transform:translate(-50%,-50%)",
       "width:min(380px,calc(100vw - 24px))",
-      "max-height:min(70vh,480px)",
+      "max-height:min(72vh,520px)",
       "margin:0",
-      "padding:10px",
-      "border-radius:16px",
-      "border:1px solid rgba(255,255,255,0.2)",
-      "background:#0d1526",
-      "box-shadow:0 24px 64px rgba(0,0,0,0.65)",
+      "padding:14px 12px",
+      "border-radius:18px",
+      "border:1px solid rgba(0,240,255,0.3)",
+      "background:rgba(10,16,28,0.96)",
+      "backdrop-filter:blur(16px)",
+      "-webkit-backdrop-filter:blur(16px)",
+      "box-shadow:0 24px 64px rgba(0,0,0,0.8), 0 0 32px rgba(0,240,255,0.15)",
       "overflow-x:hidden",
       "overflow-y:auto",
-      "display:block",
+      "display:flex",
+      "flex-direction:column",
+      "gap:6px",
     ].join(";");
+
     if (backdrop) {
       backdrop.style.cssText =
-        "position:fixed;inset:0;z-index:10040;background:rgba(2,4,10,0.72);display:block";
+        "position:fixed;inset:0;z-index:10040;background:rgba(2,6,16,0.78);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);display:block";
+      backdrop.hidden = false;
     }
     menu.hidden = false;
-    backdrop.hidden = false;
     openMenu = menu;
     openBtn = btn;
     openSelect = select;
     btn.setAttribute("aria-expanded", "true");
     document.body.classList.add("picker-open");
-    ignoreCloseUntil = Date.now() + 450;
+    ignoreCloseUntil = Date.now() + 350;
   }
 
   function close() {
@@ -106,18 +111,21 @@ const Picker = (() => {
 
   function selectedLabel(select) {
     const opt = select.selectedOptions?.[0] || select.options[select.selectedIndex];
-    return opt && opt.textContent ? opt.textContent : "—";
+    return opt && opt.textContent ? opt.textContent : "-";
   }
 
   function fillMenu(select, menu, btn) {
     menu.innerHTML = "";
     const title = document.createElement("div");
     title.className = "picker-title";
+    title.style.cssText =
+      "font-family:var(--font-display,sans-serif);font-size:13px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#00f0ff;padding:4px 8px 10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);margin-bottom:6px;text-align:center;";
+
     const titleKey = btn.dataset.pickerTitleKey;
     title.textContent =
       (titleKey && typeof I18n !== "undefined" ? I18n.t(titleKey) : null) ||
       btn.dataset.pickerTitle ||
-      (typeof I18n !== "undefined" ? I18n.t("pickerSelect") : "Select");
+      (typeof I18n !== "undefined" ? I18n.t("pickerSelect") : "Seçiniz");
     menu.appendChild(title);
 
     const items = optionList(select);
@@ -125,7 +133,8 @@ const Picker = (() => {
       const empty = document.createElement("div");
       empty.className = "picker-empty";
       empty.textContent =
-        typeof I18n !== "undefined" ? I18n.t("pickerEmpty") : "No options";
+        typeof I18n !== "undefined" ? I18n.t("pickerEmpty") : "Seçenek yok";
+      empty.style.cssText = "color:#8899aa;font-size:13px;text-align:center;padding:16px;";
       menu.appendChild(empty);
       return;
     }
@@ -135,6 +144,8 @@ const Picker = (() => {
         const g = document.createElement("div");
         g.className = "picker-group";
         g.textContent = item.label;
+        g.style.cssText =
+          "font-size:11px;font-weight:700;letter-spacing:0.06em;color:rgba(255,255,255,0.45);text-transform:uppercase;padding:8px 8px 2px 8px;margin-top:4px;";
         menu.appendChild(g);
         return;
       }
@@ -142,11 +153,30 @@ const Picker = (() => {
       b.type = "button";
       b.className = "picker-option";
       b.textContent = item.label;
-      if (item.value === select.value) b.classList.add("is-selected");
+      const isSel = item.value === select.value;
+      if (isSel) b.classList.add("is-selected");
       if (item.disabled) {
         b.disabled = true;
         b.classList.add("is-disabled");
       }
+      b.style.cssText = [
+        "display:flex",
+        "align-items:center",
+        "justify-content:space-between",
+        "width:100%",
+        "padding:10px 14px",
+        "border-radius:10px",
+        "border:1px solid " + (isSel ? "rgba(0,240,255,0.55)" : "rgba(255,255,255,0.06)"),
+        "background:" + (isSel ? "linear-gradient(135deg,rgba(0,240,255,0.18),rgba(0,119,255,0.12))" : "rgba(255,255,255,0.03)"),
+        "color:" + (isSel ? "#00f0ff" : "#e6f0ff"),
+        "font-family:inherit",
+        "font-size:14px",
+        "font-weight:" + (isSel ? "700" : "500"),
+        "cursor:pointer",
+        "transition:all 0.15s ease",
+        "text-align:left",
+      ].join(";");
+
       b.addEventListener("click", (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -178,6 +208,7 @@ const Picker = (() => {
     select.classList.add("picker-native");
     select.tabIndex = -1;
     select.setAttribute("aria-hidden", "true");
+    select.style.display = "none";
 
     const btn = document.createElement("button");
     btn.type = "button";
@@ -247,7 +278,7 @@ const Picker = (() => {
     (selectors || map.map((x) => x[0])).forEach((sel, i) => {
       const el = typeof sel === "string" ? document.querySelector(sel) : sel;
       const entry = map.find((m) => m[0] === sel) || map[i];
-      enhance(el, entry?.[1]);
+      if (el) enhance(el, entry?.[1]);
     });
 
     document.addEventListener("keydown", (e) => {
@@ -260,3 +291,8 @@ const Picker = (() => {
 
   return { init, refreshAll, close, enhance };
 })();
+
+try {
+  window.Picker = Picker;
+  window.SoundPicker = Picker;
+} catch (_) {}

@@ -14,15 +14,14 @@ final class EtubuOsmHazardsMonitor: ObservableObject {
     private var fetchCenter: CLLocationCoordinate2D?
     private var fetchedAt: Date?
     private var fetching = false
+    private var failRetryAt: Date?
 
     private let fetchRadiusM = 900.0
-    private let refetchDistM = 150.0
+    private let refetchDistM = 80.0
     private let refetchAge: TimeInterval = 60
+    private let failRetryAge: TimeInterval = 20
 
-    private let endpoints = [
-        "https://overpass-api.de/api/interpreter",
-        "https://overpass.kumi.systems/api/interpreter",
-    ]
+    private let endpoints = EtubuHazardMerge.overpassEndpoints
 
     private init() {}
 
@@ -70,6 +69,9 @@ final class EtubuOsmHazardsMonitor: ObservableObject {
     private func refreshIfNeeded(lat: Double, lng: Double) {
         if fetching { return }
         let stale: Bool = {
+            if lastFetchFailed, let fail = failRetryAt, Date().timeIntervalSince(fail) >= failRetryAge {
+                return true
+            }
             guard let at = fetchedAt, let c = fetchCenter else { return true }
             if Date().timeIntervalSince(at) > refetchAge { return true }
             let moved = CLLocation(latitude: c.latitude, longitude: c.longitude)
@@ -82,13 +84,16 @@ final class EtubuOsmHazardsMonitor: ObservableObject {
             let remote = await Self.fetchAround(lat: lat, lng: lng, endpoints: endpoints, radiusM: fetchRadiusM)
             await MainActor.run {
                 self.fetching = false
-                self.fetchCenter = CLLocationCoordinate2D(latitude: lat, longitude: lng)
-                self.fetchedAt = Date()
-                self.lastFetchFailed = remote == nil
                 if let remote {
+                    self.lastFetchFailed = false
+                    self.failRetryAt = nil
+                    self.fetchCenter = CLLocationCoordinate2D(latitude: lat, longitude: lng)
+                    self.fetchedAt = Date()
                     self.points = remote
+                } else {
+                    self.lastFetchFailed = true
+                    self.failRetryAt = Date()
                 }
-                // On failure keep previous points; mark failed so mode can fall back to OSM-led.
             }
         }
     }
@@ -109,20 +114,14 @@ final class EtubuOsmHazardsMonitor: ObservableObject {
           node["railway"="level_crossing"](around:\(r),\(lat),\(lng));
           node["railway"="tram_level_crossing"](around:\(r),\(lat),\(lng));
           node["highway"="traffic_signals"](around:\(r),\(lat),\(lng));
-          node["highway"="stop"](around:\(r),\(lat),\(lng));
-          node["highway"="give_way"](around:\(r),\(lat),\(lng));
-          node["highway"="crossing"](around:\(r),\(lat),\(lng));
           node["traffic_calming"="bump"](around:\(r),\(lat),\(lng));
           node["traffic_calming"="hump"](around:\(r),\(lat),\(lng));
           node["traffic_calming"="table"](around:\(r),\(lat),\(lng));
           node["amenity"="charging_station"](around:\(r),\(lat),\(lng));
-          node["highway"="traffic_signals"]["crossing"="traffic_signals"](around:\(r),\(lat),\(lng));
           node["hazard"](around:\(r),\(lat),\(lng));
           node["mountain_pass"="yes"](around:\(r),\(lat),\(lng));
           way["highway"~"\(Self.overpassDrivableHighways)"]["tunnel"~"^(yes|covered)$"](around:\(r),\(lat),\(lng));
           way["highway"~"\(Self.overpassDrivableHighways)"]["covered"="yes"](around:\(r),\(lat),\(lng));
-          way["highway"~"\(Self.overpassPedestrianWays)"]["tunnel"="yes"](around:\(r),\(lat),\(lng));
-          way["highway"~"\(Self.overpassPedestrianWays)"]["bridge"~"^(yes|viaduct)$"](around:\(r),\(lat),\(lng));
           way["highway"~"\(Self.overpassDrivableHighways)"]["hazard"](around:\(r),\(lat),\(lng));
           way["highway"~"\(Self.overpassDrivableHighways)"]["mountain_pass"="yes"](around:\(r),\(lat),\(lng));
         );out body center;
@@ -165,7 +164,7 @@ final class EtubuOsmHazardsMonitor: ObservableObject {
                 return nil
             })
             guard let kind = classify(tags) else { continue }
-            let maxspeed = Int(tags["maxspeed"] ?? "")
+            let maxspeed = EtubuOsmSpeedLimit.limitKmh(fromTag: tags["maxspeed"], lat: lat, lng: lon)
             let oid: String = {
                 if let i = el["id"] as? Int { return "\(i)" }
                 if let n = el["id"] as? NSNumber { return n.stringValue }
@@ -207,8 +206,15 @@ final class EtubuOsmHazardsMonitor: ObservableObject {
         "subway_entrance", "platform", "halt", "station",
     ]
 
-    /// Drop leftover metro/rail labels already in the HUD cache.
+    /// Kinds the driver asked not to be notified about (HUD + voice).
+    nonisolated static let mutedWarnKinds: Set<String> = [
+        "crossing", "underpass", "overpass", "give_way", "stop", "yield"
+    ]
+
+    /// Drop leftover metro/rail labels already in the HUD cache. Charge is not a road warning.
     nonisolated static func isRoadTrafficWarning(_ h: EtubuRouteHazard) -> Bool {
+        if h.kind == "charge" { return false }
+        if mutedWarnKinds.contains(h.kind) { return false }
         if looksLikeMetroOrRailLabel(h.label), h.kind == "tunnel" || h.kind == "railway" {
             return false
         }
@@ -269,16 +275,15 @@ final class EtubuOsmHazardsMonitor: ObservableObject {
         let hw = tags["highway"] ?? ""
         let isParkingService = tags["service"] == "parking_aisle" || tags["service"] == "driveway"
         if !isParkingService, (drivableHighways.contains(hw) || hw == "tunnel"), isCoveredRoad(tags) {
+            // Motorway/trunk covered → tunnel; skip underpass (muted).
             if ["motorway", "motorway_link", "trunk", "trunk_link"].contains(hw) {
                 return "tunnel"
             }
-            return "underpass"
+            return nil
         }
+        // Pedestrian under/overpass — muted (do not warn).
         if pedestrianWays.contains(hw) {
-            let tunnel = (tags["tunnel"] ?? "").lowercased()
-            let bridge = (tags["bridge"] ?? "").lowercased()
-            if tunnel == "yes" || tunnel == "covered" { return "underpass" }
-            if bridge == "yes" || bridge == "viaduct" { return "overpass" }
+            return nil
         }
         let hazard = (tags["hazard"] ?? "").lowercased()
         if ["curve", "curves", "winding_road", "bend"].contains(hazard) {
@@ -305,18 +310,19 @@ final class EtubuOsmHazardsMonitor: ObservableObject {
             return "traffic_light"
         }
         if tags["highway"] == "stop" || tags["traffic_sign"] == "stop" {
-            return "stop"
+            return nil
         }
         if tags["highway"] == "give_way"
             || tags["traffic_sign"] == "give_way"
             || tags["traffic_sign"] == "yield" {
-            return "give_way"
+            return nil
         }
+        // Pedestrian crossing — muted (do not warn).
         if tags["highway"] == "crossing"
             || tags["crossing"] == "uncontrolled"
             || tags["crossing"] == "zebra"
             || tags["footway"] == "crossing" {
-            return "crossing"
+            return nil
         }
         if let tc = tags["traffic_calming"], ["bump", "hump", "table"].contains(tc) {
             return "bump"

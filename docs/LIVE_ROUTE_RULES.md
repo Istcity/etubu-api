@@ -54,7 +54,7 @@ Araç navigasyonu bitince sticky `navDestination` / `navRemainKm` **temizlenir**
 | Öncelik | Kaynak |
 |---------|--------|
 | **1 — OSM** | Overpass: radar, koridor, ışık, yaya, tünel, viraj, tırmanış, yol şartı, şarj |
-| **2 — TR koridor cache** | Dil TR: gömülü + haftalık OSM (EGM yok) |
+| **2 — TR koridor cache** | Ulusal gömülü EGM+Overpass JSON + haftalık OSM; rota başına EGM yok |
 | **3 — Hava** | Open-Meteo (WMO) + MGM uyarı (TR, varsa) |
 | **Karma çekim** | Rota çizilince koridor cache hemen; OSM + şarj + hava paralel. |
 | **Canlı karma** | Navigasyon açıkken LiveRadar + OsmHazards + Weather **paralel**. |

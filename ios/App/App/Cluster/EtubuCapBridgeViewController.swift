@@ -5,7 +5,7 @@ import Capacitor
 /// Cap start page is a blank stub (`index.html`). Full www (`index-app.html`) loads
 /// only after legal/onboarding — prevents RouteGuard geolocation prompts on launch.
 final class EtubuCapBridgeViewController: CAPBridgeViewController {
-    private static var webArmed = false
+    private static var webArmed = true
     private var lastSyncedSize: CGSize = .zero
     private var armRetryWork: DispatchWorkItem?
 
@@ -23,21 +23,28 @@ final class EtubuCapBridgeViewController: CAPBridgeViewController {
             name: .etubuArmCapWeb,
             object: nil
         )
-        webView?.evaluateJavaScript(
-            "window.__ETUBU_NATIVE_CLUSTER__=true;window.__ETUBU_GPS_ARMED__=false;",
-            completionHandler: nil
-        )
-        // Arm may have fired before this VC registered — apply if already requested.
-        if Self.webArmed {
-            applyArmToWeb(retriesLeft: 12)
+        if let wv = webView {
+            wv.isHidden = false
+            wv.alpha = 1.0
+            wv.isUserInteractionEnabled = true
+            wv.scrollView.isUserInteractionEnabled = true
+            wv.evaluateJavaScript(
+                "window.__ETUBU_NATIVE_CLUSTER__=true;window.__ETUBU_GPS_ARMED__=true;",
+                completionHandler: nil
+            )
         }
+        applyArmToWeb(retriesLeft: 16)
     }
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        if Self.webArmed {
-            applyArmToWeb(retriesLeft: 8)
+        if let wv = webView {
+            wv.isHidden = false
+            wv.alpha = 1.0
+            wv.isUserInteractionEnabled = true
+            wv.scrollView.isUserInteractionEnabled = true
         }
+        applyArmToWeb(retriesLeft: 12)
     }
 
     override func viewWillTransition(

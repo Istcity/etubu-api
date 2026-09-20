@@ -52,6 +52,13 @@ public struct EtubuDriveAttributes: ActivityAttributes {
         public var planStop1: String?
         public var planStop2: String?
         public var planWhPerKm: Int?
+        /// Last completed trip — Island / lock (km + kWh).
+        public var lastTripLine: String?
+        /// Pre-localized captions so Island can label numbers.
+        public var batteryCaption: String
+        public var limitCaption: String
+        public var destWeatherSymbol: String
+        public var destWeatherTempC: Int?
 
         public init(
             kmh: Int,
@@ -94,7 +101,12 @@ public struct EtubuDriveAttributes: ActivityAttributes {
             planSummary: String? = nil,
             planStop1: String? = nil,
             planStop2: String? = nil,
-            planWhPerKm: Int? = nil
+            planWhPerKm: Int? = nil,
+            lastTripLine: String? = nil,
+            batteryCaption: String = "",
+            limitCaption: String = "",
+            destWeatherSymbol: String = "",
+            destWeatherTempC: Int? = nil
         ) {
             self.kmh = kmh
             self.gear = gear
@@ -137,6 +149,11 @@ public struct EtubuDriveAttributes: ActivityAttributes {
             self.planStop1 = planStop1
             self.planStop2 = planStop2
             self.planWhPerKm = planWhPerKm
+            self.lastTripLine = lastTripLine
+            self.batteryCaption = batteryCaption
+            self.limitCaption = limitCaption
+            self.destWeatherSymbol = destWeatherSymbol
+            self.destWeatherTempC = destWeatherTempC
         }
 
         public var routeSummaryLine: String {

@@ -25,19 +25,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             for w in scene.windows {
                 w.backgroundColor = canvas
                 w.rootViewController?.view.backgroundColor = canvas
+                w.isUserInteractionEnabled = true
             }
         }
-        // Overlay cluster ASAP (separate UIWindow — never trapped under Cap/WKWebView).
-        EtubuClusterPresenter.shared.installOverCapacitor()
         DispatchQueue.main.async {
-            EtubuRuntimeProfile.hideLingeringSplashOverlays()
             EtubuClusterPresenter.shared.installOverCapacitor()
-        }
-        for delay in [0.1, 0.3, 0.7, 1.4, 2.5] as [Double] {
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                EtubuRuntimeProfile.hideLingeringSplashOverlays()
-                EtubuClusterPresenter.shared.installOverCapacitor()
-            }
+            EtubuRuntimeProfile.hideLingeringSplashOverlays()
         }
         if #available(iOS 16.2, *) {
             Task { @MainActor in
@@ -52,6 +45,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // EtubuVehicleLaunchNotifier.shared.configure() — ertelendi
         return true
     }
+
 
     /// Alert duck must not be overwritten by Live Activity / mix-mode reasserts.
     private static var alertDuckActive = false
@@ -91,7 +85,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         if mix == "solo" {
             applyPlayback(
                 mode: .default,
-                options: [.allowBluetoothA2DP, .allowAirPlay],
+                options: [.allowBluetoothA2DP, .allowAirPlay, .duckOthers],
                 quality: true
             )
         } else {
@@ -145,11 +139,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         let session = AVAudioSession.sharedInstance()
         let attempts: [AVAudioSession.CategoryOptions] = [
             options,
-            options.union([.duckOthers, .allowBluetoothA2DP]),
+            options.union([.duckOthers, .allowBluetoothA2DP, .allowAirPlay]),
+            [.duckOthers, .allowBluetoothA2DP, .allowAirPlay, .mixWithOthers],
             [.duckOthers, .allowBluetoothA2DP, .allowAirPlay],
-            options.union([.mixWithOthers, .duckOthers]),
-            [.mixWithOthers, .duckOthers, .allowBluetoothA2DP],
             [.mixWithOthers, .allowBluetoothA2DP, .allowAirPlay],
+            [.mixWithOthers, .duckOthers],
         ]
         var lastError: Error?
         for opts in attempts {
@@ -181,6 +175,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             queue: .main
         ) { _ in
             reassertAfterRouteOrInterruption()
+            if isCarMediaRoute() {
+                EtubuTeslaBleSession.shared.resumeAutoConnectIfNeeded()
+            }
         }
         nc.addObserver(
             forName: AVAudioSession.interruptionNotification,
@@ -319,14 +316,16 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func applicationDidBecomeActive(_ application: UIApplication) {
+        EtubuClusterPresenter.shared.refreshOverlayGeometry()
         EtubuClusterAudioBridge.setCapacitorSuspended(false)
         configureAudioSession(quality: true)
         EtubuRuntimeProfile.hideLingeringSplashOverlays()
-        EtubuClusterPresenter.shared.installOverCapacitor()
         // Premium köprüsünü taze tut — Cap “kilitli” yanılmasın.
         Task { @MainActor in
             EtubuClusterAudioBridge.setPremium(EtubuPremiumManager.shared.isPremium)
             await EtubuPremiumManager.shared.refreshEntitlementQuietly()
+            // Haftalık TR hız koridoru cache (OSM tiles) — arka planda, UI’yi bloklamaz.
+            EtubuTrCorridorStore.refreshIfNeeded()
         }
         // Araç bağlantısı yalnızca uygulama açılışında (startCore → bootstrap).
         // becomeActive’de yeniden bağlanma / koparma yok.

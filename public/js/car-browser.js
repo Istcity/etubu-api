@@ -8,7 +8,7 @@
 const CarBrowser = (() => {
   const cfg = () => window.ETUBU_CONFIG || {};
   const COOKIE_MAX_AGE = 60 * 60 * 24 * 400; // ~400 gün
-  const URL_SYNC_KEYS = ["voice", "theme", "vol", "sens", "gauge", "mute", "lang"];
+  const URL_SYNC_KEYS = ["voice", "theme", "vol", "sens", "gauge", "mute", "lang", "unit"];
 
   /** @type {Record<string, { url: string, ls: string, cookie: string }>} */
   const PREF_META = {
@@ -19,6 +19,7 @@ const CarBrowser = (() => {
     gauge: { url: "gauge", ls: "etubu_gauge_screen", cookie: "etubu_g" },
     mute: { url: "mute", ls: "etubu_mute", cookie: "etubu_m" },
     lang: { url: "lang", ls: "etubu_lang", cookie: "etubu_lang" },
+    unit: { url: "unit", ls: "etubu_unit", cookie: "etubu_u" },
   };
 
   let urlSyncTimer = null;
@@ -310,15 +311,23 @@ const CarBrowser = (() => {
     }
   }
 
-  /** Tüm Tesla’larda reklam / alt şerit yer kaplamasın */
+  /** Tesla tarayıcısı: sol paneli gizle, reklamları aktif tut (ücretsiz model) */
   function forceCompactChrome() {
     if (!isTesla() && !isEphemeral()) return;
-    document.body.classList.add("ads-hidden", "drive-focus", "panel-hidden");
+    document.body.classList.add("panel-hidden");
     const editorial = document.getElementById("siteEditorial");
     if (editorial) editorial.hidden = true;
-    try {
-      typeof Ads !== "undefined" && Ads.hideAll?.();
-    } catch (_) {}
+    if (typeof Paywall !== "undefined" && Paywall.isAdFree()) {
+      document.body.classList.add("ads-hidden");
+      try {
+        typeof Ads !== "undefined" && Ads.hideAll?.();
+      } catch (_) {}
+    } else {
+      document.body.classList.remove("ads-hidden");
+      try {
+        typeof Ads !== "undefined" && Ads.setDriveFocus?.(true);
+      } catch (_) {}
+    }
     syncViewportHeight();
   }
 

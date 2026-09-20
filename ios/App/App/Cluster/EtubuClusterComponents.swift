@@ -1,4 +1,59 @@
 import SwiftUI
+import Combine
+
+/// Monitors device thermal state (especially when mounted on vehicle dashboard under direct sunlight)
+/// and dynamically reduces GPU shadow passes, heavy blur filters, and particle effects to prevent
+/// thermal throttling, device shutdown, and frame drops.
+final class EtubuThermalGuard: ObservableObject {
+    static let shared = EtubuThermalGuard()
+
+    @Published private(set) var state: ProcessInfo.ThermalState = ProcessInfo.processInfo.thermalState
+
+    private var cancellables = Set<AnyCancellable>()
+
+    var isThrottled: Bool {
+        state == .serious || state == .critical
+    }
+
+    var isFairOrHigher: Bool {
+        state == .fair || state == .serious || state == .critical
+    }
+
+    private init() {
+        NotificationCenter.default.publisher(for: ProcessInfo.thermalStateDidChangeNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                let next = ProcessInfo.processInfo.thermalState
+                if self?.state != next {
+                    self?.state = next
+                }
+            }
+            .store(in: &cancellables)
+    }
+
+    /// Dynamically scales shadow radius to reduce GPU fill rate and composition passes under heat.
+    func adaptiveShadow(_ base: CGFloat) -> CGFloat {
+        if isThrottled { return 0 }
+        if state == .fair { return base * 0.5 }
+        return base
+    }
+}
+
+enum EtubuGaugeScreen: String, CaseIterable {
+    case digital, cyber, minimal, mapHud
+
+    static var stored: EtubuGaugeScreen {
+        let raw = UserDefaults.standard.string(forKey: "etubu.cluster.gaugeMode") ?? "digital"
+        if raw == "analog" { return .digital }
+        return EtubuGaugeScreen(rawValue: raw) ?? .digital
+    }
+
+    func next() -> EtubuGaugeScreen {
+        let all = Self.allCases
+        guard let idx = all.firstIndex(of: self) else { return .digital }
+        return all[(idx + 1) % all.count]
+    }
+}
 
 struct EtubuSpeedDialView: View, Equatable {
     let kmh: Int
@@ -36,11 +91,14 @@ struct EtubuSpeedDialView: View, Equatable {
     }
     @ObservedObject private var warnings = EtubuDriveWarnings.shared
     @ObservedObject private var osmLimit = EtubuOsmSpeedLimit.shared
-    /// Smooth chase toward vehicle speed — no ±1 stair and no snap after BLE gaps.
+    @ObservedObject private var thermal = EtubuThermalGuard.shared
+    /// Smooth chase toward vehicle speed — critically damped physics smoothing.
     @State private var displayKmh: Double = 0
     @State private var displayPower: Double = 0
     @State private var boostPulse: CGFloat = 0
-    private let dialPulse = Timer.publish(every: 1.0 / 30.0, on: .main, in: .common).autoconnect()
+    @State private var gaugeScreen: EtubuGaugeScreen = EtubuGaugeScreen.stored
+    @State private var lastTickAt: Double = 0
+    private let dialPulse = Timer.publish(every: 1.0 / 60.0, on: .main, in: .common).autoconnect()
 
     private var rawKmh: Int { warnings.demoActive ? warnings.demoKmh : kmh }
     private var shownGear: String {
@@ -64,7 +122,9 @@ struct EtubuSpeedDialView: View, Equatable {
         if let kmhFine, kmhFine.isFinite, kmhFine >= 0 { return min(280, kmhFine) }
         return Double(rawKmh)
     }
-    private var shownKmh: Int { Int(displayKmh.rounded()) }
+    private var speedUnit: EtubuSpeedUnit { EtubuSpeedUnit.stored }
+    private var isMph: Bool { speedUnit.isMph }
+    private var shownKmh: Int { speedUnit.format(kmh: displayKmh) }
     private var shownPowerKw: Int? {
         let raw = warnings.demoActive ? warnings.demoPowerKw : powerKw
         guard let raw else { return nil }
@@ -75,35 +135,34 @@ struct EtubuSpeedDialView: View, Equatable {
 
     private var dialSize: CGFloat { diameter ?? (compact ? 200 : 280) }
     private var chromeSize: CGFloat { chromeDiameter ?? dialSize }
-    private var textBoost: CGFloat { compact ? 1.22 * 1.15 : 1.22 }
-    private var tripleDigitFactor: CGFloat { shownKmh >= 100 ? 0.74 : (shownKmh >= 10 ? 0.92 : 1.0) }
+    private var tripleDigitFactor: CGFloat { shownKmh >= 100 ? 0.85 : (shownKmh >= 10 ? 0.95 : 1.0) }
 
     private var speedFont: CGFloat {
         let base: CGFloat = compact
-            ? max(44, min(dialSize * 0.30, 96))
-            : max(64, min(dialSize * 0.36, 112))
-        return base * textBoost * min(theme.gaugeScale, 1.04) * tripleDigitFactor
+            ? min(dialSize * 0.38, 86)
+            : min(dialSize * 0.40, 110)
+        return base * min(theme.gaugeScale, 1.0) * tripleDigitFactor
     }
 
     private var gearFont: CGFloat {
-        let base: CGFloat = compact
-            ? max(16, min(chromeSize * 0.09, 24))
-            : max(18, min(chromeSize * 0.085, 28))
-        return base
+        compact
+            ? max(12, min(chromeSize * 0.065, 16))
+            : max(14, min(chromeSize * 0.075, 20))
     }
 
     private var unitFont: CGFloat {
         let base: CGFloat = compact
-            ? max(10, min(chromeSize * 0.050, 15))
-            : max(13, min(chromeSize * 0.058, 18))
-        return base * textBoost * (shownKmh >= 100 ? 0.9 : 1)
+            ? max(9, min(chromeSize * 0.038, 12))
+            : max(11, min(chromeSize * 0.042, 14))
+        return base * (shownKmh >= 100 ? 0.9 : 1.0)
     }
 
     private var kwFont: CGFloat {
-        compact ? max(10, min(chromeSize * 0.045, 14)) : max(12, min(chromeSize * 0.048, 16))
+        compact ? max(9, min(chromeSize * 0.034, 11)) : max(10, min(chromeSize * 0.038, 13))
     }
 
-    private var speedProgress: CGFloat { min(1, CGFloat(max(0, displayKmh)) / 180) }
+    private var maxScaleSpeed: Double { isMph ? 180 : 280 }
+    private var speedProgress: CGFloat { min(1, CGFloat(max(0, displayKmh)) / (isMph ? 112 : 180)) }
     private var power: Int { Int(displayPower.rounded()) }
     private var powerFill: CGFloat { min(1, CGFloat(abs(displayPower)) / 160) }
     private var boostStrength: CGFloat {
@@ -121,22 +180,61 @@ struct EtubuSpeedDialView: View, Equatable {
     }
 
     private var ringClearance: CGFloat {
-        guard compact else { return dialSize * 0.05 }
         return theme.ringLineWidth(for: dialSize) * 1.8 + dialSize * 0.03
     }
 
+    private var ringInnerSize: CGFloat {
+        dialSize * 0.92
+    }
+
+    private var effectiveSpeedLimit: Int? {
+        if warnings.corridorActive, let clim = warnings.corridorLimit, clim > 0 {
+            return clim
+        }
+        if let p = warnings.primary, p.kind == "radar" {
+            let numStr = p.meta.replacingOccurrences(of: "lim ", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if let rlim = Int(numStr), rlim > 0 {
+                return rlim
+            }
+        }
+        return osmLimit.limitKmh
+    }
+
     private var overLimit: Bool {
-        guard let lim = osmLimit.limitKmh, lim > 0, !isStationary else { return false }
+        guard let lim = effectiveSpeedLimit, lim > 0, !isStationary else { return false }
         return displayKmh > Double(lim) + 3
     }
 
     var body: some View {
         ZStack {
-            if compact { dialRings }
+            switch gaugeScreen {
+            case .digital:
+                digitalScreen
+            case .cyber:
+                cyberScreen
+            case .minimal:
+                minimalScreen
+            case .mapHud:
+                mapHudScreen
+            }
+
             if overLimit { isaOverspeedRing }
 
-            // Soft boost wash — hızlanmada yumuşak ışık, keskin flaş değil.
-            if boostStrength > 0.05 {
+            // Gidilen yolun anlık hız limiti tabelası (Kadranın sağ-üst köşesinde)
+            VStack {
+                HStack {
+                    Spacer()
+                    EtubuRoadSpeedLimitSign(size: compact ? max(26, dialSize * 0.16) : max(32, dialSize * 0.17))
+                        .padding(.trailing, dialSize * 0.08)
+                        .padding(.top, dialSize * 0.06)
+                }
+                Spacer()
+            }
+            .frame(width: dialSize, height: dialSize)
+            .allowsHitTesting(false)
+
+            // Soft boost wash (omitted when thermally throttled)
+            if boostStrength > 0.05, !thermal.isThrottled {
                 Circle()
                     .fill(
                         RadialGradient(
@@ -154,72 +252,22 @@ struct EtubuSpeedDialView: View, Equatable {
                     .allowsHitTesting(false)
                     .animation(.easeOut(duration: 0.35), value: boostStrength)
             }
-
-            VStack(spacing: compact ? max(1, dialSize * 0.008) : 5) {
-                gearRow
-                Text("\(shownKmh)")
-                    .font(EtubuClusterFonts.gauge(speedFont))
-                    .monospacedDigit()
-                    .tracking(shownKmh >= 100 ? 0 : min(theme.gaugeTracking, 0.8) * 0.06)
-                    .foregroundStyle(overLimit ? Color.orange : theme.primaryText)
-                    .shadow(
-                        color: overLimit
-                            ? Color.orange.opacity(0.7)
-                            : (isStationary ? .clear : theme.accent.opacity(0.4)),
-                        radius: compact ? 8 : 6
-                    )
-                    .minimumScaleFactor(0.38)
-                    .lineLimit(1)
-                    .frame(maxWidth: dialSize * (shownKmh >= 100 ? 0.78 : 0.70))
-                    .accessibilityIdentifier("etubu.speed")
-                    .contentTransition(.identity)
-                Text("km/h")
-                    .font(EtubuClusterFonts.ui(unitFont, weight: .semibold))
-                    .foregroundStyle(theme.mutedText)
-                    .tracking(min(theme.gaugeTracking, 0.8) * 0.4)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-
-                if warnings.demoActive {
-                    Button {
-                        EtubuDemoDrive.shared.stop()
-                    } label: {
-                        Text(EtubuClusterL10n.t("demoStop"))
-                            .font(EtubuClusterFonts.ui(compact ? 9 : 11, weight: .bold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, compact ? 8 : 10)
-                            .padding(.vertical, compact ? 4 : 5)
-                            .background(Capsule().fill(Color.red.opacity(0.92)))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(EtubuClusterL10n.t("demoStop"))
-                    .accessibilityIdentifier("etubu.demo.stop")
-                }
-
-                if compact {
-                    Text(shownPowerKw.map { "\($0) kW" } ?? "— kW")
-                        .font(EtubuClusterFonts.gauge(kwFont))
-                        .monospacedDigit()
-                        .foregroundStyle(
-                            power < -1
-                            ? Color(red: 0.35, green: 0.92, blue: 0.55)
-                            : (power > 1 ? theme.accent : theme.mutedText)
-                        )
-                        .minimumScaleFactor(0.65)
-                        .lineLimit(1)
-                }
-            }
-            .padding(.horizontal, max(4, ringClearance * 0.55))
-            .padding(.vertical, ringClearance * 0.7)
-            .frame(maxWidth: dialSize * 0.88, maxHeight: dialSize * 0.88)
         }
         .frame(width: dialSize, height: dialSize)
+        .contentShape(Circle())
+        .onTapGesture {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                gaugeScreen = gaugeScreen.next()
+                UserDefaults.standard.set(gaugeScreen.rawValue, forKey: "etubu.cluster.gaugeMode")
+            }
+        }
         .transaction { txn in
             if isStationary { txn.animation = nil }
         }
         .onAppear {
             displayKmh = targetFine
             displayPower = Double(shownPowerKw ?? 0)
+            gaugeScreen = EtubuGaugeScreen.stored
         }
         .onReceive(dialPulse) { _ in
             tickDisplaySpeed()
@@ -229,7 +277,7 @@ struct EtubuSpeedDialView: View, Equatable {
             withAnimation(.easeInOut(duration: 0.22)) {
                 displayPower = v
             }
-            guard v > 55 else {
+            guard v > 55, !thermal.isThrottled else {
                 withAnimation(.easeOut(duration: 0.4)) { boostPulse = 0 }
                 return
             }
@@ -241,30 +289,356 @@ struct EtubuSpeedDialView: View, Equatable {
         .animation(.easeInOut(duration: 0.22), value: displayPower)
     }
 
-    /// 30 Hz chase — large lag (hard accel/brake) catches up first, like web gps-tracker.
+    /// Continuous physical fluid digit step rate with delta-time exponential smoothing.
     private func tickDisplaySpeed() {
         let target = targetFine
-        let dt = 1.0 / 30.0
-        if target <= 2.2 {
-            displayKmh *= 0.35
-            if displayKmh < 0.8 { displayKmh = 0 }
+        let now = CACurrentMediaTime()
+        let dt = lastTickAt == 0 ? (1.0 / 60.0) : min(0.08, max(0.001, now - lastTickAt))
+        lastTickAt = now
+
+        if isStationary {
+            if displayKmh > 0 {
+                let alpha = 1.0 - exp(-dt / 0.12)
+                displayKmh += (0 - displayKmh) * alpha
+                if displayKmh < 0.10 { displayKmh = 0 }
+            }
             return
         }
-        let mag = abs(target - displayKmh)
-        if mag < 0.03 {
+
+        if target <= 0.6 {
+            if displayKmh <= 0.05 {
+                if displayKmh != 0 { displayKmh = 0 }
+                return
+            }
+            let alpha = 1.0 - exp(-dt / 0.14)
+            displayKmh += (0 - displayKmh) * alpha
+            if displayKmh < 0.12 { displayKmh = 0 }
+            return
+        }
+
+        let diff = target - displayKmh
+        let absDiff = abs(diff)
+        if absDiff < 0.03 {
             if displayKmh != target { displayKmh = target }
             return
         }
-        let tau: Double = mag > 14 ? 0.055 : (mag > 5 ? 0.075 : 0.10)
-        let alpha = 1 - exp(-dt / tau)
-        var next = displayKmh + (target - displayKmh) * alpha
-        let maxRate = mag > 18 ? 140.0 : (mag > 8 ? 100.0 : 70.0)
-        let maxStep = maxRate * dt
-        let delta = next - displayKmh
-        if abs(delta) > maxStep {
-            next = displayKmh + (delta > 0 ? maxStep : -maxStep)
+
+        // Asymmetric time constant: fast, responsive acceleration; smooth, natural deceleration
+        let tau: Double = diff > 0 ? 0.16 : 0.20
+        let alpha = 1.0 - exp(-dt / tau)
+        displayKmh += diff * alpha
+    }
+
+    // MARK: - Symmetrical Dial Bezel Chrome
+
+    private var dialRingChrome: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            theme.surface.opacity(0.70),
+                            Color.black.opacity(0.40)
+                        ],
+                        center: .center,
+                        startRadius: dialSize * 0.1,
+                        endRadius: dialSize * 0.5
+                    )
+                )
+                .overlay(
+                    Circle()
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    theme.accent.opacity(0.50),
+                                    theme.stroke.opacity(0.65),
+                                    Color.white.opacity(0.18)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1.2
+                        )
+                )
+                .shadow(color: theme.accent.opacity(0.15), radius: thermal.adaptiveShadow(6), x: 0, y: 0)
         }
-        displayKmh = max(0, next)
+        .frame(width: dialSize, height: dialSize)
+    }
+
+    // MARK: - Digital Screen
+
+    private var digitalScreen: some View {
+        ZStack {
+            dialRingChrome
+            dialRings
+
+            VStack(spacing: compact ? 0 : 2) {
+                gearRow
+                Text("\(shownKmh)")
+                    .font(EtubuClusterFonts.gauge(speedFont))
+                    .monospacedDigit()
+                    .tracking(shownKmh >= 100 ? 0 : min(theme.gaugeTracking, 0.6) * 0.04)
+                    .foregroundStyle(overLimit ? Color.orange : theme.primaryText)
+                    .shadow(
+                        color: overLimit
+                            ? Color.orange.opacity(0.7)
+                            : (isStationary ? .clear : theme.accent.opacity(0.4)),
+                        radius: thermal.adaptiveShadow(compact ? 4 : 6)
+                    )
+                    .minimumScaleFactor(0.35)
+                    .lineLimit(1)
+                    .frame(maxWidth: dialSize * 0.80)
+                    .accessibilityIdentifier("etubu.speed")
+                    .contentTransition(.identity)
+                Text(speedUnit.label)
+                    .font(EtubuClusterFonts.ui(unitFont, weight: .semibold))
+                    .foregroundStyle(theme.mutedText)
+                    .tracking(min(theme.gaugeTracking, 0.6) * 0.2)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+
+                if warnings.demoActive {
+                    demoStopButton
+                }
+
+                Text(shownPowerKw.map { "\($0) kW" } ?? "— kW")
+                    .font(EtubuClusterFonts.gauge(kwFont))
+                    .monospacedDigit()
+                    .foregroundStyle(
+                        power < -1
+                        ? Color(red: 0.35, green: 0.92, blue: 0.55)
+                        : (power > 1 ? theme.accent : theme.mutedText)
+                    )
+                    .minimumScaleFactor(0.55)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: dialSize * 0.82, maxHeight: dialSize * 0.82)
+        }
+    }
+
+    // MARK: - Map HUD Screen
+
+    private var mapHudScreen: some View {
+        let side = dialSize
+        return ZStack {
+            Circle()
+                .fill(Color.black.opacity(0.45))
+                .overlay(
+                    Circle()
+                        .stroke(
+                            LinearGradient(
+                                colors: [theme.accent.opacity(0.8), theme.accent.opacity(0.2), Color.white.opacity(0.4)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 2.0
+                        )
+                )
+                .frame(width: side * 0.92, height: side * 0.92)
+                .shadow(color: theme.accent.opacity(0.45), radius: 12)
+
+            Circle()
+                .trim(from: 0, to: speedProgress)
+                .stroke(
+                    AngularGradient(
+                        colors: [theme.accent.opacity(0.3), theme.accent, Color.white],
+                        center: .center
+                    ),
+                    style: StrokeStyle(lineWidth: 6, lineCap: .round)
+                )
+                .rotationEffect(.degrees(-90))
+                .frame(width: side * 0.92, height: side * 0.92)
+
+            VStack(spacing: compact ? 0 : 2) {
+                gearRow
+                Text("\(shownKmh)")
+                    .font(EtubuClusterFonts.gauge(speedFont))
+                    .monospacedDigit()
+                    .foregroundStyle(overLimit ? Color.orange : Color.white)
+                    .shadow(color: theme.accent.opacity(0.7), radius: 8)
+                    .minimumScaleFactor(0.35)
+                    .lineLimit(1)
+                    .frame(maxWidth: side * 0.80)
+                Text(speedUnit.label)
+                    .font(EtubuClusterFonts.ui(unitFont, weight: .bold))
+                    .tracking(2)
+                    .foregroundStyle(theme.accent)
+                    .minimumScaleFactor(0.6)
+                    .lineLimit(1)
+
+                if warnings.demoActive {
+                    demoStopButton
+                }
+
+                Text(shownPowerKw.map { "\($0) kW" } ?? "— kW")
+                    .font(EtubuClusterFonts.gauge(kwFont))
+                    .monospacedDigit()
+                    .foregroundStyle(
+                        power < -1
+                        ? Color(red: 0.35, green: 0.92, blue: 0.55)
+                        : (power > 1 ? theme.accent : theme.mutedText)
+                    )
+                    .minimumScaleFactor(0.55)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: side * 0.82, maxHeight: side * 0.82)
+        }
+    }
+
+    // MARK: - Cyber Screen
+
+    private var cyberScreen: some View {
+        let side = dialSize
+        return ZStack {
+            dialRingChrome
+
+            // Cyber HUD corner brackets
+            Group {
+                Path { p in
+                    p.move(to: CGPoint(x: side * 0.18, y: side * 0.08))
+                    p.addLine(to: CGPoint(x: side * 0.08, y: side * 0.08))
+                    p.addLine(to: CGPoint(x: side * 0.08, y: side * 0.18))
+                }
+                .stroke(theme.accent, lineWidth: 2.5)
+
+                Path { p in
+                    p.move(to: CGPoint(x: side * 0.82, y: side * 0.08))
+                    p.addLine(to: CGPoint(x: side * 0.92, y: side * 0.08))
+                    p.addLine(to: CGPoint(x: side * 0.92, y: side * 0.18))
+                }
+                .stroke(theme.accent, lineWidth: 2.5)
+
+                Path { p in
+                    p.move(to: CGPoint(x: side * 0.08, y: side * 0.82))
+                    p.addLine(to: CGPoint(x: side * 0.08, y: side * 0.92))
+                    p.addLine(to: CGPoint(x: side * 0.18, y: side * 0.92))
+                }
+                .stroke(theme.accent, lineWidth: 2.5)
+
+                Path { p in
+                    p.move(to: CGPoint(x: side * 0.92, y: side * 0.82))
+                    p.addLine(to: CGPoint(x: side * 0.92, y: side * 0.92))
+                    p.addLine(to: CGPoint(x: side * 0.82, y: side * 0.92))
+                }
+                .stroke(theme.accent, lineWidth: 2.5)
+            }
+            .shadow(color: theme.accent.opacity(0.8), radius: 6)
+
+            // Segmented cyber tachometer arc
+            Circle()
+                .trim(from: 0.15, to: 0.85)
+                .stroke(theme.stroke.opacity(0.35), style: StrokeStyle(lineWidth: 6, dash: [4, 4]))
+                .rotationEffect(.degrees(90))
+                .frame(width: side * 0.92, height: side * 0.92)
+
+            Circle()
+                .trim(from: 0.15, to: 0.15 + 0.70 * speedProgress)
+                .stroke(
+                    AngularGradient(
+                        colors: [theme.accent.opacity(0.3), theme.accent, Color.white],
+                        center: .center
+                    ),
+                    style: StrokeStyle(lineWidth: 8, lineCap: .round)
+                )
+                .rotationEffect(.degrees(90))
+                .frame(width: side * 0.92, height: side * 0.92)
+                .shadow(color: theme.accent.opacity(0.9), radius: 10)
+
+            VStack(spacing: compact ? 0 : 2) {
+                gearRow
+                Text("\(shownKmh)")
+                    .font(EtubuClusterFonts.gauge(speedFont))
+                    .monospacedDigit()
+                    .foregroundStyle(overLimit ? Color.orange : Color.white)
+                    .shadow(color: theme.accent.opacity(0.7), radius: 10)
+                    .minimumScaleFactor(0.35)
+                    .lineLimit(1)
+                    .frame(maxWidth: side * 0.80)
+                Text(speedUnit.label)
+                    .font(EtubuClusterFonts.ui(unitFont, weight: .bold))
+                    .tracking(2)
+                    .foregroundStyle(theme.accent)
+                    .minimumScaleFactor(0.6)
+                    .lineLimit(1)
+
+                if warnings.demoActive {
+                    demoStopButton
+                }
+
+                Text(shownPowerKw.map { "PWR \($0) kW" } ?? "PWR — kW")
+                    .font(EtubuClusterFonts.gauge(kwFont * 0.95))
+                    .monospacedDigit()
+                    .foregroundStyle(theme.mutedText)
+                    .minimumScaleFactor(0.55)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: side * 0.82, maxHeight: side * 0.82)
+        }
+    }
+
+    // MARK: - Minimal Screen
+
+    private var minimalScreen: some View {
+        ZStack {
+            dialRingChrome
+
+            Circle()
+                .stroke(theme.stroke.opacity(0.2), lineWidth: 1.5)
+                .frame(width: dialSize * 0.92, height: dialSize * 0.92)
+
+            Circle()
+                .trim(from: 0, to: speedProgress)
+                .stroke(theme.accent, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+                .frame(width: dialSize * 0.92, height: dialSize * 0.92)
+                .shadow(color: theme.accent.opacity(0.6), radius: 6)
+
+            VStack(spacing: compact ? 0 : 2) {
+                gearRow
+                Text("\(shownKmh)")
+                    .font(EtubuClusterFonts.gauge(speedFont))
+                    .monospacedDigit()
+                    .foregroundStyle(overLimit ? Color.orange : Color.white)
+                    .minimumScaleFactor(0.35)
+                    .lineLimit(1)
+                    .frame(maxWidth: dialSize * 0.80)
+                Text(speedUnit.label)
+                    .font(EtubuClusterFonts.ui(unitFont, weight: .medium))
+                    .tracking(2)
+                    .foregroundStyle(theme.mutedText)
+                    .minimumScaleFactor(0.6)
+                    .lineLimit(1)
+
+                if warnings.demoActive {
+                    demoStopButton
+                }
+            }
+            .frame(maxWidth: dialSize * 0.82, maxHeight: dialSize * 0.82)
+        }
+    }
+
+    private var demoStopButton: some View {
+        Button {
+            EtubuDemoDrive.shared.stop()
+        } label: {
+            Text(EtubuClusterL10n.t("demoStop"))
+                .font(EtubuClusterFonts.ui(compact ? 8 : 10, weight: .bold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, compact ? 6 : 8)
+                .padding(.vertical, compact ? 2 : 3)
+                .background(Capsule().fill(Color.red.opacity(0.92)))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(EtubuClusterL10n.t("demoStop"))
+        .accessibilityIdentifier("etubu.demo.stop")
+    }
+
+    private func analogPoint(center: CGPoint, radius: CGFloat, angleDeg: Double) -> CGPoint {
+        let rad = angleDeg * .pi / 180.0
+        return CGPoint(
+            x: center.x + radius * CGFloat(cos(rad)),
+            y: center.y + radius * CGFloat(sin(rad))
+        )
     }
 
     @ViewBuilder
@@ -296,7 +670,7 @@ struct EtubuSpeedDialView: View, Equatable {
                     .strokeBorder(theme.accent.opacity(0.28), lineWidth: lw * 1.05)
             }
         }
-        .frame(width: dialSize, height: dialSize)
+        .frame(width: ringInnerSize, height: ringInnerSize)
         .allowsHitTesting(false)
         // Don't animate every ±1 km/h tick — that stuttered the ring against digit steps.
         .animation(.easeOut(duration: 0.28), value: socProgress)
@@ -308,7 +682,7 @@ struct EtubuSpeedDialView: View, Equatable {
         return Circle()
             .strokeBorder(Color.orange.opacity(0.92), lineWidth: lw * 1.15)
             .shadow(color: Color.orange.opacity(0.65), radius: 10)
-            .frame(width: dialSize, height: dialSize)
+            .frame(width: ringInnerSize, height: ringInnerSize)
             .allowsHitTesting(false)
     }
 
@@ -597,22 +971,70 @@ struct EtubuMapHazardMark: View {
     }
 }
 
-/// Araç konumu — şık kuzey oku + halo.
+/// Araç konumu — Navigasyon oku boyutunda, içi dolu üstten araç silüeti ve 3D ön yol huzmesi (Canlı Kırmızı).
 struct EtubuMapVehicleMark: View {
     var headingDeg: Double?
+    var is3D: Bool = false
 
     var body: some View {
-        let red = Color(red: 0.86, green: 0.08, blue: 0.24)
+        let redPrimary = Color(red: 0.95, green: 0.10, blue: 0.15)
+        let redDark = Color(red: 0.72, green: 0.04, blue: 0.08)
+        let redBright = Color(red: 1.0, green: 0.22, blue: 0.25)
+
         ZStack {
-            Circle()
-                .fill(Color(red: 0.02, green: 0.05, blue: 0.09).opacity(0.75))
-                .frame(width: 28, height: 28)
-                .overlay(Circle().strokeBorder(Color.white.opacity(0.45), lineWidth: 1.1))
-            Image(systemName: "location.north.fill")
-                .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(red)
-                .rotationEffect(.degrees(headingDeg ?? 0))
-                .shadow(color: red.opacity(0.75), radius: 5)
+            if is3D {
+                // 3D Cockpit forward headlights / navigation road beam (Canlı kırmızı huzme)
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [redPrimary.opacity(0.50), redPrimary.opacity(0.12), .clear],
+                            center: .center,
+                            startRadius: 2,
+                            endRadius: 28
+                        )
+                    )
+                    .frame(width: 56, height: 56)
+                    .allowsHitTesting(false)
+            } else {
+                Circle()
+                    .fill(redPrimary.opacity(0.22))
+                    .frame(width: 44, height: 44)
+                    .allowsHitTesting(false)
+            }
+
+            // Top-down filled car silhouette sized to navigation marker (~20x38pt)
+            ZStack {
+                // Dark background shadow for sharp contrast over maps
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(Color.black.opacity(0.85))
+                    .frame(width: 22, height: 38)
+                    .blur(radius: 1.2)
+
+                // Navigation Arrow / Forward Direction Pointer
+                Image(systemName: "arrowtriangle.up.fill")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(redBright)
+                    .offset(y: -19)
+                    .shadow(color: redPrimary.opacity(0.9), radius: 3)
+
+                // Filled Vehicle Silhouette in vibrant automotive red
+                Image("EtubuCarTopUp")
+                    .renderingMode(.template)
+                    .resizable()
+                    .interpolation(.high)
+                    .antialiased(true)
+                    .scaledToFit()
+                    .frame(width: 18, height: 34)
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [redBright, redPrimary, redDark],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .shadow(color: redPrimary.opacity(0.95), radius: 6)
+            }
+            .rotationEffect(.degrees(is3D ? 0 : (headingDeg ?? 0)))
         }
     }
 }
@@ -987,27 +1409,36 @@ struct EtubuCorridorChipView: View {
                         .foregroundStyle(theme.mutedText.opacity(0.8))
                 }
 
-                HStack(spacing: 6) {
+                HStack(spacing: 8) {
                     if warnings.corridorInstantKmh > 0 {
                         Text("\(EtubuClusterL10n.t("corridorInstant")) \(warnings.corridorInstantKmh)")
                             .font(EtubuClusterFonts.ui(metaSize, weight: .semibold))
                             .monospacedDigit()
                             .foregroundStyle(theme.secondaryText)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
                     }
                     if let limit = warnings.corridorLimit {
                         Text("\(EtubuClusterL10n.t("corridorLimitShort")) \(limit)")
                             .font(EtubuClusterFonts.ui(metaSize, weight: .semibold))
                             .monospacedDigit()
                             .foregroundStyle(theme.secondaryText)
-                    }
-                    if !warnings.corridorRemainLabel.isEmpty {
-                        Text(warnings.corridorRemainLabel)
-                            .font(EtubuClusterFonts.ui(metaSize, weight: .medium))
-                            .foregroundStyle(theme.mutedText)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
                     }
                 }
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+                .frame(maxWidth: .infinity)
+                .clipped()
+
+                if !warnings.corridorRemainLabel.isEmpty {
+                    Text(warnings.corridorRemainLabel)
+                        .font(EtubuClusterFonts.ui(metaSize + 1, weight: .heavy))
+                        .foregroundStyle(Color(red: 1, green: 0.88, blue: 0.54))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.55)
+                        .allowsTightening(true)
+                        .frame(maxWidth: .infinity)
+                }
                 if isOver {
                     TimelineView(.animation(minimumInterval: 1.0 / 8.0, paused: false)) { timeline in
                         let pulse = 0.55 + 0.45 * abs(sin(timeline.date.timeIntervalSinceReferenceDate * 3.2))
@@ -1138,8 +1569,7 @@ struct EtubuRoadWarnTwinView: View {
     }
 }
 
-/// Shared Jul 29 twin-panel chrome — identical frame language for avg + road warnings.
-/// Stroke stays outside content clip so full cards never lose top/bottom borders.
+/// Shared Jul 29 twin-panel chrome — completely transparent HUD background without border or box.
 private struct EtubuTwinCardChrome: ViewModifier {
     var theme: ClusterTheme
     var stroke: Color
@@ -1147,37 +1577,10 @@ private struct EtubuTwinCardChrome: ViewModifier {
     var shadowColor: Color
 
     func body(content: Content) -> some View {
-        let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
         content
-            // İçerik taşarsa kes; çerçeve çizgisi overlay’de kalır.
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .clipped()
-            .background(
-                shape.fill(
-                    warmFill
-                    ? LinearGradient(
-                        colors: [
-                            Color(red: 0.22, green: 0.14, blue: 0.02).opacity(0.72),
-                            Color(red: 0.11, green: 0.06, blue: 0.01).opacity(0.62),
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                      )
-                    : LinearGradient(
-                        colors: [
-                            theme.surface.opacity(0.92),
-                            Color.black.opacity(0.34),
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                      )
-                )
-            )
-            .overlay(
-                shape.strokeBorder(stroke, lineWidth: 1.25)
-            )
-            .clipShape(shape)
-            .shadow(color: shadowColor, radius: 4)
+            .background(Color.clear)
     }
 }
 

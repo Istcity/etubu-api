@@ -27,6 +27,7 @@
   <meta property="og:image" content="https://etubu.com/assets/brand/logo-dark.png" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Syne:wght@700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/content.css" />
+  <link rel="stylesheet" href="css/paytr-storefront.css" />
 </head>
 <body>
   <p><a href="/">← ETUBU</a></p>
@@ -84,9 +85,9 @@
       </tr>
       <tr>
         <td>Analitik (izinli)</td>
-        <td>Ziyaret ölçümü. IP kısmi maskelenir. İzin vermezseniz Google etiketi yüklenmez.</td>
-        <td>Google Analytics <code>G-9FQ0VVHGYC</code></td>
-        <td>Google’ın çerez süreleri</td>
+        <td>Ziyaret ve performans ölçümü. İzin vermezseniz analitik betikleri yüklenmez.</td>
+        <td>Vercel Analytics / Speed Insights; Google Analytics <code>G-9FQ0VVHGYC</code></td>
+        <td>Sağlayıcı süreleri (Vercel çerez kullanmaz)</td>
       </tr>
       <tr>
         <td>Reklam (izinli)</td>
@@ -107,22 +108,57 @@
   <ul>
     <li>Ödeme sağlayıcısı — web ödeme</li>
     <li>Apple — App Store ödemeleri (iOS)</li>
+    <li>Vercel — izinliyse Web Analytics ve Speed Insights</li>
     <li>Google — Sign-In; izinliyse Analytics ve reklamlar; AdMob (iOS, açıksa)</li>
     <li>Yandex — izinliyse sitedeki reklamlar</li>
     <li>OpenStreetMap / Overpass — yol ve hız limiti verisi (konum cihazınızda kalır; sorgu yaklaşık konumla yapılır)</li>
   </ul>
 
   <div class="payment-badges" aria-label="Ödeme yöntemleri">
+    <img src="assets/payment/ssl-secure.svg" alt="256-bit SSL Güvenli Ödeme" width="140" height="36" />
     <img src="assets/payment/visa.svg" alt="Visa" width="90" height="29" />
     <img src="assets/payment/mastercard.svg" alt="Mastercard" width="90" height="29" />
+    <img src="assets/payment/troy.svg" alt="Troy" width="90" height="36" />
   </div>
 
   <div class="box">
     <strong>İletişim</strong><br />
-    E-posta: <a href="mailto:privacy@etubu.com">privacy@etubu.com</a> · <a href="contact.html">İletişim sayfası</a>
+    Yetkili: Sinan Nergiz<br />
+    E-posta: <a href="mailto:privacy@etubu.com">privacy@etubu.com</a> · <a href="mailto:destek@etubu.com">destek@etubu.com</a><br />
+    Tel: <a href="tel:+905305115800">+90 530 511 58 00</a> · <a href="contact.html">İletişim sayfası</a>
   </div>
 
-  <footer class="legal-footer">© 2026 ETUBU · etubu.com · <button type="button" class="link-btn" data-consent-open>Çerez ayarları</button></footer>
-  <script src="js/consent.js?v=20260814e"></script>
+  <p class="muted">Yasal: <a href="distance-sales.html">Mesafeli Satış</a> · <a href="returns.html">İade</a> · <a href="shipping-delivery.html">Teslimat</a> · <a href="terms.html">Kullanım şartları</a></p>
+
+  <footer class="site-legal-footer">
+    <div class="site-legal-footer__grid">
+      <div>
+        <strong>ETUBU</strong>
+        <p>Yetkili: Sinan Nergiz</p>
+        <p><a href="mailto:destek@etubu.com">destek@etubu.com</a></p>
+        <p><a href="tel:+905305115800">+90 530 511 58 00</a></p>
+        <p>Adres: İstasyon Mah. TOKİ Göl Konutları B1-3 Blok No: 28, Küçükçekmece / İstanbul</p>
+      </div>
+      <div>
+        <strong>Yasal</strong>
+        <p><a href="distance-sales.html">Mesafeli Satış Sözleşmesi</a></p>
+        <p><a href="returns.html">İptal ve İade Koşulları</a></p>
+        <p><a href="privacy.html">Gizlilik Politikası ve KVKK</a></p>
+        <p><a href="shipping-delivery.html">Teslimat Koşulları</a></p>
+      </div>
+      <div>
+        <strong>Güvenli ödeme</strong>
+        <p>256-bit SSL Güvenli Ödeme</p>
+        <div class="payment-badges payment-badges--compact">
+          <img src="assets/payment/ssl-secure.svg" alt="256-bit SSL" width="120" height="32" />
+          <img src="assets/payment/visa.svg" alt="Visa" width="72" height="24" />
+          <img src="assets/payment/mastercard.svg" alt="Mastercard" width="72" height="24" />
+          <img src="assets/payment/troy.svg" alt="Troy" width="72" height="28" />
+        </div>
+      </div>
+    </div>
+    <p class="muted">© 2026 ETUBU · etubu.com · <button type="button" class="link-btn" data-consent-open>Çerez ayarları</button></p>
+  </footer>
+  <script src="js/consent.js?v=20260919a"></script>
 </body>
 </html>

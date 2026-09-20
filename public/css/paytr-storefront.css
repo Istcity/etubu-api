@@ -1,0 +1,346 @@
+/* PayTR storefront — fiyatlandırma, landing, yasal footer */
+
+:root {
+  --paytr-cyan: #00f0ff;
+  --paytr-cyan-dim: rgba(0, 240, 255, 0.12);
+  --paytr-card: rgba(255, 255, 255, 0.04);
+  --paytr-border: rgba(255, 255, 255, 0.1);
+  --paytr-text: #e8f4ff;
+  --paytr-dim: #7a9bb5;
+  --paytr-bg: #02040a;
+}
+
+body.landing-page {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  background: var(--paytr-bg);
+  color: var(--paytr-text);
+  font-family: Inter, system-ui, sans-serif;
+  line-height: 1.6;
+}
+
+.landing-wrap {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 0 20px 64px;
+}
+
+.landing-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--paytr-border);
+}
+
+.landing-nav__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: var(--paytr-text);
+  font-family: Syne, Inter, sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  font-size: 1.15rem;
+}
+
+.landing-nav__brand img {
+  height: 36px;
+  width: auto;
+}
+
+.landing-nav__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  font-size: 0.9rem;
+}
+
+.landing-nav__links a {
+  color: var(--paytr-dim);
+  text-decoration: none;
+}
+
+.landing-nav__links a:hover,
+.landing-nav__links a.is-active {
+  color: var(--paytr-cyan);
+}
+
+.landing-hero {
+  position: relative;
+  padding: 56px 0 40px;
+  overflow: hidden;
+}
+
+.landing-hero::before {
+  content: "";
+  position: absolute;
+  inset: -20% -10% auto;
+  height: 70%;
+  background:
+    radial-gradient(ellipse at 30% 40%, rgba(0, 240, 255, 0.18), transparent 55%),
+    radial-gradient(ellipse at 80% 20%, rgba(80, 120, 255, 0.12), transparent 50%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.landing-hero > * {
+  position: relative;
+  z-index: 1;
+}
+
+.landing-hero h1 {
+  font-family: Syne, Inter, sans-serif;
+  font-size: clamp(2rem, 5vw, 3.1rem);
+  letter-spacing: 0.04em;
+  color: var(--paytr-cyan);
+  margin: 0 0 14px;
+  line-height: 1.15;
+  max-width: 14ch;
+}
+
+.landing-hero .lede {
+  max-width: 36rem;
+  color: #b9d7ea;
+  font-size: 1.08rem;
+  margin: 0 0 28px;
+}
+
+.landing-cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.btn-primary,
+.btn-ghost,
+.price-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 22px;
+  border-radius: 10px;
+  font-weight: 600;
+  text-decoration: none;
+  font-size: 0.95rem;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+}
+
+.btn-primary,
+.price-cta {
+  background: var(--paytr-cyan);
+  color: #021018;
+  border: 1px solid transparent;
+}
+
+.btn-primary:hover,
+.price-cta:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--paytr-text);
+  border: 1px solid var(--paytr-border);
+}
+
+.btn-ghost:hover {
+  border-color: rgba(0, 240, 255, 0.4);
+  color: var(--paytr-cyan);
+}
+
+.landing-section {
+  margin-top: 48px;
+}
+
+.landing-section h2 {
+  font-family: Syne, Inter, sans-serif;
+  color: var(--paytr-text);
+  font-size: 1.45rem;
+  margin: 0 0 8px;
+}
+
+.landing-section > .section-sub {
+  color: var(--paytr-dim);
+  margin: 0 0 24px;
+  max-width: 40rem;
+}
+
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.feature-card {
+  padding: 18px 16px;
+  border-radius: 14px;
+  background: var(--paytr-card);
+  border: 1px solid var(--paytr-border);
+}
+
+.feature-card h3 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+  color: var(--paytr-cyan);
+}
+
+.feature-card p {
+  margin: 0;
+  color: #b9d7ea;
+  font-size: 0.92rem;
+}
+
+.price-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  margin: 20px 0 28px;
+}
+
+.price-card {
+  position: relative;
+  padding: 22px 18px;
+  border-radius: 16px;
+  background: var(--paytr-card);
+  border: 1px solid var(--paytr-border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.price-card--featured {
+  border-color: rgba(0, 240, 255, 0.45);
+  background:
+    linear-gradient(180deg, rgba(0, 240, 255, 0.08), transparent 40%),
+    var(--paytr-card);
+  box-shadow: 0 0 0 1px rgba(0, 240, 255, 0.08);
+}
+
+.price-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #021018;
+  background: var(--paytr-cyan);
+  padding: 4px 8px;
+  border-radius: 999px;
+}
+
+.price-card h2 {
+  margin: 0;
+  font-size: 1.15rem;
+  color: #cfe8f8;
+}
+
+.price-amount {
+  margin: 4px 0;
+  font-family: Syne, Inter, sans-serif;
+  font-size: 2rem;
+  color: var(--paytr-cyan);
+  letter-spacing: 0.02em;
+}
+
+.price-amount small {
+  font-size: 0.9rem;
+  color: var(--paytr-dim);
+  font-family: Inter, sans-serif;
+}
+
+.price-note {
+  margin: 0;
+  color: var(--paytr-dim);
+  font-size: 0.88rem;
+}
+
+.price-card ul {
+  margin: 8px 0 16px;
+  padding-left: 1.1rem;
+  color: #d7e8f5;
+  font-size: 0.92rem;
+  flex: 1;
+}
+
+.price-card .price-cta {
+  width: 100%;
+  margin-top: auto;
+}
+
+body.content-page {
+  max-width: 900px;
+}
+
+.site-legal-footer {
+  margin-top: 48px;
+  padding: 28px 0 8px;
+  border-top: 1px solid var(--paytr-border);
+  font-size: 0.88rem;
+  color: var(--paytr-dim);
+}
+
+.site-legal-footer__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 22px;
+  margin-bottom: 20px;
+}
+
+.site-legal-footer strong {
+  display: block;
+  color: var(--paytr-text);
+  margin-bottom: 8px;
+  font-size: 0.92rem;
+}
+
+.site-legal-footer p {
+  margin: 0 0 6px;
+  color: var(--paytr-dim);
+}
+
+.site-legal-footer a {
+  color: var(--paytr-cyan);
+  text-decoration: none;
+}
+
+.site-legal-footer a:hover {
+  text-decoration: underline;
+}
+
+.payment-badges--compact {
+  margin: 8px 0 0;
+  gap: 8px;
+}
+
+.payment-badges--compact img {
+  height: 28px;
+}
+
+.ssl-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 16px 0;
+  color: #9fd9b8;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .landing-hero {
+    padding: 36px 0 28px;
+  }
+
+  .landing-nav {
+    align-items: flex-start;
+  }
+}

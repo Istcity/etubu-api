@@ -16,9 +16,10 @@ enum EtubuHazardMerge {
     /// Approach / urgent distances (m) for live warnings.
     static func thresholds(for kind: String) -> (warn: Double, urgent: Double) {
         switch kind {
-        case "radar", "corridor", "control":
-            // Waze/Coyote-style: one approach cue ~500 m, urgent only when close.
-            return (520, 140)
+        case "radar", "control":
+            return (500, 120)
+        case "corridor":
+            return (500, 140)
         case "railway":
             return (380, 90)
         case "tunnel":
@@ -54,12 +55,32 @@ enum EtubuHazardMerge {
     }
 
     static func isOsmSource(_ h: EtubuRouteHazard) -> Bool {
-        h.id.hasPrefix("osm-") || h.id.hasPrefix("osmhz-")
+        if h.id.hasPrefix("egm-") { return false }
+        return h.id.hasPrefix("osm-") || h.id.hasPrefix("osmhz-")
     }
 
     static func isEnforcement(_ kind: String) -> Bool {
         kind == "radar" || kind == "corridor" || kind == "control"
     }
+
+    /// HUD distance: 500→100 by 50 m, then by 10 m.
+    static func fmtApproachDist(_ m: Double) -> String {
+        guard m.isFinite, m >= 0 else { return "" }
+        if m >= 1000 {
+            let km = m / 1000
+            return km >= 10 ? String(format: "%.0f km", km) : String(format: "%.1f km", km)
+        }
+        if m >= 100 {
+            return "\(Int((m / 50).rounded() * 50)) m"
+        }
+        return "\(max(10, Int((m / 10).rounded() * 10))) m"
+    }
+
+    static let overpassEndpoints = [
+        "https://overpass.kumi.systems/api/interpreter",
+        "https://overpass-api.de/api/interpreter",
+        "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+    ]
 
     static func sameTypeFamily(_ a: String, _ b: String) -> Bool {
         if a == b { return true }

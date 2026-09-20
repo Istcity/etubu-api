@@ -18,6 +18,8 @@
   const maxSpeedSlider = $("maxSpeedSlider");
   const sensitivitySlider = $("sensitivitySlider");
   const mapOpacitySlider = $("mapOpacitySlider");
+  const unitSelect = $("unitSelect");
+  const unitToggleBtn = $("unitToggleBtn");
   const speedValue = $("speedValue");
   const hudWarnSide = $("hudWarnSide");
   const hudWarnLabel = $("hudWarnLabel");
@@ -88,8 +90,11 @@
     });
   }
 
-  function paintEqBars(speedPct) {
-    const pct = Math.min(1, Math.max(0, speedPct));
+  function paintEqBars(speedPct, loadPct) {
+    const speed = Math.min(1, Math.max(0, speedPct));
+    const load = Math.min(1, Math.max(0, Number(loadPct) || 0));
+    // Drive.app: bars follow speed pitch + load volume spike
+    const pct = Math.min(1, speed * 0.55 + load * 0.7 + (speed > 0.05 && load < 0.05 ? 0.08 : 0));
     paintEqColumn(eqSegsL, pct);
     paintEqColumn(eqSegsR, pct);
   }
@@ -112,6 +117,7 @@
   const inviteDock = $("inviteDock");
   const voiceLockHint = $("voiceLockHint");
   const panelToggle = $("panelToggle");
+  const muteToggle = $("muteToggle");
   const demoBtn = $("demoBtn");
   const focusLockEl = $("focusLock");
 
@@ -173,7 +179,7 @@
   }
 
   function readSensitivity() {
-    return pctToSensitivity(sensitivitySlider?.value ?? 20);
+    return pctToSensitivity(sensitivitySlider?.value ?? 0);
   }
 
   function defaultVolumePct() {
@@ -219,11 +225,17 @@
     const pct = clampPct(maxSpeedSlider?.value ?? 56);
     if (maxSpeedSlider) maxSpeedSlider.value = String(pct);
     setPctLabel(maxSpeedPctLabel, pct);
-    if (maxSpeedLabel) maxSpeedLabel.textContent = `${pctToMaxKmh(pct)} km/h`;
+    const isMph = typeof I18n !== "undefined" && I18n.isMph();
+    const kmh = pctToMaxKmh(pct);
+    if (maxSpeedLabel) {
+      maxSpeedLabel.textContent = isMph
+        ? `${Math.round(kmh * 0.621371)} mph`
+        : `${kmh} km/h`;
+    }
   }
 
   function syncSensitivityUi() {
-    const pct = clampPct(sensitivitySlider?.value ?? 20);
+    const pct = clampPct(sensitivitySlider?.value ?? 0);
     if (sensitivitySlider) sensitivitySlider.value = String(pct);
     setPctLabel(sensitivityLabel, pct);
   }
@@ -266,66 +278,57 @@
   }
 
   function unlocked() {
-    return (
-      demoMode ||
-      Paywall.hasCatalogAccess(GpsTracker.getTotalKm?.() ?? GpsTracker.loadTotalKm())
-    );
+    return true; // Web sürümü: tüm ses kataloğu ve temalar tamamen ücretsiz ve açıktır
   }
 
   function populateVoices() {
     if (!voiceSelect) return;
     const prev = voiceSelect.value;
     voiceSelect.innerHTML = "";
-    const full = unlocked();
     const order =
-      AudioEngine.getVoiceGroupOrder?.() || ["theme", "ev"];
-    const labelKeys = {
-      theme: "voiceGroupTheme",
+      AudioEngine.getVoiceGroupOrder?.() || ["ev", "exhaust", "race", "fx"];
+    const groupKeyMap = {
       ev: "voiceGroupEv",
       exhaust: "voiceGroupExhaust",
       race: "voiceGroupRace",
       fx: "voiceGroupFx",
-      sim: "voiceGroupSim",
-      proc: "voiceGroupProc",
-      grain: "voiceGroupGrain",
     };
     const groups = {};
     order.forEach((id) => {
       const g = document.createElement("optgroup");
-      g.label = t(labelKeys[id] || id);
+      g.label = t(groupKeyMap[id] || id);
       g.dataset.group = id;
       groups[id] = g;
     });
     AudioEngine.getVoices().forEach((v) => {
-      // Sessiz mod herkese açık
-      if (!full && v.key !== DEFAULT_VOICE() && v.key !== "silent-mode") return;
       const opt = document.createElement("option");
       opt.value = v.key;
-      opt.textContent = v.label;
-      const gid = v.group || v.family || "ev";
+      const keyName = "voice_" + v.key.replace(/-/g, "_");
+      const translated = t(keyName);
+      opt.textContent = translated === keyName ? (v.label || v.key) : translated;
+      const gid = v.group || "ev";
       (groups[gid] || groups.ev).appendChild(opt);
     });
     order.forEach((id) => {
       if (groups[id]?.children.length) voiceSelect.appendChild(groups[id]);
     });
-    // Eski/kaldırılmış ses anahtarlarını yeni kataloga düşür
+    // Varsayılan açılış: Sessiz Mod (Yalnızca HUD)
     const valid = new Set([...voiceSelect.options].map((o) => o.value));
-    if (valid.has(prev) && full) {
+    if (valid.has(prev)) {
       voiceSelect.value = prev;
-    } else if (prev === "silent-mode" && valid.has("silent-mode")) {
+    } else if (valid.has("silent-mode")) {
       voiceSelect.value = "silent-mode";
     } else {
       voiceSelect.value = DEFAULT_VOICE();
     }
-    voiceSelect.disabled = !full && voiceSelect.options.length <= 1;
-    if (voiceLockHint) voiceLockHint.hidden = full;
+    voiceSelect.disabled = false;
+    if (voiceLockHint) voiceLockHint.hidden = true;
   }
 
   function populateVisuals() {
     if (!visualSelect) return;
     const prev = visualSelect.value;
     visualSelect.innerHTML = "";
-    const full = unlocked();
     const gaugeGroups = {
       digital: document.createElement("optgroup"),
       analog: document.createElement("optgroup"),
@@ -333,7 +336,6 @@
     gaugeGroups.digital.label = t("visualGroupDigital");
     gaugeGroups.analog.label = t("visualGroupAnalog");
     Scene.getModes().forEach((m) => {
-      if (!full && m.key !== DEFAULT_VISUAL()) return;
       const opt = document.createElement("option");
       opt.value = m.key;
       const translated = t(m.labelKey);
@@ -345,12 +347,12 @@
     if (gaugeGroups.analog.children.length) visualSelect.appendChild(gaugeGroups.analog);
     const validVis = new Set([...visualSelect.options].map((o) => o.value));
     const prevResolved = prev === "aurora" ? "glow" : prev;
-    if (validVis.has(prevResolved) && full) {
+    if (validVis.has(prevResolved)) {
       visualSelect.value = prevResolved;
     } else {
       visualSelect.value = DEFAULT_VISUAL();
     }
-    visualSelect.disabled = !full && visualSelect.options.length <= 1;
+    visualSelect.disabled = false;
     applyVisualTheme(visualSelect.value);
   }
 
@@ -359,19 +361,17 @@
     populateVisuals();
     Picker.refreshAll?.();
     if (inviteDock) inviteDock.hidden = true;
-    // Web: her zaman reklam (ücretsiz model) — Tesla’da yer kaplamasın
+    // Web: her zaman reklam (ücretsiz model). Tesla/ephemeral: kalıcı şerit yok, pulse döngüsü.
     const tesla = typeof CarBrowser !== "undefined" && CarBrowser.isTesla?.();
-    if (tesla || (typeof CarBrowser !== "undefined" && CarBrowser.isEphemeral?.())) {
+    const ephemeral = typeof CarBrowser !== "undefined" && CarBrowser.isEphemeral?.();
+    if (Paywall.isAdFree()) {
       document.body.classList.add("ads-hidden");
       Ads.hideAll?.();
-      CarBrowser.forceCompactChrome?.();
     } else {
-      document.body.classList.remove("ads-hidden");
-      if (!Paywall.isAdFree()) {
-        Ads.showRails?.();
-      } else {
-        document.body.classList.add("ads-hidden");
-        Ads.hideAll?.();
+      document.body.classList.remove("ads-hidden", "drive-focus");
+      Ads.showRails?.();
+      if (tesla || ephemeral) {
+        CarBrowser.forceCompactChrome?.();
       }
     }
     syncDriveFocus(document.body.classList.contains("panel-hidden"));
@@ -392,12 +392,23 @@
     }
   }
 
-  const GAUGE_SCREENS = ["digital", "analog", "minimal", "bars"];
+  const GAUGE_SCREENS = ["digital", "minimal", "bars"];
   const GAUGE_KEY = "etubu_gauge_screen";
   let gaugeScreen = "digital";
 
+  function triggerGaugeTransitionSpin() {
+    if (!speedGaugeWrap) return;
+    speedGaugeWrap.classList.remove("is-spinning-3d");
+    void speedGaugeWrap.offsetWidth;
+    speedGaugeWrap.classList.add("is-spinning-3d");
+    setTimeout(() => {
+      speedGaugeWrap?.classList.remove("is-spinning-3d");
+    }, 750);
+  }
+
   function setGaugeScreen(name, persist = true) {
     if (!GAUGE_SCREENS.includes(name)) name = "digital";
+    const prev = gaugeScreen;
     gaugeScreen = name;
     speedGaugeWrap?.setAttribute("data-gauge", name);
     speedGaugeWrap?.querySelectorAll(".gauge-screen").forEach((el) => {
@@ -412,6 +423,9 @@
       try {
         localStorage.setItem(GAUGE_KEY, name);
       } catch (_) {}
+    }
+    if (prev && prev !== name) {
+      triggerGaugeTransitionSpin();
     }
   }
 
@@ -429,15 +443,25 @@
   }
 
   const ANALOG_MAX_KMH = 250;
+  const ANALOG_MAX_MPH = 160;
 
   function updateAnalogScale() {
     const spans = document.querySelectorAll(".analog-scale span");
     if (!spans.length) return;
-    const step = ANALOG_MAX_KMH / (spans.length - 1);
-    spans.forEach((span, i) => {
-      span.style.setProperty("--i", String(i));
-      span.textContent = String(Math.round(step * i));
-    });
+    const isMph = typeof I18n !== "undefined" && I18n.isMph();
+    if (isMph) {
+      const mphSteps = [0, 30, 60, 90, 120, 160];
+      spans.forEach((span, i) => {
+        span.style.setProperty("--i", String(i));
+        span.textContent = String(mphSteps[i] ?? Math.round((ANALOG_MAX_MPH / (spans.length - 1)) * i));
+      });
+    } else {
+      const step = ANALOG_MAX_KMH / (spans.length - 1);
+      spans.forEach((span, i) => {
+        span.style.setProperty("--i", String(i));
+        span.textContent = String(Math.round(step * i));
+      });
+    }
   }
 
   function setRing(kmh, maxKmh) {
@@ -446,9 +470,12 @@
       ringFill.style.strokeDasharray = String(RING_CIRC);
       ringFill.style.strokeDashoffset = String(RING_CIRC * (1 - digPct));
     }
-    // Analog kadran sabit 0–250 — açı yuvarlanır, mikro titreme kesilir
+    // Analog kadran sabit 0–250 km/h (veya 0–160 mph) — açı yuvarlanır, mikro titreme kesilir
     if (analogNeedle) {
-      const aPct = Math.min(1, Math.max(0, kmh / ANALOG_MAX_KMH));
+      const isMph = typeof I18n !== "undefined" && I18n.isMph();
+      const speedVal = isMph ? kmh * 0.621371192 : kmh;
+      const maxAnalog = isMph ? ANALOG_MAX_MPH : ANALOG_MAX_KMH;
+      const aPct = Math.min(1, Math.max(0, speedVal / maxAnalog));
       const angle = -120 + aPct * 240;
       const q = Math.round(angle * 2) / 2; // 0.5° adım
       if (
@@ -459,8 +486,12 @@
         analogNeedle.style.transform = `rotate(${q}deg)`;
       }
     }
-    // Yan equalizer sütunlar: üst üste parçalar, yeşil→kırmızı
-    paintEqBars(digPct);
+    // Yan equalizer: hız (pitch) + yük (volume) — Drive.app senkronu
+    const loadNow =
+      typeof AudioEngine !== "undefined" && AudioEngine.getLoad
+        ? AudioEngine.getLoad()
+        : 0;
+    paintEqBars(digPct, loadNow);
     setSpeedColors(kmh, maxKmh);
   }
 
@@ -468,10 +499,13 @@
   let gaugeSmoothKmh = 0;
   let gaugeRaf = null;
   let gaugeLastShown = -1;
+  let lastGaugeTickAt = 0;
 
   function paintGaugeHud(kmh) {
     hudDisplayKmh = kmh;
-    const shown = Math.round(kmh);
+    const isMph = typeof I18n !== "undefined" && I18n.isMph();
+    const dispVal = isMph ? kmh * 0.621371192 : kmh;
+    const shown = Math.max(0, Math.round(dispVal));
     if (shown !== gaugeLastShown) {
       gaugeLastShown = shown;
       const shownStr = String(shown);
@@ -479,28 +513,44 @@
       if (analogSpeedValue) analogSpeedValue.textContent = shownStr;
       if (minimalSpeedValue) minimalSpeedValue.textContent = shownStr;
       if (barsSpeedValue) barsSpeedValue.textContent = shownStr;
+
+      const digits = shownStr.length;
+      const isTriple = digits >= 3;
+      if (speedGaugeWrap) {
+        speedGaugeWrap.dataset.digits = String(digits);
+        speedGaugeWrap.classList.toggle("is-triple-digits", isTriple);
+      }
+      speedValue?.classList.toggle("is-triple-digits", isTriple);
+      minimalSpeedValue?.classList.toggle("is-triple-digits", isTriple);
+      barsSpeedValue?.classList.toggle("is-triple-digits", isTriple);
+      analogSpeedValue?.classList.toggle("is-triple-digits", isTriple);
     }
     setRing(kmh, readMaxKmh());
   }
 
   function startGaugeSmooth() {
     if (gaugeRaf != null) return;
-    const tick = () => {
-      // Sürüşte gösterge = ses hattı (tek kaynak → GPS–ses–HUD kilitli)
-      if (running && typeof AudioEngine.getSmoothKmh === "function") {
-        gaugeSmoothKmh = AudioEngine.getSmoothKmh();
-        gaugeTargetKmh = gaugeSmoothKmh;
+    lastGaugeTickAt = performance.now();
+    const tick = (now) => {
+      const dt = Math.max(0.001, Math.min(0.1, (now - lastGaugeTickAt) / 1000));
+      lastGaugeTickAt = now;
+
+      const diff = gaugeTargetKmh - gaugeSmoothKmh;
+      const absDiff = Math.abs(diff);
+
+      if (absDiff < 0.08) {
+        gaugeSmoothKmh = gaugeTargetKmh;
       } else {
-        const rising = gaugeTargetKmh >= gaugeSmoothKmh;
-        const a = rising ? 0.88 : 0.2;
-        gaugeSmoothKmh += (gaugeTargetKmh - gaugeSmoothKmh) * a;
-        if (Math.abs(gaugeTargetKmh - gaugeSmoothKmh) < 0.06) {
-          gaugeSmoothKmh = gaugeTargetKmh;
-        }
-        if (gaugeTargetKmh < 0.35 && gaugeSmoothKmh < 0.55) gaugeSmoothKmh = 0;
+        // Continuous 1-by-1 fluid rate without bursts or freezing
+        const baseRate = absDiff > 40 ? 55 : (absDiff > 20 ? 35 : (absDiff > 8 ? 22 : 14));
+        const maxStep = baseRate * dt;
+        const step = Math.min(absDiff, maxStep);
+        gaugeSmoothKmh += Math.sign(diff) * step;
       }
+
+      if (gaugeTargetKmh < 0.3 && gaugeSmoothKmh < 0.4) gaugeSmoothKmh = 0;
       paintGaugeHud(gaugeSmoothKmh);
-      // Idle: hedef 0 ve sürüş yoksa rAF’ı kes — kendi kendine titreme yok
+      
       if (!running && gaugeTargetKmh < 0.2 && gaugeSmoothKmh < 0.2) {
         gaugeSmoothKmh = 0;
         paintGaugeHud(0);
@@ -521,7 +571,7 @@
 
   function setGaugeTarget(kmh) {
     gaugeTargetKmh = Math.max(0, Number(kmh) || 0);
-    if (!running && gaugeTargetKmh < 0.2) {
+    if (!running && gaugeTargetKmh < 0.2 && (gaugeLastShown <= 0)) {
       gaugeSmoothKmh = 0;
       stopGaugeSmooth();
       paintGaugeHud(0);
@@ -533,6 +583,7 @@
   function resetGaugesIdle() {
     gaugeTargetKmh = 0;
     gaugeSmoothKmh = 0;
+    gaugeLastShown = 0;
     stopGaugeSmooth();
     paintGaugeHud(0);
     setRing(0, readMaxKmh());
@@ -626,8 +677,11 @@
     }
     setSpeedColors(hudDisplayKmh, readMaxKmh());
     syncMapOpacityUi();
-    if (!silent && themeCueReady && prev && prev !== modeKey) {
-      playThemeChangeSound();
+    if (prev && prev !== modeKey) {
+      triggerGaugeTransitionSpin();
+      if (!silent && themeCueReady) {
+        playThemeChangeSound();
+      }
     }
   }
 
@@ -684,26 +738,44 @@
   }
 
   function isPremiumUser() {
-    // Web ücretsiz: paneli kapatınca immersive sürüş herkese açık
-    return true;
+    return typeof Paywall !== "undefined" && Paywall.isAdFree();
   }
 
   function syncDriveFocus(panelHidden) {
-    // Premium + panel kapalı → yalnızca hız + tema (immersive)
-    const focus = !!panelHidden && isPremiumUser();
-    document.body.classList.toggle("drive-focus", focus);
+    const isClosed = !!panelHidden;
+    document.body.classList.toggle("panel-hidden", isClosed);
+    try {
+      Ads.setDriveFocus?.(isClosed);
+    } catch (_) {}
   }
 
   function setPanelHidden(hidden, persist = true) {
-    document.body.classList.toggle("panel-hidden", hidden);
-    syncDriveFocus(hidden);
+    const isClosed = !!hidden;
+    document.body.classList.toggle("panel-hidden", isClosed);
+    syncDriveFocus(isClosed);
+    if (!isClosed && !isPremiumUser()) {
+      Ads.showRails?.();
+    }
     const editorial = document.getElementById("siteEditorial");
-    if (editorial) editorial.hidden = !!hidden;
+    if (editorial) editorial.hidden = isClosed;
     if (panelToggle) {
-      const mobile = window.matchMedia("(max-width: 720px)").matches;
-      panelToggle.textContent = mobile ? (hidden ? "⌃" : "⌄") : hidden ? "›" : "‹";
+      let textEl = panelToggle.querySelector(".panel-toggle-text");
+      if (!textEl) {
+        panelToggle.innerHTML = `
+          <svg class="panel-toggle-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+          <span class="panel-toggle-text">${hidden ? t("panelSettings") : t("panelClose")}</span>`;
+        textEl = panelToggle.querySelector(".panel-toggle-text");
+      }
+      if (textEl) {
+        textEl.textContent = hidden ? t("panelSettings") : t("panelClose");
+      }
       panelToggle.setAttribute("aria-label", hidden ? t("panelShow") : t("panelHide"));
-      panelToggle.setAttribute("title", hidden ? t("panelShow") : t("panelHide"));
+      panelToggle.setAttribute("title", hidden ? t("panelSettings") : t("panelClose"));
+      panelToggle.classList.toggle("is-closed", !!hidden);
+      panelToggle.classList.toggle("is-open", !hidden);
     }
     if (persist) {
       try {
@@ -876,9 +948,14 @@
   }
 
   function formatDistShort(m) {
-    if (m == null) return "";
-    if (m >= 1000) return `${(m / 1000).toFixed(1)} km`;
-    return `${Math.round(m / 10) * 10} m`;
+    if (m == null || m <= 0) return "";
+    if (m >= 1000) return `${(m / 1000).toFixed(m >= 2000 ? 0 : 1)} km`;
+    if (m > 100) {
+      const hundreds = Math.min(900, Math.max(100, Math.round(m / 100) * 100));
+      return `${hundreds} m`;
+    }
+    const tens = Math.max(10, Math.round(m / 10) * 10);
+    return `${tens} m`;
   }
 
   function triggerCorridorEnterPulse() {
@@ -896,9 +973,11 @@
 
   function renderAvgSpeedPanel(kmh) {
     if (!avgSpeedPanel || !avgSpeedValue) return;
+    const isMph = typeof I18n !== "undefined" && I18n.isMph();
     const corridor = lastCorridorInfo;
     if (corridor?.active) {
-      const avg = Math.round(corridor.avg || 0);
+      const avgRaw = corridor.avg || 0;
+      const avg = Math.round(isMph ? avgRaw * 0.621371 : avgRaw);
       avgSpeedValue.textContent = String(avg);
       if (avgSpeedLabel) avgSpeedLabel.textContent = t("avgCorridorLabel");
       if (avgSpeedBadge) {
@@ -911,7 +990,10 @@
         avgSpeedMeta.hidden = false;
         const bits = [];
         if (corridor.label) bits.push(corridor.label);
-        if (corridor.limit) bits.push(`${t("avgLimit")} ${corridor.limit}`);
+        if (corridor.limit) {
+          const lim = isMph ? Math.round(corridor.limit * 0.621371) : corridor.limit;
+          bits.push(`${t("avgLimit")} ${lim}`);
+        }
         if (corridor.remainM != null) {
           bits.push(`${t("radarRemain")} ${formatDistShort(corridor.remainM)}`);
         }
@@ -928,7 +1010,8 @@
       lastCorridorTrackId = cid;
     } else {
       lastCorridorTrackId = null;
-      const avg = Math.round(tripAvg.avg || 0);
+      const avgRaw = tripAvg.avg || 0;
+      const avg = Math.round(isMph ? avgRaw * 0.621371 : avgRaw);
       avgSpeedValue.textContent = String(avg);
       if (avgSpeedLabel) avgSpeedLabel.textContent = t("avgSpeedLabel");
       if (avgSpeedBadge) {
@@ -940,7 +1023,12 @@
         const km = tripAvg.distM / 1000;
         if (km >= 0.05) {
           avgSpeedMeta.hidden = false;
-          avgSpeedMeta.textContent = `${km.toFixed(km >= 10 ? 1 : 2)} km`;
+          if (isMph) {
+            const mi = km * 0.621371;
+            avgSpeedMeta.textContent = `${mi.toFixed(mi >= 10 ? 1 : 2)} mi`;
+          } else {
+            avgSpeedMeta.textContent = `${km.toFixed(km >= 10 ? 1 : 2)} km`;
+          }
         } else {
           avgSpeedMeta.hidden = true;
           avgSpeedMeta.textContent = "";
@@ -954,6 +1042,7 @@
     const seen = new Set();
     const push = (item) => {
       if (!item) return;
+      if (item.distM != null && item.distM <= 5 && item.id !== "overspeed") return;
       const id = String(item.id || `${item.kind}-${item.dist}-${item.title}`);
       if (seen.has(id)) return;
       seen.add(id);
@@ -1048,8 +1137,10 @@
       speedLimitValue.textContent = "—";
       return;
     }
+    const isMph = typeof I18n !== "undefined" && I18n.isMph();
+    const dispLimit = isMph ? Math.round(limit * 0.621371) : Math.round(limit);
     speedLimitBadge.hidden = false;
-    speedLimitValue.textContent = String(Math.round(limit));
+    speedLimitValue.textContent = String(dispLimit);
     speedLimitBadge.classList.toggle("is-over", !!overLimit);
     speedHudEl?.classList.toggle("is-over-limit", !!overLimit);
   }
@@ -1184,7 +1275,7 @@
     // Sayısal hız gösterimi gaugeSmooth rAF’ta; burada yalnızca hedef + yan HUD
     setGaugeTarget(kmh);
     if (meta.lat != null && meta.lng != null) {
-      MiniMap.update?.(meta.lat, meta.lng, kmh);
+      MiniMap.update?.(meta.lat, meta.lng, kmh, meta.heading);
       updateTripAvg(meta.lat, meta.lng, kmh);
       let roadWarn = null;
       let routeInfo = null;
@@ -1431,8 +1522,8 @@
       audioKmh = 0;
     }
     const accelNow = Number(data.accelKmhS != null ? data.accelKmhS : data.trend) || 0;
-    // Demo dışında crawl gürültüsünü göstergede tutma — ivme varsa ses açık kalsın
-    if (!demoMode && kmh < 2.2 && audioKmh < 2.2 && accelNow < 0.35) {
+    // Düşük hız filtresi: 0.5 km/s altında duruş kabul edilir
+    if (!demoMode && kmh < 0.5 && audioKmh < 0.5 && accelNow < 0.2) {
       kmh = 0;
       audioKmh = 0;
     }
@@ -1458,21 +1549,25 @@
     }
   }
 
-  async function startDrive() {
+  async function startDrive(isAuto = false) {
     if (startInFlight) return;
     if (running) stopDrive();
 
     startInFlight = true;
     const session = ++driveSession;
+    running = true;
+    demoMode = false;
     syncStartStopUi();
 
-    // Jest içinde hemen — await yok
     AudioEngine.kickUnlock?.();
-    clearDriveMute();
+    if (isAuto && voiceSelect) {
+      voiceSelect.value = "silent-mode";
+      Picker?.refreshAll?.();
+    }
 
     const voice =
       unlocked() || voiceSelect?.value === "silent-mode"
-        ? voiceSelect.value
+        ? (voiceSelect?.value || "silent-mode")
         : DEFAULT_VOICE();
     const visual = unlocked() ? visualSelect?.value : DEFAULT_VISUAL();
     applyVisualTheme(visual);
@@ -1482,33 +1577,23 @@
       AudioEngine.kickUnlock?.();
       clearDriveMute();
       if (session !== driveSession) return;
-      const started = await AudioEngine.start(voice);
+      await AudioEngine.start(voice).catch((e) => {
+        console.warn("[etubu-audio] Audio start deferred", e);
+      });
       if (session !== driveSession) {
         AudioEngine.stop();
         return;
       }
       AudioEngine.setMaxKmh(readMaxKmh());
       AudioEngine.setVolume(Math.max(0.35, readVolume()));
-      // Müzik yokken / çalmıyorken ducking uygulama
       if (!AudioEngine.isMusicPlaying?.()) {
         AudioEngine.setMixUnderMusic?.(false, 1);
       } else {
         MusicHub.applyMix?.();
       }
-      const ok = await AudioEngine.ensureAudible?.(voice);
-      if (!ok && voice !== "silent-mode") {
-        console.warn("[etubu-audio] startDrive: context not running", started);
-      }
-      if (session !== driveSession) {
-        AudioEngine.stop();
-        return;
-      }
       AudioEngine.setSpeed(0, { source: "gps" });
     } catch (err) {
-      console.warn("Audio start failed", err);
-      alert(t("audioStartFail"));
-      running = false;
-      return;
+      console.warn("Audio start deferred", err);
     } finally {
       startInFlight = false;
       syncStartStopUi();
@@ -1519,12 +1604,23 @@
     resetGaugesIdle();
     tapCount = 0;
     unlockFocus();
-
-    running = true;
-    demoMode = false;
-    syncStartStopUi();
     enterDriveFocus();
     startAvgIdleTicker();
+
+    // Ekrana ilk dokunuşta sesi anında çözer
+    const unlockOnFirstTouch = () => {
+      AudioEngine.kickUnlock?.();
+      clearDriveMute();
+      AudioEngine.ensureCtx?.().then(() => {
+        AudioEngine.start(voice).catch(() => {});
+      }).catch(() => {});
+      window.removeEventListener("pointerdown", unlockOnFirstTouch);
+      window.removeEventListener("keydown", unlockOnFirstTouch);
+      window.removeEventListener("touchstart", unlockOnFirstTouch);
+    };
+    window.addEventListener("pointerdown", unlockOnFirstTouch, { passive: true, once: true });
+    window.addEventListener("keydown", unlockOnFirstTouch, { passive: true, once: true });
+    window.addEventListener("touchstart", unlockOnFirstTouch, { passive: true, once: true });
 
     GpsTracker.setSensitivity(readSensitivity());
     const gpsOk = GpsTracker.start({
@@ -1533,7 +1629,7 @@
         if (session !== driveSession || !running) return;
         const el = $("gpsState");
         if (el) el.textContent = msg;
-        alert(t("gpsNeeded") + msg);
+        if (!isAuto) alert(t("gpsNeeded") + msg);
       },
     });
     if (gpsOk === false) {
@@ -1608,7 +1704,6 @@
   }
 
   async function startDemoMode() {
-    // Jest token — herhangi bir await’den ÖNCE
     AudioEngine.kickUnlock?.();
 
     if (startInFlight) return;
@@ -1621,13 +1716,13 @@
     startInFlight = true;
     const session = ++driveSession;
     demoMode = true;
+    running = true;
     syncStartStopUi();
     refreshCatalogUi();
 
     AudioEngine.kickUnlock?.();
     clearDriveMute();
 
-    // Deneme = duyulabilir ses; sessiz profili yok say
     let voice = voiceSelect?.value || DEFAULT_VOICE();
     if (!voice || voice === "silent-mode") {
       voice = DEFAULT_VOICE();
@@ -1640,35 +1735,23 @@
       AudioEngine.kickUnlock?.();
       clearDriveMute();
       if (session !== driveSession) return;
-      const started = await AudioEngine.start(voice);
+      await AudioEngine.start(voice).catch((e) => {
+        console.warn("[etubu-audio] demo audio deferred", e);
+      });
       if (session !== driveSession) {
         AudioEngine.stop();
         return;
       }
       AudioEngine.setMaxKmh(readMaxKmh());
       AudioEngine.setVolume(Math.max(0.55, readVolume()));
-      // Demo: müzik yoksa / çalmıyorsa tam EV
       if (!AudioEngine.isMusicPlaying?.()) {
         AudioEngine.setMixUnderMusic?.(false, 1);
       } else {
         MusicHub.applyMix?.();
       }
-      const ok = await AudioEngine.ensureAudible?.(voice);
-      if (!ok) {
-        console.warn("[etubu-audio] demo: context not running", started, voice);
-      }
-      if (session !== driveSession) {
-        AudioEngine.stop();
-        return;
-      }
-      // İlk 1 sn içinde net duyulsun — sim tick beklemeden hız ver
       AudioEngine.snapSpeed?.(62) || AudioEngine.setSpeed(62, { source: "gps" });
     } catch (err) {
-      console.warn("Demo audio start failed", err);
-      alert(t("audioStartFail"));
-      demoMode = false;
-      running = false;
-      return;
+      console.warn("Demo audio start deferred", err);
     } finally {
       startInFlight = false;
       syncStartStopUi();
@@ -1677,8 +1760,6 @@
     if (session !== driveSession) return;
 
     resetGaugesIdle();
-    running = true;
-    syncStartStopUi();
     enterDriveFocus();
     startAvgIdleTicker();
 
@@ -1807,8 +1888,24 @@
     setGaugeScreen(btn.dataset.gaugeGoto);
   });
 
+  /* 3D Havada Asılı Kadran Parallaks Eğilme Hareketi */
+  speedHud?.addEventListener("pointermove", (e) => {
+    if (!speedGaugeWrap || speedGaugeWrap.classList.contains("is-spinning-3d") || hudTouchActive) return;
+    const rect = speedHud.getBoundingClientRect();
+    const nx = (e.clientX - rect.left) / rect.width - 0.5;
+    const ny = (e.clientY - rect.top) / rect.height - 0.5;
+    const tiltX = (-ny * 14).toFixed(1);
+    const tiltY = (nx * 18).toFixed(1);
+    speedGaugeWrap.style.transform = `perspective(1200px) translateZ(58px) rotateX(${tiltX}deg) rotateY(${tiltY}deg)`;
+  }, { passive: true });
+
+  speedHud?.addEventListener("pointerleave", () => {
+    if (!speedGaugeWrap || speedGaugeWrap.classList.contains("is-spinning-3d")) return;
+    speedGaugeWrap.style.transform = "";
+  }, { passive: true });
+
   const UI_CHROME_SEL =
-    "#controlDock, #panelToggle, #routeBriefTop, #routeBriefPeek, #routeFormPeek, .picker-sheet, .paywall, button, select, input, a, label, .gauge-dots, .avg-speed-panel, .route-guard, #focusLock, #audioUnlockOverlay";
+    "#controlDock, #panelToggle, #muteToggle, #routeBriefTop, #routeBriefPeek, #routeFormPeek, .picker-sheet, .paywall, button, select, input, a, label, .gauge-dots, .avg-speed-panel, .route-guard, #focusLock, #audioUnlockOverlay";
 
   function isUiChrome(el) {
     return el instanceof Element && !!el.closest(UI_CHROME_SEL);
@@ -1881,6 +1978,21 @@
     showGestureToast(t("gestureVoice", { name }));
   }
 
+  function syncMuteBtnUi() {
+    const btn = $("muteToggle");
+    if (!btn) return;
+    const isMuted = !!(AudioEngine.isMuted?.() || voiceSelect?.value === "silent-mode");
+    btn.classList.toggle("is-muted", isMuted);
+    const soundIcon = btn.querySelector(".mute-icon-sound");
+    const muteIcon = btn.querySelector(".mute-icon-muted");
+    const textEl = $("muteToggleText");
+    if (soundIcon) soundIcon.style.display = isMuted ? "none" : "block";
+    if (muteIcon) muteIcon.style.display = isMuted ? "block" : "none";
+    if (textEl) textEl.textContent = isMuted ? t("muteOn") : t("muteOff");
+    btn.setAttribute("aria-label", isMuted ? t("soundUnmute") : t("soundMute"));
+    btn.setAttribute("title", isMuted ? t("soundUnmute") : t("soundMute"));
+  }
+
   /** Başlat = ses açık; mute tercihi sürüş başında temizlenir (URL dahil) */
   function clearDriveMute() {
     AudioEngine.setMuted?.(false);
@@ -1889,20 +2001,47 @@
       if (typeof CarBrowser !== "undefined" && CarBrowser.setPref) {
         CarBrowser.setPref("mute", "0", { forceUrl: true });
         CarBrowser.refreshTeslaHint?.();
-        return;
       }
     } catch (_) {}
     try {
       localStorage.setItem("etubu_mute", "0");
     } catch (_) {}
     prefSet("mute", "0");
+    syncMuteBtnUi();
   }
 
   function toggleDriveMute() {
-    const next = !(AudioEngine.isMuted?.() ?? false);
-    AudioEngine.setMuted(next);
-    document.body.classList.toggle("audio-muted", next);
-    prefSet("mute", next ? "1" : "0");
+    const isCurrentlyMuted = !!(AudioEngine.isMuted?.() || voiceSelect?.value === "silent-mode");
+    const next = !isCurrentlyMuted;
+
+    if (!next) {
+      // Sesi aç
+      if (voiceSelect?.value === "silent-mode") {
+        const defaultAudible = "tesla";
+        if (voiceSelect) {
+          voiceSelect.value = defaultAudible;
+          prefSet("voice", defaultAudible);
+          Picker?.refreshAll?.();
+        }
+      }
+      AudioEngine.setMuted(false);
+      document.body.classList.remove("audio-muted");
+      prefSet("mute", "0");
+      if (running) {
+        const v = voiceSelect?.value && voiceSelect.value !== "silent-mode" ? voiceSelect.value : "tesla";
+        AudioEngine.start(v).then(() => {
+          AudioEngine.setMaxKmh(readMaxKmh());
+          AudioEngine.setVolume(readVolume());
+        });
+      }
+    } else {
+      // Sessize al
+      AudioEngine.setMuted(true);
+      document.body.classList.add("audio-muted");
+      prefSet("mute", "1");
+    }
+
+    syncMuteBtnUi();
     showGestureToast(t(next ? "gestureMuted" : "gestureUnmuted"));
   }
 
@@ -2157,6 +2296,11 @@
     setPanelHidden(!document.body.classList.contains("panel-hidden"));
   });
 
+  muteToggle?.addEventListener("click", () => {
+    AudioEngine.kickUnlock?.();
+    toggleDriveMute();
+  });
+
   volumeSlider?.addEventListener("input", () => {
     syncVolumeUi();
     AudioEngine.setVolume(readVolume());
@@ -2195,6 +2339,12 @@
     const v = AudioEngine.getVoices().find((x) => x.key === voiceSelect.value);
     void v;
     prefSet("voice", voiceSelect.value);
+    if (voiceSelect.value !== "silent-mode" && AudioEngine.isMuted?.()) {
+      AudioEngine.setMuted(false);
+      document.body.classList.remove("audio-muted");
+      prefSet("mute", "0");
+    }
+    syncMuteBtnUi();
     if (running) {
       AudioEngine.start(voiceSelect.value).then(() => {
         AudioEngine.setMaxKmh(readMaxKmh());
@@ -2214,6 +2364,95 @@
     applyVisualTheme(visualSelect.value);
   });
 
+  function toggleUnit() {
+    if (typeof I18n === "undefined") return;
+    const nextUnit = I18n.isMph() ? "kmh" : "mph";
+    I18n.setUnit(nextUnit, true);
+    prefSet("unit", nextUnit);
+    syncUnitLabels();
+  }
+
+  function syncUnitLabels() {
+    if (typeof I18n === "undefined") return;
+    const isMph = I18n.isMph();
+    const uLabel = isMph ? "mph" : "km/h";
+    document.querySelectorAll(".speed-unit, .analog-unit, .minimal-unit, .bars-unit").forEach((el) => {
+      el.textContent = uLabel;
+    });
+    const avgSmall = document.querySelector("#avgSpeedValue + small, .avg-speed-value small");
+    if (avgSmall) avgSmall.textContent = uLabel;
+    if (unitToggleBtn) unitToggleBtn.textContent = isMph ? "MPH" : "KM/H";
+    if (unitSelect) {
+      const mode = typeof I18n.getUnitMode === "function" ? I18n.getUnitMode() : null;
+      unitSelect.value = mode === "auto" ? "auto" : (isMph ? "mph" : "kmh");
+    }
+    updateAnalogScale();
+    syncMaxSpeedUi();
+    if (hudDisplayKmh != null) paintGaugeHud(hudDisplayKmh);
+    if (tripAvg) renderAvgSpeedPanel(hudDisplayKmh);
+  }
+
+  document.addEventListener("etubu:unit-change", () => {
+    syncUnitLabels();
+  });
+
+  unitToggleBtn?.addEventListener("click", toggleUnit);
+  unitSelect?.addEventListener("change", (e) => {
+    const val = e.target.value;
+    if (val && typeof I18n !== "undefined") {
+      I18n.setUnit(val, true);
+      prefSet("unit", val);
+      syncUnitLabels();
+    }
+  });
+
+  document.querySelectorAll(".speed-unit, .analog-unit, .minimal-unit, .bars-unit").forEach((el) => {
+    el.addEventListener("click", toggleUnit);
+  });
+
+  const alertRoadHazardsToggle = $("alertRoadHazardsToggle");
+  const alertCorridorToggle = $("alertCorridorToggle");
+  const alertVoiceToggle = $("alertVoiceToggle");
+  const alertOverspeedToggle = $("alertOverspeedToggle");
+
+  function initAlertControls() {
+    if (typeof RadarAlert === "undefined" || !RadarAlert.getAlertConfig) return;
+    const cfg = RadarAlert.getAlertConfig();
+    if (alertRoadHazardsToggle) alertRoadHazardsToggle.checked = !!cfg.roadHazards;
+    if (alertCorridorToggle) alertCorridorToggle.checked = !!cfg.corridor;
+    if (alertVoiceToggle) alertVoiceToggle.checked = !!cfg.voice;
+    if (alertOverspeedToggle) alertOverspeedToggle.checked = !!cfg.overspeed;
+
+    const onToggle = () => {
+      const updated = {
+        roadHazards: alertRoadHazardsToggle ? alertRoadHazardsToggle.checked : true,
+        corridor: alertCorridorToggle ? alertCorridorToggle.checked : true,
+        voice: alertVoiceToggle ? alertVoiceToggle.checked : true,
+        overspeed: alertOverspeedToggle ? alertOverspeedToggle.checked : true,
+      };
+      RadarAlert.setAlertConfig(updated);
+      if (!updated.roadHazards || !updated.corridor) {
+        if (!updated.corridor) {
+          const badge = $("avgSpeedBadge");
+          if (badge) badge.hidden = true;
+          const panel = $("avgSpeedPanel");
+          if (panel) panel.classList.remove("is-corridor");
+        }
+        if (!updated.roadHazards) {
+          const band = $("hudWarnBand");
+          if (band) band.hidden = true;
+          const warnVal = $("hudWarn");
+          if (warnVal) warnVal.textContent = "—";
+        }
+      }
+    };
+
+    alertRoadHazardsToggle?.addEventListener("change", onToggle);
+    alertCorridorToggle?.addEventListener("change", onToggle);
+    alertVoiceToggle?.addEventListener("change", onToggle);
+    alertOverspeedToggle?.addEventListener("change", onToggle);
+  }
+
   /** URL → cookie → localStorage (CarBrowser.getPref) */
   function loadUserPrefs() {
     // Volume
@@ -2226,15 +2465,18 @@
     }
     syncVolumeUi();
 
-    // Sensitivity — varsayılan %20
+    // Sensitivity — varsayılan %0 (1.0x saf GPS referans hızı)
     const sensRaw = prefGet("sensitivity");
     if (sensRaw != null && sensitivitySlider) {
-      sensitivitySlider.value = String(clampPct(sensRaw));
-    } else if (sensitivitySlider) {
-      const htmlVal = parseFloat(sensitivitySlider.value);
-      if (!Number.isFinite(htmlVal) || htmlVal === 46) {
-        sensitivitySlider.value = "20";
+      if ((sensRaw === "20" || sensRaw === "46") && !localStorage.getItem("etubu_sens_zero_v1")) {
+        localStorage.setItem("etubu_sens_zero_v1", "1");
+        sensitivitySlider.value = "0";
+        prefSet("sensitivity", "0");
+      } else {
+        sensitivitySlider.value = String(clampPct(sensRaw));
       }
+    } else if (sensitivitySlider) {
+      sensitivitySlider.value = "0";
     }
     syncSensitivityUi();
     try {
@@ -2276,6 +2518,14 @@
       setGaugeScreen(gaugeRaw, false);
     }
 
+    // Speed Unit (kmh / mph / auto)
+    const unitRaw = prefGet("unit");
+    if (unitRaw === "mph" || unitRaw === "kmh" || unitRaw === "auto") {
+      if (typeof I18n !== "undefined") I18n.setUnit(unitRaw, true);
+    }
+    syncUnitLabels();
+    initAlertControls();
+
     // Tesla: cookie/LS’ten gelen ayarları URL’e yaz — yer imi tam olsun
     if (typeof CarBrowser !== "undefined" && CarBrowser.isEphemeral?.()) {
       if (voiceSelect?.value) CarBrowser.setPref("voice", voiceSelect.value);
@@ -2287,6 +2537,7 @@
       CarBrowser.setPref("gauge", gaugeScreen);
       if (AudioEngine.isMuted?.()) CarBrowser.setPref("mute", "1");
       if (typeof I18n !== "undefined" && I18n.lang) CarBrowser.setPref("lang", I18n.lang);
+      if (typeof I18n !== "undefined" && I18n.getUnit) CarBrowser.setPref("unit", I18n.getUnit());
     }
 
     CarBrowser.refreshTeslaHint?.();
@@ -2326,12 +2577,21 @@
         Paywall.refreshAdFreeUi?.();
       });
       I18n.fillLangSelect?.();
-      $("langSelect")?.addEventListener("change", () => setTimeout(refreshAfterLang, 0));
+      $("langSelect")?.addEventListener("change", (e) => {
+        const val = e.target.value;
+        if (val) I18n.setLang(val);
+        setTimeout(refreshAfterLang, 0);
+      });
+      document.addEventListener("etubu:lang-change", () => {
+        refreshAfterLang();
+      });
+      document.addEventListener("etubu:unit-change", () => {
+        syncUnitLabels();
+      });
     });
     step("panel", () => {
       if (CarBrowser.isTesla?.() || CarBrowser.isEphemeral?.()) {
         setPanelHidden(true, false);
-        document.body.classList.add("ads-hidden", "drive-focus");
         CarBrowser.forceCompactChrome?.();
         CarBrowser.syncViewportHeight?.();
       } else {
@@ -2347,7 +2607,12 @@
       document.addEventListener("visibilitychange", () => {
         if (!running) return;
         AudioEngine.ensureCtx?.();
+        if (typeof RadarAlert !== "undefined") RadarAlert.primeAudio?.();
+        if (typeof WarnVoice !== "undefined") WarnVoice.prime?.();
         if (document.visibilityState === "visible") {
+          if ("wakeLock" in navigator && !wakeLock) {
+            navigator.wakeLock.request("screen").then((wl) => { wakeLock = wl; }).catch(() => {});
+          }
           window.EtubuNative?.setAudioMixMode?.(
             document.getElementById("mixUnderMusic")?.checked !== false ? "blend" : "solo"
           );
@@ -2397,11 +2662,14 @@
         console.error("Picker missing — script order?");
         return;
       }
-      Picker.init(["#voiceSelect", "#visualSelect", "#langSelect"]);
+      Picker.init(["#voiceSelect", "#visualSelect", "#langSelect", "#unitSelect"]);
       I18n.fillLangSelect?.();
       Picker.refreshAll?.();
     });
-    step("prefs", () => loadUserPrefs());
+    step("prefs", () => {
+      loadUserPrefs();
+      syncMuteBtnUi();
+    });
     step("paymentQuery", () => {
       const params = new URLSearchParams(location.search);
       if (params.get("payment") === "error") {
@@ -2411,6 +2679,11 @@
     });
     // After prefs/catalog settle — theme swipe/select may play cue
     themeCueReady = true;
+
+    // Otomatik Başlat: Uygulama açıldığında sürüş ve GPS doğrudan aktif başlasın
+    setTimeout(() => {
+      startDrive(true).catch((err) => console.warn("[etubu] Auto-start drive error", err));
+    }, 200);
   }
 
   if (document.readyState === "loading") {

@@ -390,15 +390,79 @@ enum EtubuTrafikAPI {
         return out
     }
 
-    /// EGM retired — always empty. TR corridors come from `EtubuTrCorridorStore`.
+    /// EGM `createRoute` response → radar + hız koridoru (SpeedTunnels).
     static func parseOfficialHazards(
         data: [String: Any],
         coords: [(lat: Double, lng: Double)],
-        includeSeeds: Bool = false
+        includeSeeds: Bool = true
     ) -> [EtubuRouteHazard] {
-        _ = data
-        _ = includeSeeds
-        return EtubuTrCorridorStore.alongRoute(coords: coords)
+        var list: [EtubuRouteHazard] = []
+        if let radars = data["Radars"] as? [[String: Any]] {
+            for r in radars {
+                if let act = r["activity"] as? Int, act != 3 { continue }
+                if let act = r["activity"] as? NSNumber, act.intValue != 3 { continue }
+                if let act = r["activity"] as? String, let n = Int(act), n != 3 { continue }
+                let lat = (r["y"] as? NSNumber)?.doubleValue ?? (r["y"] as? Double)
+                    ?? (r["lat"] as? NSNumber)?.doubleValue ?? (r["lat"] as? Double)
+                let lng = (r["x"] as? NSNumber)?.doubleValue ?? (r["x"] as? Double)
+                    ?? (r["lng"] as? NSNumber)?.doubleValue ?? (r["lng"] as? Double)
+                guard let lat, let lng else { continue }
+                let near = nearestRouteIndex(coords: coords, lat: lat, lng: lng)
+                guard near.dM <= 2500 else { continue }
+                let idRaw = r["id"].map { "\($0)" } ?? "\(lat)-\(lng)"
+                let lim = (r["speedLimit"] as? NSNumber)?.intValue ?? (r["speedLimit"] as? Int)
+                list.append(EtubuRouteHazard(
+                    id: "egm-radar-\(idRaw)",
+                    kind: "radar",
+                    label: (r["name"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                        ?? EtubuClusterL10n.t("routeRadar"),
+                    lat: lat,
+                    lng: lng,
+                    maxspeed: lim.flatMap { $0 > 0 ? $0 : nil },
+                    routeIdx: near.idx,
+                    alongKm: alongKm(coords: coords, upTo: near.idx)
+                ))
+            }
+        }
+        if let tunnels = data["SpeedTunnels"] as? [[String: Any]] {
+            for tun in tunnels {
+                if let act = tun["activity"] as? Int, act != 3 { continue }
+                if let act = tun["activity"] as? NSNumber, act.intValue != 3 { continue }
+                let lat = (tun["startLatY"] as? NSNumber)?.doubleValue ?? (tun["startLatY"] as? Double)
+                    ?? (tun["lat"] as? NSNumber)?.doubleValue ?? (tun["lat"] as? Double)
+                let lng = (tun["startLonX"] as? NSNumber)?.doubleValue ?? (tun["startLonX"] as? Double)
+                    ?? (tun["lng"] as? NSNumber)?.doubleValue ?? (tun["lng"] as? Double)
+                guard let lat, let lng else { continue }
+                let near = nearestRouteIndex(coords: coords, lat: lat, lng: lng)
+                guard near.dM <= 3500 else { continue }
+                let idRaw = tun["id"].map { "\($0)" } ?? "\(lat)-\(lng)"
+                let lim = (tun["speedLimit"] as? NSNumber)?.intValue ?? (tun["speedLimit"] as? Int)
+                let lengthKm: Double? = {
+                    if let n = tun["length"] as? NSNumber { return n.doubleValue }
+                    if let d = tun["length"] as? Double { return d }
+                    if let i = tun["length"] as? Int { return Double(i) }
+                    return nil
+                }()
+                list.append(EtubuRouteHazard(
+                    id: "egm-cor-\(idRaw)",
+                    kind: "corridor",
+                    label: (tun["name"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                        ?? EtubuClusterL10n.t("warnKindCorridor"),
+                    lat: lat,
+                    lng: lng,
+                    maxspeed: lim.flatMap { $0 > 0 ? $0 : nil },
+                    routeIdx: near.idx,
+                    alongKm: alongKm(coords: coords, upTo: near.idx),
+                    lengthKm: lengthKm ?? 10,
+                    endLat: (tun["endLatY"] as? NSNumber)?.doubleValue ?? (tun["endLatY"] as? Double),
+                    endLng: (tun["endLonX"] as? NSNumber)?.doubleValue ?? (tun["endLonX"] as? Double)
+                ))
+            }
+        }
+        if includeSeeds {
+            list.append(contentsOf: EtubuTrCorridorStore.alongRoute(coords: coords))
+        }
+        return dedupeHazards(list)
     }
 
     /// OSM Overpass along polyline: cameras/corridors + tunnel/railway/hazard/pass (not dense lights).
@@ -411,10 +475,7 @@ enum EtubuTrafikAPI {
         guard coords.count >= 2 else { return [] }
         let samples = sampleAlong(coords: coords, everyKm: everyKm, limit: limitSamples)
         guard !samples.isEmpty else { return [] }
-        let endpoints = [
-            "https://overpass-api.de/api/interpreter",
-            "https://overpass.kumi.systems/api/interpreter",
-        ]
+        let endpoints = EtubuHazardMerge.overpassEndpoints
         var merged: [EtubuRouteHazard] = []
         await withTaskGroup(of: [EtubuRouteHazard].self) { group in
             for s in samples {

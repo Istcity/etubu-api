@@ -4,20 +4,21 @@ import AuthenticationServices
 import UIKit
 import Security
 
-/// Lifetime premium (`com.etubu.premium`) + Sign in with Apple identity.
+/// App Store paid download (v1.1+) unlocks all features.
+/// Legacy IAP product id kept for restore/history; freemium gates are disabled.
 @MainActor
 final class EtubuPremiumManager: ObservableObject {
     static let shared = EtubuPremiumManager()
 
+    /// Paid-upfront App Store model — no free/premium feature split.
+    static let isPaidAppModel = true
+
     static let productID = "com.etubu.premium"
-    /// Free tier: only this theme.
+    /// Default theme when enforcing (legacy free-tier path; unused in paid-app mode).
     static let freeTheme: ClusterTheme = .tesla
 
-    /// Production gates on — entitlement from StoreKit.
-    static let frozenOpen = false
-
-    @Published private(set) var isPremium: Bool = false
-    /// Cold start: false until first StoreKit probe finishes (or force/cache path settles).
+    @Published private(set) var isPremium: Bool = true
+    /// Cold start: false until first StoreKit probe finishes (or paid-app unlock settles).
     /// Gates should wait when locked so transient empty entitlements don’t flash paywall.
     @Published private(set) var entitlementReady: Bool = false
     @Published var product: Product?
@@ -30,33 +31,15 @@ final class EtubuPremiumManager: ObservableObject {
     @Published private(set) var appleUserID: String?
     @Published private(set) var appleDisplayName: String?
 
-    private static let unlockedDefaultsKey = "etubu.premium.unlocked"
-
     var isSignedIn: Bool { appleUserID != nil && !(appleUserID?.isEmpty ?? true) }
 
-    /// Maestro / debug / review launch overrides — always win over StoreKit.
-    static var isForcePremiumLaunch: Bool {
-        let args = ProcessInfo.processInfo.arguments
-        if args.contains("-etubuForcePremium") || args.contains("etubuForcePremium") {
-            return true
-        }
-        let env = ProcessInfo.processInfo.environment
-        if env["etubuForcePremium"] == "1" || env["etubuForcePremium"]?.lowercased() == "true" {
-            return true
-        }
-        if UserDefaults.standard.bool(forKey: "etubuForcePremium") { return true }
-        return false
-    }
-
-    /// Türkiye vitrin fiyatı (ASC’de de 249 TRY olmalı).
     static let turkeyPriceLabel = "249 TL"
+    static let globalPriceLabel = "$6.99"
 
     var displayPrice: String {
-        if shouldShowTurkeyPrice {
-            return Self.turkeyPriceLabel
-        }
-        if let product { return product.displayPrice }
-        return Self.turkeyPriceLabel
+        if shouldShowTurkeyPrice { return Self.turkeyPriceLabel }
+        if let product, !Self.isPaidAppModel { return product.displayPrice }
+        return Self.globalPriceLabel
     }
 
     /// UI dili/bölge TR ise App Store storefront USD olsa bile 249 TL göster.
@@ -81,24 +64,18 @@ final class EtubuPremiumManager: ObservableObject {
         appleDisplayName = EtubuKeychain.string(for: .appleDisplayName)
             ?? UserDefaults.standard.string(forKey: "etubu.apple.displayName")
 
-        if Self.frozenOpen || Self.isForcePremiumLaunch {
-            // Force / open build: unlock immediately; never race StoreKit into a lock.
-            applyPremium(true, persistCache: !Self.isForcePremiumLaunch || Self.frozenOpen)
+        if Self.isPaidAppModel {
+            // App Store purchase unlocks everything — no IAP freemium gate.
+            isPremium = true
             entitlementReady = true
-            // Still listen so a real purchase can refresh product metadata; never downgrade force.
-            if !Self.frozenOpen {
-                transactionListener = listenForTransactions()
-                Task { await loadProduct() }
-            }
+            EtubuClusterAudioBridge.setPremium(true)
+            Task { await refreshCredentialState() }
             return
         }
 
-        // Cached flag until StoreKit confirms (false if never purchased).
-        // Keep unlocked UI from the first frame when UserDefaults says so — avoid false-locked flash.
-        let cached = UserDefaults.standard.bool(forKey: Self.unlockedDefaultsKey)
-        isPremium = cached
-        if cached { EtubuClusterAudioBridge.setPremium(true) }
-
+        // Legacy freemium path (kept for possible rollback).
+        isPremium = false
+        EtubuClusterAudioBridge.setPremium(false)
         enforceFreeThemeIfNeeded()
         transactionListener = listenForTransactions()
         Task { await loadProduct() }
@@ -112,6 +89,7 @@ final class EtubuPremiumManager: ObservableObject {
     }
 
     func enforceFreeThemeIfNeeded() {
+        guard !Self.isPaidAppModel else { return }
         guard !isPremium else { return }
         if ClusterTheme.stored != Self.freeTheme {
             ClusterTheme.stored = Self.freeTheme
@@ -133,9 +111,14 @@ final class EtubuPremiumManager: ObservableObject {
         }
     }
 
-    /// SIWA then StoreKit purchase.
+    /// SIWA then StoreKit purchase (no-op in paid-app model — already unlocked).
     @discardableResult
     func purchase() async -> Bool {
+        if Self.isPaidAppModel {
+            applyPremium(true)
+            entitlementReady = true
+            return true
+        }
         lastError = nil
         if !isSignedIn {
             let ok = await signInWithApple()
@@ -172,6 +155,11 @@ final class EtubuPremiumManager: ObservableObject {
     }
 
     func restore() async {
+        if Self.isPaidAppModel {
+            applyPremium(true)
+            entitlementReady = true
+            return
+        }
         lastError = nil
         restoring = true
         defer { restoring = false }
@@ -183,8 +171,7 @@ final class EtubuPremiumManager: ObservableObject {
         } catch {
             lastError = error.localizedDescription
         }
-        // After AppStore.sync(), empty entitlements are authoritative — allow lock.
-        await checkEntitlement(allowDowngrade: true)
+        await checkEntitlement()
         if !isPremium {
             lastError = lastError ?? EtubuClusterL10n.t("premiumRestoreNone")
         }
@@ -192,13 +179,13 @@ final class EtubuPremiumManager: ObservableObject {
 
     /// Await first (or fresh) entitlement probe — route/paywall gates use this on cold start.
     func ensureEntitlementChecked() async {
-        if Self.frozenOpen || Self.isForcePremiumLaunch {
-            applyPremium(true, persistCache: Self.frozenOpen)
+        if Self.isPaidAppModel {
+            applyPremium(true)
             entitlementReady = true
             return
         }
         if entitlementReady { return }
-        await checkEntitlement(allowDowngrade: false)
+        await checkEntitlement()
     }
 
     /// Offer code — Ayarlar/Paywall kapandıktan sonra UIKit ile sun (SwiftUI nested sheet kırılır).
@@ -264,6 +251,7 @@ final class EtubuPremiumManager: ObservableObject {
                     switch result {
                     case .success(let cred):
                         self?.persistAppleIdentity(user: cred.user, name: cred.name)
+                        Task { await self?.checkEntitlement() }
                         cont.resume(returning: true)
                     case .failure(let err):
                         if case .message(let msg) = err, !msg.isEmpty {
@@ -284,7 +272,14 @@ final class EtubuPremiumManager: ObservableObject {
         EtubuKeychain.delete(.appleUserID)
         EtubuKeychain.delete(.appleDisplayName)
         UserDefaults.standard.removeObject(forKey: "etubu.apple.displayName")
-        // Premium entitlement stays with Apple ID / StoreKit — do not lock on sign-out.
+        if Self.isPaidAppModel {
+            applyPremium(true)
+            entitlementReady = true
+            return
+        }
+        // Legacy: premium tied to Apple identity + StoreKit entitlement.
+        applyPremium(false)
+        entitlementReady = true
     }
 
     private func persistAppleIdentity(user: String, name: String?) {
@@ -297,69 +292,49 @@ final class EtubuPremiumManager: ObservableObject {
         }
     }
 
-    private func applyPremium(_ on: Bool, persistCache: Bool = true) {
-        // Force / frozen unlock sources must not be cleared by a later StoreKit miss.
-        if !on && (Self.frozenOpen || Self.isForcePremiumLaunch) {
-            isPremium = true
-            EtubuClusterAudioBridge.setPremium(true)
-            objectWillChange.send()
-            return
-        }
-        let changed = isPremium != on
-        isPremium = on
-        if persistCache {
-            UserDefaults.standard.set(on, forKey: Self.unlockedDefaultsKey)
-        }
-        EtubuClusterAudioBridge.setPremium(on)
-        if !on { enforceFreeThemeIfNeeded() }
+    private func applyPremium(_ on: Bool) {
+        let unlocked = Self.isPaidAppModel ? true : on
+        let changed = isPremium != unlocked
+        isPremium = unlocked
+        EtubuClusterAudioBridge.setPremium(unlocked)
+        if !unlocked { enforceFreeThemeIfNeeded() }
         if changed { objectWillChange.send() }
     }
 
-    /// StoreKit entitlement probe.
-    /// - `allowDowngrade: false` (cold start / offer redeem): never clear a cached unlock when
-    ///   `currentEntitlements` is briefly empty — that was the flaky “premium locked” bug.
-    /// - `allowDowngrade: true` (explicit Restore after `AppStore.sync()`): empty = lock.
-    private func checkEntitlement(allowDowngrade: Bool = false) async {
-        if Self.frozenOpen || Self.isForcePremiumLaunch {
-            applyPremium(true, persistCache: Self.frozenOpen)
+    /// StoreKit entitlement probe (paid-app model always unlocks).
+    private func checkEntitlement() async {
+        if Self.isPaidAppModel {
+            applyPremium(true)
+            entitlementReady = true
+            return
+        }
+        guard isSignedIn else {
+            applyPremium(false)
             entitlementReady = true
             return
         }
 
         var found = false
         for await result in Transaction.currentEntitlements {
-            if let tx = try? checkVerified(result), tx.productID == Self.productID {
-                found = true
-                break
+            if let tx = try? checkVerified(result) {
+                if tx.productID == Self.productID {
+                    found = true
+                    break
+                }
             }
         }
 
-        if found {
-            applyPremium(true)
-        } else if allowDowngrade {
-            applyPremium(false)
-        } else {
-            // Keep cached unlock; only confirm lock when we never had one.
-            let cached = UserDefaults.standard.bool(forKey: Self.unlockedDefaultsKey)
-            if cached {
-                // Stay unlocked; re-mirror web bridge in case Cap loaded late.
-                applyPremium(true)
-            } else if !isPremium {
-                applyPremium(false)
-            }
-        }
+        applyPremium(found)
         entitlementReady = true
     }
 
-    /// Foreground: re-check without flashing lock if cache says unlocked.
     func refreshEntitlementQuietly() async {
-        if Self.frozenOpen || Self.isForcePremiumLaunch {
-            applyPremium(true, persistCache: Self.frozenOpen)
+        if Self.isPaidAppModel {
+            applyPremium(true)
             entitlementReady = true
-            EtubuClusterAudioBridge.setPremium(true)
             return
         }
-        await checkEntitlement(allowDowngrade: false)
+        await checkEntitlement()
         EtubuClusterAudioBridge.setPremium(isPremium)
     }
 

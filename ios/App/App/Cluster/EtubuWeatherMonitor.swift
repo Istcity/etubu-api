@@ -9,10 +9,17 @@ final class EtubuWeatherMonitor: ObservableObject {
 
     @Published private(set) var points: [EtubuRouteHazard] = []
     @Published private(set) var lastLabel: String = ""
+    @Published private(set) var dayBriefLine: String = ""
+    /// Destination current weather (Island + HUD under dest).
+    @Published private(set) var arrivalTempC: Int?
+    @Published private(set) var arrivalSymbol: String = ""
 
     private var fetchCenter: CLLocationCoordinate2D?
     private var fetchedAt: Date?
     private var fetching = false
+    private var arrivalCenter: CLLocationCoordinate2D?
+    private var arrivalFetchedAt: Date?
+    private var arrivalFetching = false
 
     private let refetchDistM = 8_000.0
     private let refetchAge: TimeInterval = 10 * 60
@@ -32,6 +39,84 @@ final class EtubuWeatherMonitor: ObservableObject {
         fetchCenter = nil
         fetchedAt = nil
         refreshIfNeeded(lat: lat, lng: lng)
+    }
+
+    func prefetchArrival(lat: Double, lng: Double) {
+        arrivalCenter = nil
+        arrivalFetchedAt = nil
+        refreshArrivalIfNeeded(lat: lat, lng: lng)
+    }
+
+    func clearArrival() {
+        guard arrivalTempC != nil || !arrivalSymbol.isEmpty else { return }
+        arrivalTempC = nil
+        arrivalSymbol = ""
+        arrivalCenter = nil
+        arrivalFetchedAt = nil
+    }
+
+    func refreshArrivalIfNeeded(lat: Double, lng: Double) {
+        guard lat != 0, lng != 0 else { return }
+        if arrivalFetching { return }
+        let stale: Bool = {
+            guard let at = arrivalFetchedAt, let c = arrivalCenter else { return true }
+            if Date().timeIntervalSince(at) > refetchAge { return true }
+            let moved = CLLocation(latitude: c.latitude, longitude: c.longitude)
+                .distance(from: CLLocation(latitude: lat, longitude: lng))
+            return moved >= refetchDistM
+        }()
+        guard stale else { return }
+        arrivalFetching = true
+        Task {
+            let snap = await Self.fetchArrivalCurrent(lat: lat, lng: lng)
+            await MainActor.run {
+                self.arrivalFetching = false
+                self.arrivalCenter = CLLocationCoordinate2D(latitude: lat, longitude: lng)
+                self.arrivalFetchedAt = Date()
+                if let snap {
+                    self.arrivalTempC = snap.tempC
+                    self.arrivalSymbol = Self.sfSymbol(forWMO: snap.code)
+                }
+            }
+        }
+    }
+
+    private static func fetchArrivalCurrent(lat: Double, lng: Double) async -> (code: Int, tempC: Int)? {
+        let urlStr =
+            "https://api.open-meteo.com/v1/forecast?latitude=\(lat)&longitude=\(lng)"
+            + "&current=weather_code,temperature_2m&timezone=auto"
+        guard let url = URL(string: urlStr) else { return nil }
+        var req = URLRequest(url: url)
+        req.timeoutInterval = 10
+        do {
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode),
+                  let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            else { return nil }
+            let cur = json["current"] as? [String: Any] ?? [:]
+            let code = (cur["weather_code"] as? NSNumber)?.intValue
+                ?? Int(cur["weather_code"] as? Double ?? -1)
+            let temp = (cur["temperature_2m"] as? NSNumber)?.doubleValue
+                ?? (cur["temperature_2m"] as? Double)
+            guard code >= 0, let temp else { return nil }
+            return (code, Int(temp.rounded()))
+        } catch {
+            return nil
+        }
+    }
+
+    static func sfSymbol(forWMO code: Int) -> String {
+        switch code {
+        case 0, 1: return "sun.max.fill"
+        case 2: return "cloud.sun.fill"
+        case 3: return "cloud.fill"
+        case 45, 48: return "cloud.fog.fill"
+        case 51, 53, 55, 56, 57: return "cloud.drizzle.fill"
+        case 61, 63, 65, 66, 67, 80, 81, 82: return "cloud.rain.fill"
+        case 71, 73, 75, 77, 85, 86: return "cloud.snow.fill"
+        case 95, 96, 97, 98, 99: return "cloud.bolt.rain.fill"
+        default: return "cloud.sun.fill"
+        }
     }
 
     private func refreshIfNeeded(lat: Double, lng: Double) {
@@ -60,7 +145,61 @@ final class EtubuWeatherMonitor: ObservableObject {
                 self.points = next
                 self.lastLabel = next.first?.label ?? ""
             }
+            let brief = await Self.fetchDayBrief(lat: lat, lng: lng)
+            await MainActor.run {
+                if !brief.isEmpty { self.dayBriefLine = brief }
+            }
         }
+    }
+
+    static func fetchDayBrief(lat: Double?, lng: Double?) async -> String {
+        guard let lat, let lng, lat != 0, lng != 0 else { return "" }
+        let urlStr =
+            "https://api.open-meteo.com/v1/forecast?latitude=\(lat)&longitude=\(lng)"
+            + "&current=weather_code,temperature_2m"
+            + "&daily=weather_code,precipitation_probability_max"
+            + "&forecast_days=1&timezone=auto"
+        guard let url = URL(string: urlStr) else { return "" }
+        var req = URLRequest(url: url)
+        req.timeoutInterval = 10
+        do {
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode),
+                  let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            else { return "" }
+            let cur = json["current"] as? [String: Any] ?? [:]
+            let daily = json["daily"] as? [String: Any] ?? [:]
+            let code = (cur["weather_code"] as? NSNumber)?.intValue
+                ?? Int(cur["weather_code"] as? Double ?? -1)
+            let dailyCodes = daily["weather_code"] as? [Any] ?? []
+            let dayCode = (dailyCodes.first as? NSNumber)?.intValue
+                ?? Int(dailyCodes.first as? Double ?? Double(code))
+            let probs = daily["precipitation_probability_max"] as? [Any] ?? []
+            let precip = (probs.first as? NSNumber)?.intValue
+                ?? Int(probs.first as? Double ?? 0)
+            return formatDayBrief(code: dayCode, precipChance: precip)
+        } catch {
+            return ""
+        }
+    }
+
+    private static func formatDayBrief(code: Int, precipChance: Int) -> String {
+        let sky: String = {
+            if [95, 96, 97, 98, 99, 65, 66, 67, 80, 81, 82].contains(code) {
+                return EtubuClusterL10n.t("wxDayRain")
+            }
+            if [71, 73, 75, 77, 85, 86].contains(code) {
+                return EtubuClusterL10n.t("wxDaySnow")
+            }
+            if [1, 2, 3, 45, 48].contains(code) {
+                return EtubuClusterL10n.t("wxDayCloud")
+            }
+            return EtubuClusterL10n.t("wxDayClear")
+        }()
+        if precipChance >= 20 {
+            return sky + " · " + String(format: EtubuClusterL10n.t("wxDayPrecipFmt"), precipChance)
+        }
+        return sky
     }
 
     private static func fetchOpenMeteo(lat: Double, lng: Double) async -> EtubuRouteHazard? {
