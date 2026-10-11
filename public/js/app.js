@@ -2449,6 +2449,7 @@
 
       // Tek Kadran Temaları (Single Gauge)
       setGaugeScreen("digital");
+      speedGaugeWrap?.removeAttribute("data-dual-theme");
       if (visualSelect) {
         visualSelect.value = key;
         visualSelect.dispatchEvent(new Event("change", { bubbles: true }));
@@ -2456,6 +2457,7 @@
         applyVisualTheme(key);
         prefSet("visual", key);
       }
+      triggerGaugeTransitionSpin();
     });
   });
 

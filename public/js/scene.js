@@ -48,6 +48,10 @@ const Scene = (() => {
     "desert-dune": { particles: 16, shards: 2, speedGain: 1.05, hueShift: -8 },
     "telemetry-pro": { particles: 16, shards: 2, speedGain: 1.25, hueShift: 10 },
     "stealth-hud": { particles: 6, shards: 0, speedGain: 0.6, hueShift: -15 },
+    yildirim: { particles: 18, shards: 2, speedGain: 1.35, hueShift: 10 },
+    yol: { particles: 12, shards: 0, speedGain: 1.2, hueShift: 0 },
+    orman: { particles: 14, shards: 0, speedGain: 0.95, hueShift: -8 },
+    atari: { particles: 8, shards: 0, speedGain: 1.25, hueShift: 0 },
   };
 
   let profile = MODE_PROFILE.glow;
@@ -71,6 +75,7 @@ const Scene = (() => {
     "mini-personal": 32, "mini-green": 118, "mini-balance": 40,
     "weather-sky": 202, "map-focus": 188, "map-3d": 200, "cyber-storm": 275, "desert-dune": 32,
     "telemetry-pro": 150, "stealth-hud": 215,
+    yildirim: 205, yol: 200, orman: 128, atari: 318,
   };
 
   let particles = [];
@@ -83,6 +88,11 @@ const Scene = (() => {
   let targetHue = 195;
   let skipHeavyFx = false;
   let animT = 0;
+  let worldScroll = 0;
+  let frameDt = 0.016;
+  let boltFlash = 0;
+  let boltCooldown = 0.35;
+  let activeBolts = [];
   let swayX = 0;
   let swayY = 0;
   let expandR = 1;
@@ -156,7 +166,8 @@ const Scene = (() => {
   }
 
   function viewCenter() {
-    const hud = document.getElementById("speedHud");
+    const gauge = document.getElementById("speedGaugeWrap");
+    const hud = gauge || document.getElementById("speedHud");
     if (hud) {
       const r = hud.getBoundingClientRect();
       if (r.width > 0 && r.height > 0) {
@@ -401,7 +412,6 @@ const Scene = (() => {
   }
 
   function softBg() {
-    advanceMotion();
     const motion = renderMotion;
     const base = viewCenter();
     const cx = base.cx;
@@ -543,6 +553,16 @@ const Scene = (() => {
       ctx.strokeStyle = `hsla(${themeHue + t * 25}, 90%, ${60 + v * 15}%, ${alpha * 0.45})`;
       ctx.lineWidth = 1.5 + v * 3 * (1 - t);
       ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    const spokes = skipHeavyFx ? 6 : 10;
+    for (let i = 0; i < spokes; i++) {
+      const ang = (i / spokes) * Math.PI * 2 + tunnelZ * 0.6;
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(ang) * 36, cy + Math.sin(ang) * 36);
+      ctx.lineTo(cx + Math.cos(ang) * Math.min(w, h) * 0.78, cy + Math.sin(ang) * Math.min(w, h) * 0.78);
+      ctx.strokeStyle = `hsla(${themeHue}, 85%, 68%, ${0.05 + v * 0.14})`;
+      ctx.lineWidth = 1.2;
       ctx.stroke();
     }
   }
@@ -1932,100 +1952,243 @@ const Scene = (() => {
     ctx.restore();
   }
 
+  function horizonAt(cy) {
+    return Math.max(h * 0.28, Math.min(cy * 0.62, h * 0.48));
+  }
+
+  function perspY(horizon, t) {
+    const u = Math.max(0, Math.min(1, t));
+    return horizon + (h - horizon) * Math.pow(u, 1.16);
+  }
+
+  function spawnBolt(originX) {
+    const pts = [];
+    let x = originX;
+    let y = -0.02;
+    pts.push({ x, y });
+    while (y < 1.02) {
+      y += 0.04 + Math.random() * 0.07;
+      x += (Math.random() - 0.5) * 0.11;
+      x = Math.max(0.02, Math.min(0.98, x));
+      pts.push({ x, y });
+    }
+    const branches = [];
+    if (pts.length > 5) {
+      const bi = 2 + Math.floor(Math.random() * (pts.length - 4));
+      const branch = [{ x: pts[bi].x, y: pts[bi].y }];
+      let bx = pts[bi].x;
+      let by = pts[bi].y;
+      const dir = Math.random() < 0.5 ? -1 : 1;
+      for (let k = 0; k < 4; k++) {
+        by += 0.035 + Math.random() * 0.05;
+        bx += dir * (0.025 + Math.random() * 0.05);
+        branch.push({ x: bx, y: by });
+      }
+      branches.push(branch);
+    }
+    return { pts, branches };
+  }
+
+  function strokePoly(pts, color, width, alpha) {
+    if (!pts || pts.length < 2) return;
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x * w, pts[0].y * h);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x * w, pts[i].y * h);
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = alpha;
+    ctx.lineWidth = width;
+    ctx.lineJoin = "round";
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  function tickLightning(interval) {
+    boltCooldown -= frameDt;
+    boltFlash *= Math.exp(-frameDt * 3.2);
+    if (boltCooldown > 0) return;
+    boltCooldown = interval;
+    boltFlash = 0.72 + Math.random() * 0.28;
+    const n = 1 + (Math.random() > 0.5 ? 1 : 0);
+    activeBolts = [];
+    for (let i = 0; i < n; i++) activeBolts.push(spawnBolt(0.1 + Math.random() * 0.8));
+  }
+
+  function paintBolts(core, glow) {
+    if (boltFlash < 0.05) return;
+    activeBolts.forEach((bolt) => {
+      strokePoly(bolt.pts, glow, 16, Math.min(1, boltFlash * 0.75));
+      bolt.branches.forEach((b) => strokePoly(b, glow, 7, Math.min(1, boltFlash * 0.6)));
+      strokePoly(bolt.pts, core, 2.6, Math.min(1, boltFlash * 1.35));
+      bolt.branches.forEach((b) => strokePoly(b, core, 1.6, Math.min(1, boltFlash)));
+    });
+  }
+
+  function drawRain(color, count, lean) {
+    const n = skipHeavyFx ? Math.floor(count * 0.4) : count;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.1;
+    const speed = 180 + renderMotion * 420;
+    for (let i = 0; i < n; i++) {
+      const x = ((i * 137.3 + worldScroll * 90) % (w + 60)) - 30;
+      const y = ((i * 91.7 + worldScroll * speed) % (h + 40)) - 20;
+      const len = 12 + (i % 5) * 4 + renderMotion * 22;
+      ctx.globalAlpha = 0.12 + (i % 5) * 0.06;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x - lean, y + len);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
   function drawTelemetryPro() {
-    // Apex Telemetri — Pist ve yarış dinamiği sahnesi
-    ctx.fillStyle = "rgba(6, 10, 18, 0.72)";
+    ctx.fillStyle = "#07110e";
     ctx.fillRect(0, 0, w, h);
     const { cx, cy } = viewCenter();
     const v = renderMotion;
+    const horizon = horizonAt(cy);
+    const sky = ctx.createLinearGradient(0, 0, 0, horizon);
+    sky.addColorStop(0, "#04140f");
+    sky.addColorStop(1, "#0c2a20");
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, w, horizon + 2);
+
+    ctx.beginPath();
+    ctx.moveTo(cx, horizon);
+    ctx.lineTo(cx - w * 0.46, h + 20);
+    ctx.lineTo(0, h + 20);
+    ctx.lineTo(0, horizon);
+    ctx.closePath();
+    ctx.fillStyle = "#06140f";
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(cx, horizon);
+    ctx.lineTo(cx + w * 0.46, h + 20);
+    ctx.lineTo(w, h + 20);
+    ctx.lineTo(w, horizon);
+    ctx.closePath();
+    ctx.fill();
+
+    const scroll = worldScroll % 1;
+    ctx.strokeStyle = `hsla(${themeHue}, 90%, 58%, ${0.35 + v * 0.4})`;
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 8; i++) {
+      const t = (i / 8 + scroll * 0.35) % 1;
+      const y = perspY(horizon, t);
+      ctx.beginPath();
+      ctx.moveTo(cx - (18 + t * w * 0.22), y);
+      ctx.lineTo(cx + (18 + t * w * 0.22), y);
+      ctx.stroke();
+    }
 
     ctx.save();
-    // Alt telemetri dalgası
-    ctx.beginPath();
-    const waveY = h * 0.82;
-    ctx.moveTo(0, waveY);
-    for (let x = 0; x <= w; x += 24) {
-      const off = Math.sin(x * 0.015 + animT * 4) * (8 + v * 26);
-      ctx.lineTo(x, waveY + off);
-    }
-    ctx.strokeStyle = `hsla(${themeHue}, 90%, 55%, ${0.22 + v * 0.45})`;
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    // Merkez G-Kuvveti dairesi
     ctx.translate(cx, cy);
     ctx.beginPath();
-    ctx.arc(0, 0, 75 + v * 30, 0, Math.PI * 2);
-    ctx.strokeStyle = `hsla(${themeHue}, 80%, 60%, ${0.16 + v * 0.25})`;
-    ctx.lineWidth = 1;
+    ctx.arc(0, 0, 78 + v * 26, 0, Math.PI * 2);
+    ctx.strokeStyle = `hsla(${themeHue}, 85%, 62%, ${0.2 + v * 0.3})`;
     ctx.stroke();
-
-    const gx = Math.sin(animT * 2.2) * (18 + v * 38);
-    const gy = Math.cos(animT * 1.7) * (14 + v * 28);
+    const gx = Math.sin(animT * 2.2) * (16 + v * 34);
+    const gy = Math.cos(animT * 1.7) * (12 + v * 24);
     ctx.beginPath();
-    ctx.arc(gx, gy, 4, 0, Math.PI * 2);
-    ctx.fillStyle = `hsl(${themeHue + 30}, 100%, 65%)`;
-    ctx.shadowColor = `hsl(${themeHue + 30}, 100%, 65%)`;
-    ctx.shadowBlur = 8;
+    ctx.arc(gx, gy, 4.5, 0, Math.PI * 2);
+    ctx.fillStyle = `hsl(${themeHue + 28}, 100%, 64%)`;
+    ctx.shadowColor = `hsl(${themeHue + 28}, 100%, 64%)`;
+    ctx.shadowBlur = 12;
     ctx.fill();
     ctx.restore();
   }
 
   function drawStealthHud() {
-    // Gece Gezgini / Stealth OLED HUD
-    ctx.fillStyle = "rgba(0, 0, 0, 0.88)";
+    ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, w, h);
     const { cx, cy } = viewCenter();
     const v = renderMotion;
-
     ctx.save();
-    ctx.translate(cx, cy);
+    ctx.strokeStyle = `rgba(150, 205, 255, ${0.08 + v * 0.08})`;
+    ctx.lineWidth = 1;
+    const step = skipHeavyFx ? 72 : 48;
+    for (let x = 0; x < w; x += step) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, h);
+      ctx.stroke();
+    }
+    for (let y = 0; y < h; y += step) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(w, y);
+      ctx.stroke();
+    }
+    const arm = Math.min(w, h) * 0.16;
+    ctx.strokeStyle = `rgba(186, 220, 255, ${0.45 + v * 0.3})`;
+    ctx.lineWidth = 1.6;
+    const corners = [
+      [cx - arm, cy - arm, 1, 1],
+      [cx + arm, cy - arm, -1, 1],
+      [cx - arm, cy + arm, 1, -1],
+      [cx + arm, cy + arm, -1, -1],
+    ];
+    corners.forEach(([x, y, sx, sy]) => {
+      ctx.beginPath();
+      ctx.moveTo(x, y + sy * 22);
+      ctx.lineTo(x, y);
+      ctx.lineTo(x + sx * 22, y);
+      ctx.stroke();
+    });
     const lineW = Math.min(w * 0.38, 260);
-    const grad = ctx.createLinearGradient(-lineW, 0, lineW, 0);
+    const grad = ctx.createLinearGradient(cx - lineW, 0, cx + lineW, 0);
     grad.addColorStop(0, "rgba(255, 255, 255, 0)");
-    grad.addColorStop(0.5, `rgba(140, 200, 255, ${0.22 + v * 0.36})`);
+    grad.addColorStop(0.5, `rgba(140, 200, 255, ${0.28 + v * 0.4})`);
     grad.addColorStop(1, "rgba(255, 255, 255, 0)");
-
     ctx.beginPath();
-    ctx.moveTo(-lineW, 0);
-    ctx.lineTo(lineW, 0);
+    ctx.moveTo(cx - lineW, cy);
+    ctx.lineTo(cx + lineW, cy);
     ctx.strokeStyle = grad;
-    ctx.lineWidth = 1.5;
     ctx.stroke();
     ctx.restore();
   }
 
   function drawWeatherSky() {
-    // Canlı Hava Durumu & Açık Gökyüzü vizörü
+    const { cx, cy } = viewCenter();
+    const v = renderMotion;
     const grad = ctx.createLinearGradient(0, 0, 0, h);
-    grad.addColorStop(0, "rgba(8, 28, 56, 0.75)");
-    grad.addColorStop(0.55, "rgba(4, 16, 36, 0.65)");
-    grad.addColorStop(1, "rgba(2, 6, 16, 0.90)");
+    grad.addColorStop(0, "#12345f");
+    grad.addColorStop(0.45, "#0b2244");
+    grad.addColorStop(1, "#07111f");
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, w, h);
 
-    const { cx, cy } = viewCenter();
-    const v = renderMotion;
-
-    // Üstte canlı atmosferik güneş parıltısı
-    const sunGrad = ctx.createRadialGradient(cx, cy * 0.45, 10, cx, cy * 0.45, Math.min(w, h) * 0.55);
-    sunGrad.addColorStop(0, `rgba(255, 220, 120, ${0.18 + v * 0.22})`);
-    sunGrad.addColorStop(0.35, `rgba(40, 160, 255, ${0.12 + v * 0.15})`);
+    const sunY = cy * 0.42;
+    const sunGrad = ctx.createRadialGradient(cx, sunY, 8, cx, sunY, Math.min(w, h) * 0.5);
+    sunGrad.addColorStop(0, `rgba(255, 228, 150, ${0.55 + v * 0.2})`);
+    sunGrad.addColorStop(0.18, `rgba(255, 190, 90, ${0.22 + v * 0.12})`);
+    sunGrad.addColorStop(0.45, "rgba(40, 140, 220, 0.08)");
     sunGrad.addColorStop(1, "rgba(0, 0, 0, 0)");
     ctx.fillStyle = sunGrad;
     ctx.fillRect(0, 0, w, h);
 
-    // Atmosferik rüzgar akım çizgileri
+    const clouds = skipHeavyFx ? 4 : 7;
+    for (let i = 0; i < clouds; i++) {
+      const drift = ((worldScroll * (18 + i * 6) + i * 180) % (w + 280)) - 140;
+      const y = h * (0.12 + (i % 4) * 0.08);
+      const rw = 90 + (i % 3) * 40;
+      ctx.fillStyle = `rgba(230, 242, 255, ${0.08 + (i % 3) * 0.04})`;
+      ctx.beginPath();
+      ctx.ellipse(drift, y, rw, 22 + (i % 2) * 8, 0, 0, Math.PI * 2);
+      ctx.ellipse(drift + rw * 0.45, y + 6, rw * 0.7, 18, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
     ctx.save();
-    for (let i = 0; i < 6; i++) {
-      const lineY = cy * 0.3 + i * (h * 0.11);
-      const shift = ((animT * 90 * (1 + v * 2) + i * 160) % (w + 200)) - 100;
+    for (let i = 0; i < 5; i++) {
+      const lineY = cy * 0.55 + i * (h * 0.07);
+      const shift = ((worldScroll * (40 + v * 80) + i * 160) % (w + 240)) - 120;
       ctx.beginPath();
       ctx.moveTo(shift, lineY);
-      ctx.lineTo(shift + 140 + v * 120, lineY);
-      ctx.strokeStyle = `rgba(140, 215, 255, ${0.08 + v * 0.18})`;
-      ctx.lineWidth = 1.8;
-      ctx.setLineDash([12, 18]);
+      ctx.lineTo(shift + 120 + v * 90, lineY);
+      ctx.strokeStyle = `rgba(160, 220, 255, ${0.1 + v * 0.16})`;
+      ctx.lineWidth = 1.6;
+      ctx.setLineDash([10, 16]);
       ctx.stroke();
     }
     ctx.setLineDash([]);
@@ -2033,67 +2196,63 @@ const Scene = (() => {
   }
 
   function drawCyberStorm() {
-    // Siber Fırtına & Şimşek
-    ctx.fillStyle = "rgba(8, 4, 18, 0.78)";
-    ctx.fillRect(0, 0, w, h);
     const { cx, cy } = viewCenter();
     const v = renderMotion;
-
-    ctx.save();
-    ctx.translate(cx, cy);
-
-    // Merkez yüksek voltaj halkası
-    const r = Math.min(w, h) * 0.35;
-    ctx.beginPath();
-    ctx.arc(0, 0, r + Math.sin(animT * 8) * 6, 0, Math.PI * 2);
-    ctx.strokeStyle = `hsla(${themeHue}, 90%, 65%, ${0.20 + v * 0.35})`;
-    ctx.lineWidth = 2.5;
-    ctx.stroke();
-
-    // Anlık şimşek çatallaşmaları
-    if (Math.sin(animT * 12) > 0.65) {
-      ctx.beginPath();
-      ctx.moveTo(0, -r * 0.9);
-      let lx = 0, ly = -r * 0.9;
-      for (let s = 0; s < 5; s++) {
-        lx += (Math.random() - 0.5) * 40;
-        ly += (r * 0.35);
-        ctx.lineTo(lx, ly);
-      }
-      ctx.strokeStyle = "rgba(230, 180, 255, 0.85)";
-      ctx.lineWidth = 2;
-      ctx.shadowColor = "#e6b4ff";
-      ctx.shadowBlur = 12;
-      ctx.stroke();
+    const sky = ctx.createLinearGradient(0, 0, 0, h);
+    sky.addColorStop(0, "#14081f");
+    sky.addColorStop(0.55, "#0a0614");
+    sky.addColorStop(1, "#05030a");
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, w, h);
+    tickLightning(v > 0.45 ? 0.28 : 0.7);
+    if (boltFlash > 0.08) {
+      ctx.fillStyle = `rgba(190, 120, 255, ${boltFlash * 0.22})`;
+      ctx.fillRect(0, 0, w, h);
     }
-    ctx.restore();
+    drawRain("rgba(210, 170, 255, 0.7)", 48, 6);
+    paintBolts("#f4e8ff", "#c060ff");
+    ctx.beginPath();
+    ctx.arc(cx, cy, Math.min(w, h) * 0.32 + Math.sin(animT * 6) * 5, 0, Math.PI * 2);
+    ctx.strokeStyle = `hsla(${themeHue}, 90%, 66%, ${0.18 + v * 0.28})`;
+    ctx.lineWidth = 2;
+    ctx.stroke();
   }
 
   function drawDesertDune() {
-    // Çöl Rüzgarı & Gün Batımı
-    const grad = ctx.createLinearGradient(0, 0, 0, h);
-    grad.addColorStop(0, "rgba(28, 12, 4, 0.82)");
-    grad.addColorStop(0.6, "rgba(18, 8, 2, 0.75)");
-    grad.addColorStop(1, "rgba(6, 2, 0, 0.92)");
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, w, h);
-
     const { cx, cy } = viewCenter();
     const v = renderMotion;
-
-    ctx.save();
-    // Sıcak kum tepesi ufuk dalgası
-    const duneY = cy * 1.1;
+    const grad = ctx.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, "#2a1020");
+    grad.addColorStop(0.38, "#c45a18");
+    grad.addColorStop(0.55, "#f0a04a");
+    grad.addColorStop(1, "#6a3510");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+    const sun = ctx.createRadialGradient(cx, cy * 0.7, 8, cx, cy * 0.7, 90);
+    sun.addColorStop(0, "rgba(255, 236, 190, 0.95)");
+    sun.addColorStop(1, "rgba(255, 140, 40, 0)");
+    ctx.fillStyle = sun;
     ctx.beginPath();
-    ctx.moveTo(0, duneY);
-    for (let x = 0; x <= w; x += 30) {
-      const dy = Math.sin(x * 0.008 + animT * 1.2) * (14 + v * 20);
-      ctx.lineTo(x, duneY + dy);
-    }
-    ctx.strokeStyle = `rgba(255, 175, 50, ${0.28 + v * 0.35})`;
-    ctx.lineWidth = 3;
-    ctx.stroke();
-    ctx.restore();
+    ctx.arc(cx, cy * 0.7, 46, 0, Math.PI * 2);
+    ctx.fill();
+
+    const layers = [
+      { y: h * 0.58, amp: 28 + v * 16, color: "#c47a32", speed: 12 },
+      { y: h * 0.7, amp: 36 + v * 18, color: "#a85a22", speed: 22 },
+      { y: h * 0.84, amp: 22 + v * 10, color: "#7a3c14", speed: 34 },
+    ];
+    layers.forEach((layer) => {
+      ctx.beginPath();
+      ctx.moveTo(0, h + 20);
+      for (let x = 0; x <= w; x += 16) {
+        const dy = Math.sin(x * 0.008 + worldScroll * layer.speed * 0.05) * layer.amp;
+        ctx.lineTo(x, layer.y + dy);
+      }
+      ctx.lineTo(w, h + 20);
+      ctx.closePath();
+      ctx.fillStyle = layer.color;
+      ctx.fill();
+    });
   }
 
   function drawTeslaVision() {
@@ -2364,6 +2523,253 @@ const Scene = (() => {
     ctx.restore();
   }
 
+  function drawTree(x, groundY, scale, seed) {
+    const trunkH = 78 * scale;
+    const trunkW = Math.max(2, 9 * scale);
+    ctx.fillStyle = seed % 2 ? "#2a1a10" : "#3a2414";
+    ctx.fillRect(x - trunkW / 2, groundY - trunkH, trunkW, trunkH);
+    for (let layer = 0; layer < 3; layer++) {
+      const cw = (46 - layer * 8) * scale;
+      const ch = 34 * scale;
+      const top = groundY - trunkH * 0.72 - layer * 18 * scale;
+      ctx.beginPath();
+      ctx.moveTo(x, top - ch);
+      ctx.lineTo(x + cw, top + 6);
+      ctx.lineTo(x - cw, top + 6);
+      ctx.closePath();
+      const g = 70 + layer * 22 + (seed % 4) * 8;
+      ctx.fillStyle = `rgb(${12 + layer * 6}, ${g}, ${28 + layer * 8})`;
+      ctx.fill();
+    }
+  }
+
+  function drawYildirim() {
+    const v = renderMotion;
+    const sky = ctx.createLinearGradient(0, 0, 0, h);
+    sky.addColorStop(0, "#0c1424");
+    sky.addColorStop(0.45, "#101828");
+    sky.addColorStop(1, "#070b12");
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, w, h);
+    tickLightning(v > 0.4 ? 0.18 : 0.42);
+    if (boltFlash > 0.06) {
+      ctx.fillStyle = `rgba(225, 240, 255, ${boltFlash * 0.38})`;
+      ctx.fillRect(0, 0, w, h);
+    }
+    drawRain("rgba(200, 220, 245, 0.85)", 70, 4);
+    paintBolts("#ffffff", "#9fd4ff");
+    const ground = ctx.createLinearGradient(0, h * 0.72, 0, h);
+    ground.addColorStop(0, "rgba(8, 12, 20, 0)");
+    ground.addColorStop(1, `rgba(140, 190, 255, ${0.05 + boltFlash * 0.2})`);
+    ctx.fillStyle = ground;
+    ctx.fillRect(0, h * 0.7, w, h * 0.3);
+  }
+
+  function drawYol() {
+    const { cx, cy } = viewCenter();
+    const v = renderMotion;
+    const horizon = horizonAt(cy);
+    const sky = ctx.createLinearGradient(0, 0, 0, horizon);
+    sky.addColorStop(0, "#07111c");
+    sky.addColorStop(1, "#16304a");
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, w, h);
+    const haze = ctx.createLinearGradient(0, horizon - 30, 0, horizon + 40);
+    haze.addColorStop(0, "rgba(120, 190, 255, 0)");
+    haze.addColorStop(0.5, "rgba(160, 210, 255, 0.28)");
+    haze.addColorStop(1, "rgba(120, 190, 255, 0)");
+    ctx.fillStyle = haze;
+    ctx.fillRect(0, horizon - 30, w, 70);
+
+    ctx.beginPath();
+    ctx.moveTo(cx - 4, horizon);
+    ctx.lineTo(cx + 4, horizon);
+    ctx.lineTo(cx + w * 0.5, h + 30);
+    ctx.lineTo(cx - w * 0.5, h + 30);
+    ctx.closePath();
+    const asphalt = ctx.createLinearGradient(0, horizon, 0, h);
+    asphalt.addColorStop(0, "#2a313c");
+    asphalt.addColorStop(1, "#12161c");
+    ctx.fillStyle = asphalt;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(cx, horizon);
+    ctx.lineTo(cx - w * 0.16, h + 20);
+    ctx.lineTo(cx + w * 0.16, h + 20);
+    ctx.closePath();
+    ctx.fillStyle = `rgba(190, 220, 255, ${0.05 + v * 0.08})`;
+    ctx.fill();
+
+    const scroll = worldScroll % 1;
+    const marks = skipHeavyFx ? 10 : 16;
+    for (let i = 0; i < marks; i++) {
+      const t0 = (i / marks + scroll) % 1;
+      const t1 = Math.min(0.99, t0 + 0.035);
+      if (Math.floor(t0 * marks) % 2 === 0) continue;
+      const y0 = perspY(horizon, t0);
+      const y1 = perspY(horizon, t1);
+      const half = 2 + Math.pow(t0, 1.2) * 7;
+      ctx.fillStyle = `rgba(255, 214, 90, ${0.35 + t0 * 0.65})`;
+      ctx.beginPath();
+      ctx.moveTo(cx - half * 0.4, y0);
+      ctx.lineTo(cx + half * 0.4, y0);
+      ctx.lineTo(cx + half, y1);
+      ctx.lineTo(cx - half, y1);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    ctx.lineWidth = 2;
+    [[-1, "rgba(255,255,255,0.75)"], [1, "rgba(255,255,255,0.75)"]].forEach(([side, color]) => {
+      ctx.beginPath();
+      ctx.moveTo(cx + side * 8, horizon);
+      ctx.lineTo(cx + side * w * 0.46, h + 10);
+      ctx.strokeStyle = color;
+      ctx.stroke();
+    });
+
+    const posts = skipHeavyFx ? 8 : 12;
+    for (let i = 0; i < posts; i++) {
+      const t = (i / posts + scroll * 0.85) % 1;
+      const y = perspY(horizon, t);
+      const spread = 16 + Math.pow(t, 1.15) * w * 0.5;
+      const ph = 8 + t * 36;
+      [-1, 1].forEach((side) => {
+        const x = cx + side * spread;
+        ctx.fillStyle = side < 0 ? "#ff3b30" : "#ffe14a";
+        ctx.globalAlpha = 0.25 + t * 0.75;
+        ctx.fillRect(x - 2, y - ph, 4, ph);
+        ctx.fillRect(x - 5, y - ph, 10, 4);
+      });
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawOrman() {
+    const { cx, cy } = viewCenter();
+    const horizon = horizonAt(cy);
+    const sky = ctx.createLinearGradient(0, 0, 0, h);
+    sky.addColorStop(0, "#0c1c14");
+    sky.addColorStop(0.4, "#143222");
+    sky.addColorStop(1, "#07140d");
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, w, h);
+
+    const shafts = skipHeavyFx ? 2 : 4;
+    for (let i = 0; i < shafts; i++) {
+      const x = w * (0.18 + i * 0.2) + Math.sin(worldScroll + i) * 20;
+      const beam = ctx.createLinearGradient(x, 0, x + 40, h);
+      beam.addColorStop(0, "rgba(190, 255, 170, 0.14)");
+      beam.addColorStop(1, "rgba(190, 255, 170, 0)");
+      ctx.fillStyle = beam;
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x + 36, 0);
+      ctx.lineTo(x + 90, h);
+      ctx.lineTo(x - 20, h);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    ctx.beginPath();
+    ctx.moveTo(cx - 2, horizon + 8);
+    ctx.lineTo(cx + 2, horizon + 8);
+    ctx.lineTo(cx + w * 0.28, h + 20);
+    ctx.lineTo(cx - w * 0.28, h + 20);
+    ctx.closePath();
+    ctx.fillStyle = "#1a2218";
+    ctx.fill();
+
+    const scroll = worldScroll % 1;
+    const count = skipHeavyFx ? 8 : 12;
+    const trees = [];
+    for (let i = 0; i < count; i++) {
+      const t = (i / count + scroll) % 1;
+      trees.push({ t, side: -1, seed: i * 3 + 1 });
+      trees.push({ t: (t + 0.04) % 1, side: 1, seed: i * 3 + 2 });
+    }
+    trees.sort((a, b) => a.t - b.t);
+    trees.forEach((tree) => {
+      const y = perspY(horizon, tree.t);
+      const scale = 0.18 + Math.pow(tree.t, 1.35) * 1.15;
+      const spread = 40 + Math.pow(tree.t, 1.2) * w * 0.42;
+      drawTree(cx + tree.side * spread, y + 8, scale, tree.seed);
+    });
+  }
+
+  function pixelDisc(x, y, r, color) {
+    ctx.fillStyle = color;
+    const step = 4;
+    for (let yy = -r; yy <= r; yy += step) {
+      const span = Math.sqrt(Math.max(0, r * r - yy * yy));
+      ctx.fillRect(Math.round(x - span), Math.round(y + yy), Math.max(step, Math.round(span * 2)), step);
+    }
+  }
+
+  function drawAtari() {
+    const { cx, cy } = viewCenter();
+    const horizon = Math.max(h * 0.34, Math.min(cy * 0.55, h * 0.46));
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    const sky = ctx.createLinearGradient(0, 0, 0, horizon);
+    sky.addColorStop(0, "#140018");
+    sky.addColorStop(1, "#3a0048");
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = "#07000c";
+    ctx.fillRect(0, horizon, w, h - horizon);
+
+    pixelDisc(cx, horizon - 18, 54, "#ff4ad8");
+    pixelDisc(cx, horizon - 18, 34, "#ffd6f4");
+    pixelDisc(cx, horizon - 18, 14, "#fff");
+
+    ctx.fillStyle = "#2a0050";
+    ctx.beginPath();
+    ctx.moveTo(0, horizon + 8);
+    const peaks = skipHeavyFx ? 5 : 8;
+    for (let i = 0; i <= peaks; i++) {
+      const x = (i / peaks) * w;
+      const peak = horizon - 18 - ((i * 37) % 5) * 10;
+      ctx.lineTo(x, i % 2 ? horizon + 6 : peak);
+    }
+    ctx.lineTo(w, horizon + 8);
+    ctx.closePath();
+    ctx.fill();
+
+    const scroll = worldScroll % 1;
+    const rows = skipHeavyFx ? 8 : 12;
+    for (let i = 0; i < rows; i++) {
+      const t = (i / rows + scroll) % 1;
+      const y = Math.round(perspY(horizon, t));
+      ctx.fillStyle = i % 2 ? "#00f6ff" : "#ff2bd6";
+      ctx.globalAlpha = 0.35 + t * 0.6;
+      ctx.fillRect(0, y, w, 2);
+    }
+    ctx.globalAlpha = 1;
+    ctx.lineWidth = 2;
+    for (let i = -7; i <= 7; i++) {
+      ctx.beginPath();
+      ctx.moveTo(Math.round(cx), Math.round(horizon));
+      ctx.lineTo(Math.round(cx + i * w * 0.11), h);
+      ctx.strokeStyle = i % 2 ? "rgba(0, 246, 255, 0.8)" : "rgba(255, 43, 214, 0.8)";
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = "rgba(0, 0, 0, 0.22)";
+    const scan = skipHeavyFx ? 8 : 4;
+    for (let y = 0; y < h; y += scan) ctx.fillRect(0, y, w, 1);
+
+    const stars = skipHeavyFx ? 12 : 24;
+    ctx.fillStyle = "#fff";
+    for (let i = 0; i < stars; i++) {
+      const sx = ((i * 97) % Math.max(1, Math.floor(w))) ;
+      const sy = (i * 53) % Math.max(1, Math.floor(horizon - 20));
+      if ((i + Math.floor(worldScroll * 4)) % 3 === 0) ctx.fillRect(sx, sy, 2, 2);
+    }
+    ctx.restore();
+  }
+
   const DRAWERS = {
     glow: drawGlow, aurora: drawGlow,
     particles: drawParticlesMode, vortex: drawVortex, horizon: drawHorizon,
@@ -2382,9 +2788,16 @@ const Scene = (() => {
     "map-3d": drawMap3D,
     "cyber-storm": drawCyberStorm, "desert-dune": drawDesertDune,
     "telemetry-pro": drawTelemetryPro, "stealth-hud": drawStealthHud,
+    yildirim: drawYildirim, yol: drawYol, orman: drawOrman, atari: drawAtari,
   };
 
   const MODES = [
+    { key: "stealth-hud", labelKey: "visualStealthHud", group: "sport", gauge: "digital" },
+    { key: "night-city", labelKey: "visualNightCity", group: "neon", gauge: "digital" },
+    { key: "deep-ocean", labelKey: "visualDeepOcean", group: "ambient", gauge: "digital" },
+    { key: "cyber-storm", labelKey: "visualCyberStorm", group: "sport", gauge: "digital" },
+    { key: "warp", labelKey: "visualWarp", group: "sport", gauge: "digital" },
+    { key: "telemetry-pro", labelKey: "visualTelemetryPro", group: "sport", gauge: "digital" },
     { key: "weather-sky", labelKey: "visualWeatherSky", group: "ambient", gauge: "digital" },
     { key: "map-focus", labelKey: "visualMapFocus", group: "ambient", gauge: "digital" },
     { key: "map-3d", labelKey: "visualMap3D", group: "ambient", gauge: "digital" },
@@ -2414,9 +2827,17 @@ const Scene = (() => {
     const dt = lastFrameAt ? Math.min(0.05, (now - lastFrameAt) / 1000) : 0.016;
     lastFrameAt = now;
     frameN++;
+    frameDt = dt;
+    advanceMotion();
+    worldScroll = (worldScroll + dt * (0.55 + renderMotion * 6.4)) % 1000;
     animT += dt * (0.04 + renderMotion * 2.4);
     skipHeavyFx = dt > 0.028;
     try {
+      ctx.globalAlpha = 1;
+      ctx.shadowBlur = 0;
+      ctx.shadowColor = "transparent";
+      ctx.globalCompositeOperation = "source-over";
+      ctx.setLineDash([]);
       const draw = DRAWERS[mode] || drawGlow;
       draw();
       drawBoostRipples(dt);

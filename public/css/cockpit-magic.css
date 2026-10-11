@@ -669,3 +669,84 @@
   }
 }
 
+/* 15. SINGLE-GAUGE PREMIUM THEMES ACCENTS */
+/* Stealth OLED: Pure minimal darkness & white laser neon */
+html[data-visual="stealth-hud"] .ring-fill,
+[data-visual="stealth-hud"] .ring-fill {
+  stroke: #ffffff !important;
+  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.8)) !important;
+}
+html[data-visual="stealth-hud"] .speed-number,
+[data-visual="stealth-hud"] .speed-number {
+  color: #ffffff !important;
+  text-shadow: 0 0 20px rgba(255, 255, 255, 0.6) !important;
+}
+html[data-visual="stealth-hud"] .speed-unit,
+[data-visual="stealth-hud"] .speed-unit {
+  color: #94a3b8 !important;
+}
+
+/* Night City: Cyberpunk Amber / Cyan */
+html[data-visual="night-city"] .ring-fill,
+[data-visual="night-city"] .ring-fill {
+  stroke: #f59e0b !important;
+  filter: drop-shadow(0 0 12px #f59e0b) !important;
+}
+html[data-visual="night-city"] .speed-number,
+[data-visual="night-city"] .speed-number {
+  color: #ffffff !important;
+  text-shadow: 0 0 20px rgba(245, 158, 11, 0.6) !important;
+}
+html[data-visual="night-city"] .speed-unit,
+[data-visual="night-city"] .speed-unit {
+  color: #f59e0b !important;
+}
+
+/* Deep Ocean: Sapphire Oceanic Luxury */
+html[data-visual="deep-ocean"] .ring-fill,
+[data-visual="deep-ocean"] .ring-fill {
+  stroke: #00b4d8 !important;
+  filter: drop-shadow(0 0 14px #00b4d8) !important;
+}
+html[data-visual="deep-ocean"] .speed-number,
+[data-visual="deep-ocean"] .speed-number {
+  color: #ffffff !important;
+  text-shadow: 0 0 20px rgba(0, 180, 216, 0.7) !important;
+}
+html[data-visual="deep-ocean"] .speed-unit,
+[data-visual="deep-ocean"] .speed-unit {
+  color: #00b4d8 !important;
+}
+
+/* Cyber Storm: High Voltage Electric Violet */
+html[data-visual="cyber-storm"] .ring-fill,
+[data-visual="cyber-storm"] .ring-fill {
+  stroke: #a855f7 !important;
+  filter: drop-shadow(0 0 14px #a855f7) !important;
+}
+html[data-visual="cyber-storm"] .speed-number,
+[data-visual="cyber-storm"] .speed-number {
+  color: #ffffff !important;
+  text-shadow: 0 0 20px rgba(168, 85, 247, 0.7) !important;
+}
+html[data-visual="cyber-storm"] .speed-unit,
+[data-visual="cyber-storm"] .speed-unit {
+  color: #a855f7 !important;
+}
+
+/* Warp Speed: Relativistic Magenta Core */
+html[data-visual="warp"] .ring-fill,
+[data-visual="warp"] .ring-fill {
+  stroke: #ec4899 !important;
+  filter: drop-shadow(0 0 14px #ec4899) !important;
+}
+html[data-visual="warp"] .speed-number,
+[data-visual="warp"] .speed-number {
+  color: #ffffff !important;
+  text-shadow: 0 0 20px rgba(236, 72, 153, 0.7) !important;
+}
+html[data-visual="warp"] .speed-unit,
+[data-visual="warp"] .speed-unit {
+  color: #ec4899 !important;
+}
+
