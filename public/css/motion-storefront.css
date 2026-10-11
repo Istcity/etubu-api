@@ -111,6 +111,300 @@ body.motion-page {
   padding: 0 24px;
 }
 
+/* ==========================================================================
+   MAGIC UI — SIGNATURE BACKGROUNDS & VISUAL EFFECTS
+   ========================================================================== */
+
+/* 1. Magic UI Retro Grid (3D Perspective Grid Background) */
+.magic-retro-grid {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  opacity: 0.35;
+  [perspective:200px];
+  z-index: 0;
+}
+
+.magic-retro-grid-plane {
+  position: absolute;
+  inset: 0;
+  background-image: 
+    linear-gradient(to right, rgba(0, 240, 255, 0.15) 1px, transparent 0),
+    linear-gradient(to bottom, rgba(0, 240, 255, 0.15) 1px, transparent 0);
+  background-size: 55px 55px;
+  transform: rotateX(65deg) scale(2);
+  transform-origin: 50% 0%;
+  animation: magic-grid-move 15s linear infinite;
+  mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, transparent 80%);
+  -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, transparent 80%);
+}
+
+@keyframes magic-grid-move {
+  0% { transform: rotateX(65deg) scale(2) translateY(0); }
+  100% { transform: rotateX(65deg) scale(2) translateY(55px); }
+}
+
+/* 2. Magic UI Meteors (Shooting Stars Effect) */
+.magic-meteors-container {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.magic-meteor {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  height: 2px;
+  width: 2px;
+  border-radius: 9999px;
+  background-color: var(--cyan);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2);
+  transform: rotate(215deg);
+  animation: magic-meteor-anim 5s linear infinite;
+}
+
+.magic-meteor::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 50px;
+  height: 1px;
+  background: linear-gradient(to right, var(--cyan), transparent);
+}
+
+@keyframes magic-meteor-anim {
+  0% {
+    transform: rotate(215deg) translateX(0);
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(215deg) translateX(-500px);
+    opacity: 0;
+  }
+}
+
+/* 3. Magic UI Border Beam (Orbiting Laser Light Border) */
+.magic-border-beam-card {
+  position: relative;
+  border-radius: 28px;
+  overflow: hidden;
+  padding: 1px;
+}
+
+.magic-border-beam {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1.5px solid transparent;
+  mask: linear-gradient(transparent, transparent), linear-gradient(white, white);
+  mask-clip: padding-box, border-box;
+  mask-composite: intersect;
+  -webkit-mask: linear-gradient(transparent, transparent), linear-gradient(white, white);
+  -webkit-mask-clip: padding-box, border-box;
+  -webkit-mask-composite: source-in;
+}
+
+.magic-border-beam::after {
+  content: '';
+  position: absolute;
+  aspect-ratio: 1;
+  width: 250px;
+  background: linear-gradient(to left, var(--cyan), var(--violet), transparent);
+  offset-anchor: 90% 50%;
+  offset-path: rect(0 auto auto 0 round 28px);
+  animation: magic-beam-spin 8s infinite linear;
+}
+
+@keyframes magic-beam-spin {
+  100% {
+    offset-distance: 100%;
+  }
+}
+
+/* 4. Magic UI Shimmer Button */
+.magic-shimmer-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 14px 32px;
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  font-weight: 700;
+  border-radius: 999px;
+  color: #ffffff;
+  background: #030712;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  cursor: pointer;
+  overflow: hidden;
+  text-decoration: none;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 0 20px rgba(0, 240, 255, 0.2), inset 0 0 12px rgba(255, 255, 255, 0.1);
+}
+
+.magic-shimmer-btn::before {
+  content: '';
+  position: absolute;
+  inset: -200%;
+  background: conic-gradient(
+    from 0deg at 50% 50%,
+    transparent 0deg,
+    transparent 60deg,
+    var(--cyan) 120deg,
+    var(--violet) 180deg,
+    transparent 240deg
+  );
+  animation: magic-shimmer-rotate 4s linear infinite;
+  z-index: 0;
+}
+
+.magic-shimmer-btn::after {
+  content: '';
+  position: absolute;
+  inset: 1.5px;
+  border-radius: inherit;
+  background: linear-gradient(180deg, #0d1629 0%, #030712 100%);
+  z-index: 1;
+  transition: background 0.2s ease;
+}
+
+.magic-shimmer-btn:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 0 35px rgba(0, 240, 255, 0.5), inset 0 0 15px rgba(255, 255, 255, 0.2);
+}
+
+.magic-shimmer-btn > * {
+  position: relative;
+  z-index: 2;
+}
+
+@keyframes magic-shimmer-rotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* 5. Magic UI Bento Grid (Apple Style Modular Layout) */
+.magic-bento-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  width: 100%;
+  margin-top: 36px;
+}
+
+@media (max-width: 900px) {
+  .magic-bento-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.magic-bento-card {
+  position: relative;
+  background: rgba(13, 22, 41, 0.65);
+  border: 1px solid var(--border-subtle);
+  border-radius: 24px;
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.magic-bento-card.col-span-2 {
+  grid-column: span 2;
+}
+
+@media (max-width: 900px) {
+  .magic-bento-card.col-span-2 {
+    grid-column: span 1;
+  }
+}
+
+.magic-bento-card:hover {
+  border-color: rgba(0, 240, 255, 0.4);
+  box-shadow: 0 20px 40px -15px rgba(0, 240, 255, 0.25);
+  transform: translateY(-4px);
+}
+
+.magic-bento-bg-glow {
+  position: absolute;
+  top: -50px;
+  right: -50px;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0, 240, 255, 0.15) 0%, transparent 70%);
+  pointer-events: none;
+  transition: transform 0.3s ease;
+}
+
+.magic-bento-card:hover .magic-bento-bg-glow {
+  transform: scale(1.4);
+}
+
+/* 6. Magic UI Infinite Marquee (Continuous Smooth Proof Carousel) */
+.magic-marquee-section {
+  width: 100%;
+  overflow: hidden;
+  position: relative;
+  padding: 24px 0;
+  mask-image: linear-gradient(to right, transparent 0%, black 15%, black 85%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, black 15%, black 85%, transparent 100%);
+  margin: 32px 0 48px;
+}
+
+.magic-marquee-track {
+  display: flex;
+  gap: 20px;
+  width: max-content;
+  animation: magic-marquee-scroll 25s linear infinite;
+}
+
+.magic-marquee-track:hover {
+  animation-play-state: paused;
+}
+
+.magic-marquee-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 22px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
+  font-family: var(--font-mono);
+  font-size: 0.84rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  backdrop-filter: blur(10px);
+  transition: all 0.2s ease;
+}
+
+.magic-marquee-pill:hover {
+  background: rgba(0, 240, 255, 0.1);
+  border-color: var(--cyan);
+  color: #ffffff;
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.2);
+}
+
+@keyframes magic-marquee-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
 /* Navbar */
 .motion-nav {
   position: sticky;

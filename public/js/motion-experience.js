@@ -70,7 +70,27 @@
       this.init3DTilt();
       this.initSplitTelemetry();
       this.initAmbientLighting();
+      this.initMeteors();
       this.initSecurityShield();
+    }
+
+    /* ----------------------------------------------------
+       0. MAGIC UI METEORS GENERATOR
+       ---------------------------------------------------- */
+    initMeteors() {
+      const container = document.getElementById('meteorsContainer');
+      if (!container) return;
+
+      const count = 24;
+      for (let i = 0; i < count; i++) {
+        const meteor = document.createElement('span');
+        meteor.className = 'magic-meteor';
+        meteor.style.top = `${Math.random() * 80}%`;
+        meteor.style.left = `${Math.random() * 100}%`;
+        meteor.style.animationDelay = `${(Math.random() * 7).toFixed(2)}s`;
+        meteor.style.animationDuration = `${(Math.random() * 5 + 3).toFixed(2)}s`;
+        container.appendChild(meteor);
+      }
     }
 
     /* ----------------------------------------------------
