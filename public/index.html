@@ -120,8 +120,8 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:ital,wght@0,600;0,700;1,700&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=Michroma&family=Orbitron:wght@600;700;800;900&family=Rajdhani:wght@600;700&family=Press+Start+2P&family=Share+Tech+Mono&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css?v=20260921d" />
-  <link rel="stylesheet" href="css/cockpit-magic.css?v=20261011_magicui" />
+  <link rel="stylesheet" href="css/style.css?v=20261011_oem_v4" />
+  <link rel="stylesheet" href="css/cockpit-magic.css?v=20261011_oem_v4" />
   <script>
     (function () {
       try {
@@ -427,9 +427,9 @@
           <div class="speed-limit-badge" id="speedLimitBadge" hidden aria-label="Speed limit">
             <span class="speed-limit-value" id="speedLimitValue">—</span>
           </div>
-          <div class="speed-gauge-wrap" id="speedGaugeWrap" data-visual="glow" data-gauge="digital" role="button" tabindex="0" aria-label="Gauge screen">
+          <div class="speed-gauge-wrap" id="speedGaugeWrap" data-visual="taycan" data-gauge="dual" data-dual-theme="taycan" role="button" tabindex="0" aria-label="Gauge screen">
             <!-- Ekran 1: Dijital halka -->
-            <div class="gauge-screen gauge-screen--digital" data-screen="digital">
+            <div class="gauge-screen gauge-screen--digital" data-screen="digital" hidden>
               <svg class="speed-ring" viewBox="0 0 320 320" aria-hidden="true">
                 <defs>
                   <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -453,7 +453,7 @@
             </div>
 
             <!-- Ekran 2: Çift Kadran (Dual-Gauge Cluster: Hız + Güç/kW & Regen) -->
-            <div class="gauge-screen gauge-screen--dual" data-screen="dual" hidden>
+            <div class="gauge-screen gauge-screen--dual" data-screen="dual">
               <div class="dual-gauge-cluster" id="dualCluster">
                 <!-- Sol Kadran: Hız Göstergesi (Speedometer) -->
                 <div class="gauge-dial gauge-dial--speed" id="dualSpeedDial">
@@ -474,7 +474,7 @@
 
                 <!-- Merkez: Durum & Vites Köprüsü -->
                 <div class="dual-center-bridge" id="dualBridge">
-                  <div class="dual-bridge-pill" id="dualDriveMode">PLAID</div>
+                  <div class="dual-bridge-pill" id="dualDriveMode">TAYCAN</div>
                   <div class="dual-bridge-gear" id="dualGear">D</div>
                   <div class="dual-bridge-gmeter" id="dualGmeter">
                     <span class="g-bar g-bar--regen" id="gBarRegen" title="Regen"></span>
@@ -554,8 +554,8 @@
           </div>
 
           <div class="gauge-dots" id="gaugeDots" role="tablist" aria-label="Gauge screens">
-            <button type="button" class="gauge-dot active" data-gauge-goto="digital" aria-label="Digital" title="Digital"></button>
-            <button type="button" class="gauge-dot" data-gauge-goto="dual" aria-label="Dual Gauge" title="Dual Gauge (Çift Kadran)"></button>
+            <button type="button" class="gauge-dot" data-gauge-goto="digital" aria-label="Digital" title="Digital"></button>
+            <button type="button" class="gauge-dot active" data-gauge-goto="dual" aria-label="Dual Gauge" title="Dual Gauge (Çift Kadran)"></button>
             <button type="button" class="gauge-dot" data-gauge-goto="analog" aria-label="Analog" title="Analog"></button>
             <button type="button" class="gauge-dot" data-gauge-goto="minimal" aria-label="Minimal" title="Minimal"></button>
             <button type="button" class="gauge-dot" data-gauge-goto="bars" aria-label="Bars" title="Bars"></button>
@@ -870,23 +870,23 @@
     </div>
   </section>
 
-  <script src="js/car-browser.js?v=20260920d"></script>
-  <script src="js/i18n.js?v=20260921a"></script>
-  <script src="js/gps-tracker.js?v=20260920d"></script>
-  <script src="js/identity.js?v=20260920d"></script>
-  <script src="js/audio-engine.js?v=20260920d"></script>
-  <script src="js/warn-voice.js?v=20260920d"></script>
-  <script src="js/obd.js?v=20260920d"></script>
-  <script src="js/music-hub.js?v=20260920d"></script>
-  <script src="js/scene.js?v=20260921c"></script>
-  <script src="js/mini-map.js?v=20260920d"></script>
-  <script src="js/radar-alert.js?v=20260920d"></script>
-  <script src="js/osm-hazards.js?v=20260920d"></script>
-  <script src="js/route-guard.js?v=20260920d"></script>
-  <script src="js/ads.js?v=20260920d"></script>
-  <script src="js/paddle-checkout.js?v=20260920d"></script>
-  <script src="js/paywall.js?v=20260920d"></script>
-  <script src="js/picker.js?v=20260920d"></script>
-  <script src="js/app.js?v=20261011_magicui"></script>
+  <script src="js/car-browser.js?v=20261011_oem_v4"></script>
+  <script src="js/i18n.js?v=20261011_oem_v4"></script>
+  <script src="js/gps-tracker.js?v=20261011_oem_v4"></script>
+  <script src="js/identity.js?v=20261011_oem_v4"></script>
+  <script src="js/audio-engine.js?v=20261011_oem_v4"></script>
+  <script src="js/warn-voice.js?v=20261011_oem_v4"></script>
+  <script src="js/obd.js?v=20261011_oem_v4"></script>
+  <script src="js/music-hub.js?v=20261011_oem_v4"></script>
+  <script src="js/scene.js?v=20261011_oem_v4"></script>
+  <script src="js/mini-map.js?v=20261011_oem_v4"></script>
+  <script src="js/radar-alert.js?v=20261011_oem_v4"></script>
+  <script src="js/osm-hazards.js?v=20261011_oem_v4"></script>
+  <script src="js/route-guard.js?v=20261011_oem_v4"></script>
+  <script src="js/ads.js?v=20261011_oem_v4"></script>
+  <script src="js/paddle-checkout.js?v=20261011_oem_v4"></script>
+  <script src="js/paywall.js?v=20261011_oem_v4"></script>
+  <script src="js/picker.js?v=20261011_oem_v4"></script>
+  <script src="js/app.js?v=20261011_oem_v4"></script>
 </body>
 </html>

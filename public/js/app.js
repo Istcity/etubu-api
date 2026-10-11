@@ -449,9 +449,15 @@
   }
 
   function loadGaugeScreen() {
-    let saved = "digital";
+    const activeVisual = visualSelect?.value || prefGet("visual") || DEFAULT_VISUAL();
+    const meta = Scene.getModeMeta?.(activeVisual);
+    if (meta?.gauge && GAUGE_SCREENS.includes(meta.gauge)) {
+      setGaugeScreen(meta.gauge, false);
+      return;
+    }
+    let saved = "dual";
     try {
-      saved = prefGet("gauge") || localStorage.getItem(GAUGE_KEY) || "digital";
+      saved = prefGet("gauge") || localStorage.getItem(GAUGE_KEY) || "dual";
     } catch (_) {}
     setGaugeScreen(saved, false);
   }
@@ -2598,14 +2604,16 @@
 
     // Visual theme
     const visualRaw = prefGet("visual");
+    let initialKey = DEFAULT_VISUAL();
     if (visualRaw && visualSelect) {
       const validVis = new Set([...visualSelect.options].map((o) => o.value));
       const key = visualRaw === "aurora" ? "glow" : visualRaw;
       if (validVis.has(key) && (unlocked() || key === DEFAULT_VISUAL())) {
-        visualSelect.value = key;
-        applyVisualTheme(key);
+        initialKey = key;
       }
     }
+    if (visualSelect) visualSelect.value = initialKey;
+    applyVisualTheme(initialKey);
 
     // Mute
     const muteRaw = prefGet("mute");
