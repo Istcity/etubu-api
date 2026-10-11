@@ -59,6 +59,139 @@
     ]
   }
   </script>
+  <meta name="application-name" content="ETUBU" />
+  <meta name="apple-mobile-web-app-title" content="ETUBU" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+
+  <link rel="canonical" href="https://etubu.com/" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <link rel="apple-touch-icon" href="/assets/brand/AppIcon-1024.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/assets/brand/app-icon.png" />
+  <link rel="icon" type="image/png" href="/assets/brand/logo-dark.png" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="ETUBU" />
+  <meta property="og:locale" content="tr_TR" />
+  <meta property="og:locale:alternate" content="en_US" />
+  <meta property="og:title" content="ETUBU — Elektrikli Araç Sürüş Sesleri | GPS’e Senkron Motor Sesi" />
+  <meta property="og:description" content="GPS hızına tam senkron V8, Taycan, Formula 1 ve fütüristik EV sesleri. Tesla ve tüm elektrikli araçlarla tam uyumlu." />
+  <meta property="og:url" content="https://etubu.com/" />
+  <meta property="og:image" content="https://etubu.com/assets/brand/logo-horizontal.png" />
+  <meta property="og:image:alt" content="ETUBU Elektrikli Araç Sürüş Sesleri" />
+
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="ETUBU — Elektrikli Araç Sürüş Sesleri | GPS Motor Sesi" />
+  <meta name="twitter:description" content="GPS hızına tam senkron motor sesleri. Tesla tarayıcısında ve tüm telefonlarda çalışır." />
+  <meta name="twitter:image" content="https://etubu.com/assets/brand/logo-horizontal.png" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://etubu.com/#organization",
+        "name": "ETUBU",
+        "url": "https://etubu.com/",
+        "logo": "https://etubu.com/assets/brand/logo-dark.png",
+        "description": "GPS hızına senkron elektrikli araç motor ve sürüş sesleri platformu."
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://etubu.com/#website",
+        "url": "https://etubu.com/",
+        "name": "ETUBU — Elektrikli Araç Sürüş Sesleri",
+        "publisher": { "@id": "https://etubu.com/#organization" },
+        "inLanguage": ["tr-TR", "en-US", "de-DE", "fr-FR", "es-ES"]
+      },
+      {
+        "@type": "WebApplication",
+        "@id": "https://etubu.com/#app",
+        "name": "ETUBU — GPS Sürüş Sesleri",
+        "url": "https://etubu.com/",
+        "applicationCategory": "MultimediaApplication",
+        "operatingSystem": "Tesla Browser, iOS Safari, Android Chrome, Web",
+        "description": "Elektrikli aracınıza gerçek zamanlı GPS hızına senkron motor sesleri ekleyin. Tesla, Porsche Taycan, V8, F1 sesleri.",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD",
+          "description": "Tüm sesler ve görsel temalar ücretsizdir"
+        }
+      },
+      {
+        "@type": "FAQPage",
+        "@id": "https://etubu.com/#faq",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "Elektrikli araçlarda ETUBU motor sesi nasıl çalışır?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "ETUBU, aracınızdaki veya telefonunuzdaki GPS sensöründen gelen anlık hız verisini okur. Hızlandıkça motor devri ve ses şiddeti orantılı artar, yavaşladıkça motor rölantiye döner."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Tesla araçlarında ETUBU nasıl kullanılır?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Tesla dokunmatik ekranındaki internet tarayıcısını açıp etubu.com adresine girerek BAŞLAT butonuna basmanız yeterlidir. Model 3, Model Y, Model S ve Model X ekranlarıyla tam uyumludur."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Hangi motor sesleri bulunmaktadır?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Tesla Plaid, Porsche Taycan, Amerikan V8 Muscle, Twin-Turbo Boxer, Formula 1 V10, Superbike 1200 RR ve Sci-Fi Warp gibi karakteristik ses profilleri mevcuttur."
+            }
+          }
+        ]
+      }
+    ]
+  }
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:ital,wght@0,600;0,700;1,700&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=Michroma&family=Orbitron:wght@600;700;800;900&family=Rajdhani:wght@600;700&family=Share+Tech+Mono&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css?v=20260827b" />
+  <script>
+    (function () {
+      try {
+        if (window.__ETUBU_NATIVE_CLUSTER__) return;
+        if (window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform()) return;
+        var q = location.search || "";
+        if (/skipIntro=1|intro=0/.test(q)) return;
+        try { if (sessionStorage.getItem("etubu_intro_seen") === "1") return; } catch (eS) {}
+        var consent = null;
+        try {
+          var raw = localStorage.getItem("etubu_consent");
+          if (raw) consent = JSON.parse(raw);
+        } catch (eC) {}
+        if (!consent) {
+          try {
+            var m = document.cookie.match(/(?:^|; )etubu_consent=([^;]*)/);
+            if (m) consent = JSON.parse(decodeURIComponent(m[1]));
+          } catch (eC2) {}
+        }
+        if (!consent) return;
+        var seen = false;
+        if (consent.preferences) {
+          try { seen = localStorage.getItem("etubu_intro_seen") === "1"; } catch (e0) {}
+          if (!seen) {
+            try { seen = document.cookie.indexOf("etubu_intro_seen=1") !== -1; } catch (e1) {}
+          }
+        }
+        if (seen) return;
+        /* Intro yalnızca JS bağlandıktan sonra açılır — erken FOUC Atla/İleri’yi kilitler. */
+      } catch (e) {}
+    })();
+  </script>
+  <script src="js/etubu-native-shim.js?v=20260728a"></script>
+  <script src="js/config.js?v=20260814a"></script>
+  <script src="js/consent.js?v=20260816a"></script>
+  <!-- Yandex.RTB: loaded after advertising consent in ads.js -->
 </head>
 <body class="motion-page">
   <!-- Dynamic Ambient Glow Orbs (motion.so lighting) -->
