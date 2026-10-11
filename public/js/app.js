@@ -724,6 +724,12 @@
     if (meta?.gauge && GAUGE_SCREENS.includes(meta.gauge)) {
       setGaugeScreen(meta.gauge, false);
     }
+    if (meta?.gauge === "dual" || ["taycan", "plaid", "bmw-m", "amg", "nevera", "tron", "redline", "eco", "telemetry-pro", "cyber-storm"].includes(modeKey)) {
+      speedGaugeWrap?.setAttribute("data-dual-theme", modeKey);
+      if (dualDriveMode) dualDriveMode.textContent = modeKey.toUpperCase();
+    } else {
+      speedGaugeWrap?.removeAttribute("data-dual-theme");
+    }
     setSpeedColors(hudDisplayKmh, readMaxKmh());
     document.querySelectorAll("[data-theme-goto]").forEach((btn) => {
       btn.classList.toggle("is-on", btn.dataset.themeGoto === modeKey);
@@ -2435,31 +2441,17 @@
   document.querySelectorAll("[data-theme-goto]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const key = btn.dataset.themeGoto;
-      const mode = btn.dataset.gaugeMode;
       if (!key) return;
 
       document.querySelectorAll("[data-theme-goto]").forEach((b) => {
         b.classList.toggle("is-on", b.dataset.themeGoto === key);
       });
 
-      if (mode === "dual" || ["plaid", "taycan", "tron", "redline", "eco"].includes(key)) {
-        speedGaugeWrap?.setAttribute("data-dual-theme", key);
-        setGaugeScreen("dual");
-        if (dualDriveMode) dualDriveMode.textContent = key.toUpperCase();
-        triggerGaugeTransitionSpin();
-        return;
-      }
-
-      // Tek Kadran Temaları (Single Gauge)
-      setGaugeScreen("digital");
-      speedGaugeWrap?.removeAttribute("data-dual-theme");
       if (visualSelect) {
         visualSelect.value = key;
-        visualSelect.dispatchEvent(new Event("change", { bubbles: true }));
-      } else {
-        applyVisualTheme(key);
-        prefSet("visual", key);
       }
+      applyVisualTheme(key);
+      prefSet("visual", key);
       triggerGaugeTransitionSpin();
     });
   });

@@ -25,12 +25,7 @@ const SiteIntro = (() => {
   }
 
   function shouldSkipAuto() {
-    try {
-      if (isNativeApp()) return true;
-      const q = new URLSearchParams(window.location.search);
-      if (q.get("skipIntro") === "1" || q.get("intro") === "0") return true;
-    } catch (_) {}
-    return false;
+    return true; // Kullanıcı doğrudan ana kokpit ekranına girer, öncesinde engelleyici ekran çıkmaz
   }
 
   /** Kalıcı veya bu sekme için daha önce kapatıldı mı? */

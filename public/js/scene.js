@@ -48,6 +48,12 @@ const Scene = (() => {
     "desert-dune": { particles: 16, shards: 2, speedGain: 1.05, hueShift: -8 },
     "telemetry-pro": { particles: 16, shards: 2, speedGain: 1.25, hueShift: 10 },
     "stealth-hud": { particles: 6, shards: 0, speedGain: 0.6, hueShift: -15 },
+    taycan: { particles: 0, shards: 0, speedGain: 0.8, hueShift: 0 },
+    plaid: { particles: 0, shards: 0, speedGain: 1.1, hueShift: 0 },
+    "bmw-m": { particles: 0, shards: 0, speedGain: 1.0, hueShift: 0 },
+    amg: { particles: 0, shards: 0, speedGain: 0.85, hueShift: 0 },
+    nevera: { particles: 0, shards: 0, speedGain: 1.2, hueShift: 0 },
+    stealth: { particles: 0, shards: 0, speedGain: 0.5, hueShift: 0 },
   };
 
   let profile = MODE_PROFILE.glow;
@@ -55,8 +61,8 @@ const Scene = (() => {
   let targetNorm = 0;
   let smoothSpeed = 0;
   let renderMotion = 0;
-  let themeHue = 195;
-  let baseHue = 195;
+  let themeHue = 38;
+  let baseHue = 38;
   let raf = null;
 
   const MODE_HUE = {
@@ -71,6 +77,7 @@ const Scene = (() => {
     "mini-personal": 32, "mini-green": 118, "mini-balance": 40,
     "weather-sky": 202, "map-focus": 188, "map-3d": 200, "cyber-storm": 275, "desert-dune": 32,
     "telemetry-pro": 150, "stealth-hud": 215,
+    taycan: 38, plaid: 185, "bmw-m": 215, amg: 275, nevera: 155, stealth: 0,
   };
 
   let particles = [];
@@ -2518,27 +2525,298 @@ const Scene = (() => {
     ctx.restore();
   }
 
-  function drawTree(x, groundY, scale, seed) {
-    const trunkH = 78 * scale;
-    const trunkW = Math.max(2, 9 * scale);
-    ctx.fillStyle = seed % 2 ? "#2a1a10" : "#3a2414";
-    ctx.fillRect(x - trunkW / 2, groundY - trunkH, trunkW, trunkH);
-    for (let layer = 0; layer < 3; layer++) {
-      const cw = (46 - layer * 8) * scale;
-      const ch = 34 * scale;
-      const top = groundY - trunkH * 0.72 - layer * 18 * scale;
+  function drawTaycan() {
+    // Porsche Taycan Sport Chrono: Titanium Dial, Chronometer Rings, Guards Red Accent
+    const bg = ctx.createRadialGradient(w * 0.5, h * 0.5, 40, w * 0.5, h * 0.5, Math.max(w, h) * 0.7);
+    bg.addColorStop(0, "rgba(22, 22, 26, 0.98)");
+    bg.addColorStop(0.65, "rgba(10, 10, 14, 0.99)");
+    bg.addColorStop(1, "rgba(4, 4, 6, 1)");
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, w, h);
+
+    const { cx, cy } = viewCenter();
+    const R = Math.min(w, h) * 0.42;
+    const v = renderMotion;
+
+    ctx.save();
+    // Warm Chrono Ambient Glow
+    const halo = ctx.createRadialGradient(cx, cy, R * 0.5, cx, cy, R * 1.05);
+    halo.addColorStop(0, `rgba(224, 168, 80, ${0.04 + v * 0.08})`);
+    halo.addColorStop(0.85, `rgba(224, 168, 80, ${0.12 + v * 0.14})`);
+    halo.addColorStop(1, "rgba(0, 0, 0, 0)");
+    ctx.fillStyle = halo;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R * 1.05, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Precision Chronograph Tick Rings
+    ctx.strokeStyle = "rgba(224, 168, 80, 0.35)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R * 0.96, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+    ctx.beginPath();
+    ctx.arc(cx, cy, R * 0.88, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Radial 60-Second / 100-Tick Tachymeter Hashmarks
+    const ticks = 60;
+    for (let i = 0; i < ticks; i++) {
+      const angle = (i / ticks) * Math.PI * 2;
+      const isMajor = i % 5 === 0;
+      const rInner = isMajor ? R * 0.90 : R * 0.93;
+      const rOuter = R * 0.96;
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      ctx.strokeStyle = isMajor ? "rgba(224, 168, 80, 0.75)" : "rgba(255, 255, 255, 0.22)";
+      ctx.lineWidth = isMajor ? 1.8 : 0.9;
       ctx.beginPath();
-      ctx.moveTo(x, top - ch);
-      ctx.lineTo(x + cw, top + 6);
-      ctx.lineTo(x - cw, top + 6);
-      ctx.closePath();
-      const g = 70 + layer * 22 + (seed % 4) * 8;
-      ctx.fillStyle = `rgb(${12 + layer * 6}, ${g}, ${28 + layer * 8})`;
+      ctx.moveTo(cx + cos * rInner, cy + sin * rInner);
+      ctx.lineTo(cx + cos * rOuter, cy + sin * rOuter);
+      ctx.stroke();
+    }
+
+    // Dynamic Porsche Guards Red Chrono Sub-arc Sweep
+    const sweepAngle = ((animT * 1.2) % (Math.PI * 2)) - Math.PI / 2;
+    ctx.strokeStyle = "rgba(225, 6, 0, 0.85)";
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R * 0.88, sweepAngle - 0.25, sweepAngle);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  function drawPlaid() {
+    // Tesla Plaid Cyber: Absolute OLED Void, Dual Inverter Hyper-Speed Rails, Laser Cyan & Plaid Magenta
+    ctx.fillStyle = "rgba(3, 4, 7, 0.98)";
+    ctx.fillRect(0, 0, w, h);
+
+    const { cx, cy } = viewCenter();
+    const v = renderMotion;
+
+    ctx.save();
+    // Perspective Cyber Rails streaming toward driver
+    const railCount = 14;
+    const speedOffset = (worldScroll * 0.08) % 1;
+    ctx.lineWidth = 1.2;
+    for (let i = 0; i < railCount; i++) {
+      const progress = ((i / railCount) + speedOffset) % 1;
+      const spreadY = Math.pow(progress, 1.8) * (h * 0.48);
+      const alpha = Math.sin(progress * Math.PI) * (0.15 + v * 0.35);
+
+      // Top energy track (Cyan)
+      ctx.strokeStyle = `rgba(0, 240, 255, ${alpha * 0.7})`;
+      ctx.beginPath();
+      ctx.moveTo(0, cy - spreadY);
+      ctx.lineTo(w, cy - spreadY);
+      ctx.stroke();
+
+      // Bottom energy track (Plaid Electric Magenta)
+      ctx.strokeStyle = `rgba(224, 0, 112, ${alpha * 0.85})`;
+      ctx.beginPath();
+      ctx.moveTo(0, cy + spreadY);
+      ctx.lineTo(w, cy + spreadY);
+      ctx.stroke();
+    }
+
+    // Inverter Flux Horizon Glow
+    const fluxGlow = ctx.createRadialGradient(cx, cy, 20, cx, cy, w * 0.5);
+    fluxGlow.addColorStop(0, `rgba(0, 240, 255, ${0.08 + v * 0.14})`);
+    fluxGlow.addColorStop(0.5, `rgba(224, 0, 112, ${0.06 + v * 0.12})`);
+    fluxGlow.addColorStop(1, "rgba(0, 0, 0, 0)");
+    ctx.fillStyle = fluxGlow;
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.restore();
+  }
+
+  function drawBmwM() {
+    // BMW M Carbon Track: Procedural Twill Carbon Fiber Weave, M Tri-Color Flow Line, Apex Kerbing
+    const bg = ctx.createLinearGradient(0, 0, 0, h);
+    bg.addColorStop(0, "rgba(10, 12, 16, 0.99)");
+    bg.addColorStop(0.5, "rgba(15, 17, 23, 0.98)");
+    bg.addColorStop(1, "rgba(6, 7, 10, 1)");
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, w, h);
+
+    const { cx, cy } = viewCenter();
+    const v = renderMotion;
+
+    ctx.save();
+    // Procedural Carbon-Fiber Twill Grid Pattern (subtle micro hatch)
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.035)";
+    ctx.lineWidth = 1;
+    const step = 24;
+    for (let x = -h; x < w + h; x += step) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x + h, h);
+      ctx.stroke();
+    }
+
+    // Signature BMW M Tri-Color Racing Ribbon across cockpit horizon
+    const ribbonY = cy * 1.05;
+    const ribbonH = 3.5;
+    const offset = (worldScroll * 0.5) % 80;
+
+    // Light Blue (0, 153, 218)
+    ctx.fillStyle = `rgba(0, 153, 218, ${0.65 + v * 0.30})`;
+    ctx.fillRect(0, ribbonY - ribbonH * 1.5, w, ribbonH);
+
+    // Dark Blue (26, 43, 76)
+    ctx.fillStyle = `rgba(26, 43, 76, ${0.75 + v * 0.20})`;
+    ctx.fillRect(0, ribbonY - ribbonH * 0.5, w, ribbonH);
+
+    // M Red (229, 26, 36)
+    ctx.fillStyle = `rgba(229, 26, 36, ${0.80 + v * 0.20})`;
+    ctx.fillRect(0, ribbonY + ribbonH * 0.5, w, ribbonH);
+
+    // Subtle Racing Kerb Telemetry Flashes at bottom edges
+    const kerbW = 28;
+    for (let x = 0; x < w; x += kerbW * 2) {
+      ctx.fillStyle = ((x + Math.floor(offset)) % (kerbW * 4) < kerbW * 2)
+        ? `rgba(229, 26, 36, ${0.12 + v * 0.2})`
+        : `rgba(255, 255, 255, ${0.08 + v * 0.15})`;
+      ctx.fillRect(x, h - 8, kerbW, 8);
+    }
+
+    ctx.restore();
+  }
+
+  function drawAmg() {
+    // Mercedes AMG Hyperscreen: Cosmic Obsidian Depth, MBUX Sinusoidal Ribbon, Rose Gold Accents
+    const bg = ctx.createRadialGradient(w * 0.5, h * 0.5, 30, w * 0.5, h * 0.5, Math.max(w, h) * 0.75);
+    bg.addColorStop(0, "rgba(8, 12, 24, 0.98)");
+    bg.addColorStop(0.7, "rgba(4, 6, 14, 0.99)");
+    bg.addColorStop(1, "rgba(2, 2, 6, 1)");
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, w, h);
+
+    const { cx, cy } = viewCenter();
+    const v = renderMotion;
+
+    ctx.save();
+    // Flowing MBUX digital wave ribbon
+    const waveCount = 3;
+    for (let j = 0; j < waveCount; j++) {
+      ctx.beginPath();
+      const waveAlpha = (0.18 + v * 0.22) / (j + 1);
+      ctx.strokeStyle = j === 0
+        ? `rgba(212, 175, 55, ${waveAlpha})` // Rose Gold / Champagne
+        : `rgba(90, 160, 255, ${waveAlpha * 0.8})`; // AMG Electric Silver-Blue
+      ctx.lineWidth = 1.6 - j * 0.3;
+
+      for (let x = 0; x <= w; x += 16) {
+        const freq = 0.0035 + j * 0.001;
+        const phase = animT * 1.1 + j * 1.4;
+        const amp = (18 + v * 35) * (1 - j * 0.25);
+        const y = cy + Math.sin(x * freq + phase) * amp + Math.cos(x * 0.002 - phase * 0.5) * (amp * 0.4);
+        if (x === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+
+    // AMG Floating Micro-Glimmers
+    const sparkCount = 18;
+    for (let s = 0; s < sparkCount; s++) {
+      const sx = (Math.sin(s * 91 + animT * 0.4) * 0.5 + 0.5) * w;
+      const sy = (Math.cos(s * 47 + animT * 0.35) * 0.5 + 0.5) * h;
+      const r = 1 + (s % 3);
+      ctx.fillStyle = `rgba(212, 175, 55, ${0.15 + (s % 4) * 0.1})`;
+      ctx.beginPath();
+      ctx.arc(sx, sy, r, 0, Math.PI * 2);
       ctx.fill();
     }
+
+    ctx.restore();
+  }
+
+  function drawNevera() {
+    // Rimac Nevera Hyper-EV: 1400kW Dual Inverter Matrix, Aero Flow Vortices, Hyper-Telemetry
+    const bg = ctx.createLinearGradient(0, 0, 0, h);
+    bg.addColorStop(0, "rgba(5, 10, 18, 0.98)");
+    bg.addColorStop(0.5, "rgba(8, 14, 25, 0.98)");
+    bg.addColorStop(1, "rgba(3, 6, 12, 1)");
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, w, h);
+
+    const { cx, cy } = viewCenter();
+    const v = renderMotion;
+
+    ctx.save();
+    // Dual Inverter Symmetrical Energy Arcs (Front & Rear Axles)
+    const arcRadius = Math.min(w, h) * 0.45;
+
+    // Left Pod (Front Inverter)
+    ctx.strokeStyle = `rgba(0, 230, 160, ${0.30 + v * 0.45})`;
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.arc(cx - arcRadius * 0.45, cy, arcRadius * 0.55, -Math.PI * 0.65, Math.PI * 0.35);
+    ctx.stroke();
+
+    // Right Pod (Rear Inverter - 1400kW)
+    ctx.strokeStyle = `rgba(0, 200, 255, ${0.30 + v * 0.45})`;
+    ctx.beginPath();
+    ctx.arc(cx + arcRadius * 0.45, cy, arcRadius * 0.55, Math.PI * 0.65, -Math.PI * 0.35, true);
+    ctx.stroke();
+
+    // Active Aero Vortices streaming past cockpit
+    const vortexCount = 8;
+    for (let i = 0; i < vortexCount; i++) {
+      const side = i % 2 === 0 ? -1 : 1;
+      const seed = Math.floor(i / 2);
+      const vx = cx + side * (arcRadius * 0.75 + seed * 30);
+      const vy = (cy - h * 0.25) + ((worldScroll * 3 + seed * 80) % (h * 0.6));
+      ctx.strokeStyle = `rgba(0, 230, 180, ${0.12 + v * 0.28})`;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(vx, vy, 12 + v * 8, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
+  function drawStealth() {
+    // Stealth Minimal OLED: Absolute pitch black (0 nits), zero glare, razor-fine horizon
+    ctx.fillStyle = "#000000";
+    ctx.fillRect(0, 0, w, h);
+
+    const { cx, cy } = viewCenter();
+    const v = renderMotion;
+
+    ctx.save();
+    // Razor-thin horizon reference bar (15% opacity to preserve night vision)
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(w * 0.15, cy);
+    ctx.lineTo(w * 0.85, cy);
+    ctx.stroke();
+
+    // Center precision reticle
+    ctx.strokeStyle = `rgba(255, 255, 255, ${0.25 + v * 0.15})`;
+    ctx.beginPath();
+    ctx.moveTo(cx - 14, cy);
+    ctx.lineTo(cx + 14, cy);
+    ctx.moveTo(cx, cy - 8);
+    ctx.lineTo(cx, cy + 8);
+    ctx.stroke();
+
+    ctx.restore();
   }
 
   const DRAWERS = {
+    taycan: drawTaycan,
+    plaid: drawPlaid,
+    "bmw-m": drawBmwM,
+    amg: drawAmg,
+    nevera: drawNevera,
+    stealth: drawStealth,
     glow: drawGlow, aurora: drawGlow,
     particles: drawParticlesMode, vortex: drawVortex, horizon: drawHorizon,
     "deep-ocean": drawDeepOcean, "electric-ice": drawElectricIce,
@@ -2559,7 +2837,15 @@ const Scene = (() => {
   };
 
   const MODES = [
-    /* ⚡ Çift Kadranlı Temalar (Dual Gauge Cluster: Hız + Güç/kW & Regen) */
+    /* 🏎️ Luxury OEM Automotive Cockpits (Lüks Otomotiv Kadranları) */
+    { key: "taycan", labelKey: "visualTaycan", group: "oem", gauge: "dual" },
+    { key: "plaid", labelKey: "visualPlaid", group: "oem", gauge: "dual" },
+    { key: "bmw-m", labelKey: "visualBmwM", group: "oem", gauge: "dual" },
+    { key: "amg", labelKey: "visualAmg", group: "oem", gauge: "dual" },
+    { key: "nevera", labelKey: "visualNevera", group: "oem", gauge: "dual" },
+    { key: "stealth", labelKey: "visualStealth", group: "oem", gauge: "digital" },
+
+    /* ⚡ Çift Kadran Telemetri (Dual Gauge Cluster: Hız + Güç/kW & Regen) */
     { key: "telemetry-pro", labelKey: "visualTelemetryPro", group: "race", gauge: "dual" },
     { key: "cyber-storm", labelKey: "visualCyberStorm", group: "sport", gauge: "dual" },
     { key: "redline", labelKey: "visualRedline", group: "race", gauge: "dual" },
@@ -2570,13 +2856,6 @@ const Scene = (() => {
     { key: "warp", labelKey: "visualWarp", group: "sport", gauge: "digital" },
     { key: "weather-sky", labelKey: "visualWeatherSky", group: "ambient", gauge: "digital" },
     { key: "map-3d", labelKey: "visualMap3D", group: "ambient", gauge: "digital" },
-    { key: "mini-vibrant", labelKey: "visualMiniVibrant", group: "mini", gauge: "digital" },
-    { key: "mini-green", labelKey: "visualMiniGreen", group: "mini", gauge: "digital" },
-    { key: "mini-personal", labelKey: "visualMiniPersonal", group: "mini", gauge: "digital" },
-    { key: "alev", labelKey: "visualAlev", group: "sport", gauge: "digital" },
-    { key: "plasma", labelKey: "visualPlasma", group: "sport", gauge: "digital" },
-    { key: "neon", labelKey: "visualNeon", group: "neon", gauge: "digital" },
-    { key: "bayrak", labelKey: "visualBayrak", group: "sport", gauge: "digital" },
 
     /* ⏱️ Tek Kadran Analog Göstergeler (Single Analog Dial) */
     { key: "deep-ocean", labelKey: "visualDeepOcean", group: "ambient", gauge: "analog" },
@@ -2584,7 +2863,6 @@ const Scene = (() => {
     { key: "mini-timeless", labelKey: "visualMiniTimeless", group: "mini", gauge: "analog" },
     { key: "tunnel", labelKey: "visualTunnel", group: "race", gauge: "analog" },
     { key: "glow", labelKey: "visualGlow", group: "ambient", gauge: "analog" },
-    { key: "yildiz", labelKey: "visualYildiz", group: "ambient", gauge: "analog" },
   ];
 
   function loop() {
@@ -2625,7 +2903,7 @@ const Scene = (() => {
   function getModeMeta(key) { return MODES.find((m) => m.key === key) || null; }
 
   return {
-    DEFAULT_MODE: "alev",
+    DEFAULT_MODE: "taycan",
     getModes: () => MODES,
     getModeMeta, getThemeHue, init, setMode, setSpeed, destroy,
   };
