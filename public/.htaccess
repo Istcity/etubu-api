@@ -38,6 +38,13 @@ Options -Indexes
   Header set Referrer-Policy "strict-origin-when-cross-origin"
   Header set X-XSS-Protection "1; mode=block"
   Header set Permissions-Policy "geolocation=(self), microphone=(), camera=(), payment=(self)"
+
+  # Tarayıcıların eski HTML, CSS ve JS'i tutmasını engelleyen anlık tazeleme kuralı
+  <FilesMatch "\.(html|htm|css|js)$">
+    Header set Cache-Control "no-cache, no-store, must-revalidate, max-age=0"
+    Header set Pragma "no-cache"
+    Header set Expires "0"
+  </FilesMatch>
 </IfModule>
 
 # php -- BEGIN cPanel-generated handler, do not edit
