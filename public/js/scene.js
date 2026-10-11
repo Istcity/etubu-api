@@ -48,10 +48,6 @@ const Scene = (() => {
     "desert-dune": { particles: 16, shards: 2, speedGain: 1.05, hueShift: -8 },
     "telemetry-pro": { particles: 16, shards: 2, speedGain: 1.25, hueShift: 10 },
     "stealth-hud": { particles: 6, shards: 0, speedGain: 0.6, hueShift: -15 },
-    yildirim: { particles: 18, shards: 2, speedGain: 1.35, hueShift: 10 },
-    yol: { particles: 12, shards: 0, speedGain: 1.2, hueShift: 0 },
-    orman: { particles: 14, shards: 0, speedGain: 0.95, hueShift: -8 },
-    atari: { particles: 8, shards: 0, speedGain: 1.25, hueShift: 0 },
   };
 
   let profile = MODE_PROFILE.glow;
@@ -75,7 +71,6 @@ const Scene = (() => {
     "mini-personal": 32, "mini-green": 118, "mini-balance": 40,
     "weather-sky": 202, "map-focus": 188, "map-3d": 200, "cyber-storm": 275, "desert-dune": 32,
     "telemetry-pro": 150, "stealth-hud": 215,
-    yildirim: 205, yol: 200, orman: 128, atari: 318,
   };
 
   let particles = [];
@@ -2543,233 +2538,6 @@ const Scene = (() => {
     }
   }
 
-  function drawYildirim() {
-    const v = renderMotion;
-    const sky = ctx.createLinearGradient(0, 0, 0, h);
-    sky.addColorStop(0, "#0c1424");
-    sky.addColorStop(0.45, "#101828");
-    sky.addColorStop(1, "#070b12");
-    ctx.fillStyle = sky;
-    ctx.fillRect(0, 0, w, h);
-    tickLightning(v > 0.4 ? 0.18 : 0.42);
-    if (boltFlash > 0.06) {
-      ctx.fillStyle = `rgba(225, 240, 255, ${boltFlash * 0.38})`;
-      ctx.fillRect(0, 0, w, h);
-    }
-    drawRain("rgba(200, 220, 245, 0.85)", 70, 4);
-    paintBolts("#ffffff", "#9fd4ff");
-    const ground = ctx.createLinearGradient(0, h * 0.72, 0, h);
-    ground.addColorStop(0, "rgba(8, 12, 20, 0)");
-    ground.addColorStop(1, `rgba(140, 190, 255, ${0.05 + boltFlash * 0.2})`);
-    ctx.fillStyle = ground;
-    ctx.fillRect(0, h * 0.7, w, h * 0.3);
-  }
-
-  function drawYol() {
-    const { cx, cy } = viewCenter();
-    const v = renderMotion;
-    const horizon = horizonAt(cy);
-    const sky = ctx.createLinearGradient(0, 0, 0, horizon);
-    sky.addColorStop(0, "#07111c");
-    sky.addColorStop(1, "#16304a");
-    ctx.fillStyle = sky;
-    ctx.fillRect(0, 0, w, h);
-    const haze = ctx.createLinearGradient(0, horizon - 30, 0, horizon + 40);
-    haze.addColorStop(0, "rgba(120, 190, 255, 0)");
-    haze.addColorStop(0.5, "rgba(160, 210, 255, 0.28)");
-    haze.addColorStop(1, "rgba(120, 190, 255, 0)");
-    ctx.fillStyle = haze;
-    ctx.fillRect(0, horizon - 30, w, 70);
-
-    ctx.beginPath();
-    ctx.moveTo(cx - 4, horizon);
-    ctx.lineTo(cx + 4, horizon);
-    ctx.lineTo(cx + w * 0.5, h + 30);
-    ctx.lineTo(cx - w * 0.5, h + 30);
-    ctx.closePath();
-    const asphalt = ctx.createLinearGradient(0, horizon, 0, h);
-    asphalt.addColorStop(0, "#2a313c");
-    asphalt.addColorStop(1, "#12161c");
-    ctx.fillStyle = asphalt;
-    ctx.fill();
-
-    ctx.beginPath();
-    ctx.moveTo(cx, horizon);
-    ctx.lineTo(cx - w * 0.16, h + 20);
-    ctx.lineTo(cx + w * 0.16, h + 20);
-    ctx.closePath();
-    ctx.fillStyle = `rgba(190, 220, 255, ${0.05 + v * 0.08})`;
-    ctx.fill();
-
-    const scroll = worldScroll % 1;
-    const marks = skipHeavyFx ? 10 : 16;
-    for (let i = 0; i < marks; i++) {
-      const t0 = (i / marks + scroll) % 1;
-      const t1 = Math.min(0.99, t0 + 0.035);
-      if (Math.floor(t0 * marks) % 2 === 0) continue;
-      const y0 = perspY(horizon, t0);
-      const y1 = perspY(horizon, t1);
-      const half = 2 + Math.pow(t0, 1.2) * 7;
-      ctx.fillStyle = `rgba(255, 214, 90, ${0.35 + t0 * 0.65})`;
-      ctx.beginPath();
-      ctx.moveTo(cx - half * 0.4, y0);
-      ctx.lineTo(cx + half * 0.4, y0);
-      ctx.lineTo(cx + half, y1);
-      ctx.lineTo(cx - half, y1);
-      ctx.closePath();
-      ctx.fill();
-    }
-
-    ctx.lineWidth = 2;
-    [[-1, "rgba(255,255,255,0.75)"], [1, "rgba(255,255,255,0.75)"]].forEach(([side, color]) => {
-      ctx.beginPath();
-      ctx.moveTo(cx + side * 8, horizon);
-      ctx.lineTo(cx + side * w * 0.46, h + 10);
-      ctx.strokeStyle = color;
-      ctx.stroke();
-    });
-
-    const posts = skipHeavyFx ? 8 : 12;
-    for (let i = 0; i < posts; i++) {
-      const t = (i / posts + scroll * 0.85) % 1;
-      const y = perspY(horizon, t);
-      const spread = 16 + Math.pow(t, 1.15) * w * 0.5;
-      const ph = 8 + t * 36;
-      [-1, 1].forEach((side) => {
-        const x = cx + side * spread;
-        ctx.fillStyle = side < 0 ? "#ff3b30" : "#ffe14a";
-        ctx.globalAlpha = 0.25 + t * 0.75;
-        ctx.fillRect(x - 2, y - ph, 4, ph);
-        ctx.fillRect(x - 5, y - ph, 10, 4);
-      });
-    }
-    ctx.globalAlpha = 1;
-  }
-
-  function drawOrman() {
-    const { cx, cy } = viewCenter();
-    const horizon = horizonAt(cy);
-    const sky = ctx.createLinearGradient(0, 0, 0, h);
-    sky.addColorStop(0, "#0c1c14");
-    sky.addColorStop(0.4, "#143222");
-    sky.addColorStop(1, "#07140d");
-    ctx.fillStyle = sky;
-    ctx.fillRect(0, 0, w, h);
-
-    const shafts = skipHeavyFx ? 2 : 4;
-    for (let i = 0; i < shafts; i++) {
-      const x = w * (0.18 + i * 0.2) + Math.sin(worldScroll + i) * 20;
-      const beam = ctx.createLinearGradient(x, 0, x + 40, h);
-      beam.addColorStop(0, "rgba(190, 255, 170, 0.14)");
-      beam.addColorStop(1, "rgba(190, 255, 170, 0)");
-      ctx.fillStyle = beam;
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x + 36, 0);
-      ctx.lineTo(x + 90, h);
-      ctx.lineTo(x - 20, h);
-      ctx.closePath();
-      ctx.fill();
-    }
-
-    ctx.beginPath();
-    ctx.moveTo(cx - 2, horizon + 8);
-    ctx.lineTo(cx + 2, horizon + 8);
-    ctx.lineTo(cx + w * 0.28, h + 20);
-    ctx.lineTo(cx - w * 0.28, h + 20);
-    ctx.closePath();
-    ctx.fillStyle = "#1a2218";
-    ctx.fill();
-
-    const scroll = worldScroll % 1;
-    const count = skipHeavyFx ? 8 : 12;
-    const trees = [];
-    for (let i = 0; i < count; i++) {
-      const t = (i / count + scroll) % 1;
-      trees.push({ t, side: -1, seed: i * 3 + 1 });
-      trees.push({ t: (t + 0.04) % 1, side: 1, seed: i * 3 + 2 });
-    }
-    trees.sort((a, b) => a.t - b.t);
-    trees.forEach((tree) => {
-      const y = perspY(horizon, tree.t);
-      const scale = 0.18 + Math.pow(tree.t, 1.35) * 1.15;
-      const spread = 40 + Math.pow(tree.t, 1.2) * w * 0.42;
-      drawTree(cx + tree.side * spread, y + 8, scale, tree.seed);
-    });
-  }
-
-  function pixelDisc(x, y, r, color) {
-    ctx.fillStyle = color;
-    const step = 4;
-    for (let yy = -r; yy <= r; yy += step) {
-      const span = Math.sqrt(Math.max(0, r * r - yy * yy));
-      ctx.fillRect(Math.round(x - span), Math.round(y + yy), Math.max(step, Math.round(span * 2)), step);
-    }
-  }
-
-  function drawAtari() {
-    const { cx, cy } = viewCenter();
-    const horizon = Math.max(h * 0.34, Math.min(cy * 0.55, h * 0.46));
-    ctx.save();
-    ctx.imageSmoothingEnabled = false;
-    const sky = ctx.createLinearGradient(0, 0, 0, horizon);
-    sky.addColorStop(0, "#140018");
-    sky.addColorStop(1, "#3a0048");
-    ctx.fillStyle = sky;
-    ctx.fillRect(0, 0, w, h);
-    ctx.fillStyle = "#07000c";
-    ctx.fillRect(0, horizon, w, h - horizon);
-
-    pixelDisc(cx, horizon - 18, 54, "#ff4ad8");
-    pixelDisc(cx, horizon - 18, 34, "#ffd6f4");
-    pixelDisc(cx, horizon - 18, 14, "#fff");
-
-    ctx.fillStyle = "#2a0050";
-    ctx.beginPath();
-    ctx.moveTo(0, horizon + 8);
-    const peaks = skipHeavyFx ? 5 : 8;
-    for (let i = 0; i <= peaks; i++) {
-      const x = (i / peaks) * w;
-      const peak = horizon - 18 - ((i * 37) % 5) * 10;
-      ctx.lineTo(x, i % 2 ? horizon + 6 : peak);
-    }
-    ctx.lineTo(w, horizon + 8);
-    ctx.closePath();
-    ctx.fill();
-
-    const scroll = worldScroll % 1;
-    const rows = skipHeavyFx ? 8 : 12;
-    for (let i = 0; i < rows; i++) {
-      const t = (i / rows + scroll) % 1;
-      const y = Math.round(perspY(horizon, t));
-      ctx.fillStyle = i % 2 ? "#00f6ff" : "#ff2bd6";
-      ctx.globalAlpha = 0.35 + t * 0.6;
-      ctx.fillRect(0, y, w, 2);
-    }
-    ctx.globalAlpha = 1;
-    ctx.lineWidth = 2;
-    for (let i = -7; i <= 7; i++) {
-      ctx.beginPath();
-      ctx.moveTo(Math.round(cx), Math.round(horizon));
-      ctx.lineTo(Math.round(cx + i * w * 0.11), h);
-      ctx.strokeStyle = i % 2 ? "rgba(0, 246, 255, 0.8)" : "rgba(255, 43, 214, 0.8)";
-      ctx.stroke();
-    }
-
-    ctx.fillStyle = "rgba(0, 0, 0, 0.22)";
-    const scan = skipHeavyFx ? 8 : 4;
-    for (let y = 0; y < h; y += scan) ctx.fillRect(0, y, w, 1);
-
-    const stars = skipHeavyFx ? 12 : 24;
-    ctx.fillStyle = "#fff";
-    for (let i = 0; i < stars; i++) {
-      const sx = ((i * 97) % Math.max(1, Math.floor(w))) ;
-      const sy = (i * 53) % Math.max(1, Math.floor(horizon - 20));
-      if ((i + Math.floor(worldScroll * 4)) % 3 === 0) ctx.fillRect(sx, sy, 2, 2);
-    }
-    ctx.restore();
-  }
-
   const DRAWERS = {
     glow: drawGlow, aurora: drawGlow,
     particles: drawParticlesMode, vortex: drawVortex, horizon: drawHorizon,
@@ -2788,38 +2556,35 @@ const Scene = (() => {
     "map-3d": drawMap3D,
     "cyber-storm": drawCyberStorm, "desert-dune": drawDesertDune,
     "telemetry-pro": drawTelemetryPro, "stealth-hud": drawStealthHud,
-    yildirim: drawYildirim, yol: drawYol, orman: drawOrman, atari: drawAtari,
   };
 
   const MODES = [
+    /* ⚡ Çift Kadranlı Temalar (Dual Gauge Cluster: Hız + Güç/kW & Regen) */
+    { key: "telemetry-pro", labelKey: "visualTelemetryPro", group: "race", gauge: "dual" },
+    { key: "cyber-storm", labelKey: "visualCyberStorm", group: "sport", gauge: "dual" },
+    { key: "redline", labelKey: "visualRedline", group: "race", gauge: "dual" },
+
+    /* 📱 Tek Kadran Dijital Göstergeler (Single Digital Dial) */
     { key: "stealth-hud", labelKey: "visualStealthHud", group: "sport", gauge: "digital" },
     { key: "night-city", labelKey: "visualNightCity", group: "neon", gauge: "digital" },
-    { key: "deep-ocean", labelKey: "visualDeepOcean", group: "ambient", gauge: "digital" },
-    { key: "cyber-storm", labelKey: "visualCyberStorm", group: "sport", gauge: "digital" },
     { key: "warp", labelKey: "visualWarp", group: "sport", gauge: "digital" },
-    { key: "telemetry-pro", labelKey: "visualTelemetryPro", group: "sport", gauge: "digital" },
     { key: "weather-sky", labelKey: "visualWeatherSky", group: "ambient", gauge: "digital" },
-    { key: "map-focus", labelKey: "visualMapFocus", group: "ambient", gauge: "digital" },
     { key: "map-3d", labelKey: "visualMap3D", group: "ambient", gauge: "digital" },
-    { key: "cyber-storm", labelKey: "visualCyberStorm", group: "sport", gauge: "digital" },
-    { key: "desert-dune", labelKey: "visualDesertDune", group: "sport", gauge: "digital" },
-    { key: "telemetry-pro", labelKey: "visualTelemetryPro", group: "sport", gauge: "digital" },
-    { key: "stealth-hud", labelKey: "visualStealthHud", group: "ambient", gauge: "analog" },
-    { key: "glow", labelKey: "visualGlow", group: "ambient", gauge: "analog" },
-    { key: "alev", labelKey: "visualAlev", group: "sport", gauge: "digital" },
-    { key: "yildiz", labelKey: "visualYildiz", group: "ambient", gauge: "analog" },
-    { key: "bayrak", labelKey: "visualBayrak", group: "sport", gauge: "digital" },
-    { key: "plasma", labelKey: "visualPlasma", group: "sport", gauge: "digital" },
-    { key: "warp", labelKey: "visualWarp", group: "sport", gauge: "digital" },
-    { key: "tunnel", labelKey: "visualTunnel", group: "race", gauge: "analog" },
-    { key: "neon", labelKey: "visualNeon", group: "neon", gauge: "digital" },
-    { key: "night-city", labelKey: "visualNightCity", group: "neon", gauge: "digital" },
-    { key: "deep-ocean", labelKey: "visualDeepOcean", group: "ambient", gauge: "analog" },
-    { key: "redline", labelKey: "visualRedline", group: "race", gauge: "analog" },
-    { key: "mini-timeless", labelKey: "visualMiniTimeless", group: "mini", gauge: "analog" },
     { key: "mini-vibrant", labelKey: "visualMiniVibrant", group: "mini", gauge: "digital" },
-    { key: "mini-personal", labelKey: "visualMiniPersonal", group: "mini", gauge: "digital" },
     { key: "mini-green", labelKey: "visualMiniGreen", group: "mini", gauge: "digital" },
+    { key: "mini-personal", labelKey: "visualMiniPersonal", group: "mini", gauge: "digital" },
+    { key: "alev", labelKey: "visualAlev", group: "sport", gauge: "digital" },
+    { key: "plasma", labelKey: "visualPlasma", group: "sport", gauge: "digital" },
+    { key: "neon", labelKey: "visualNeon", group: "neon", gauge: "digital" },
+    { key: "bayrak", labelKey: "visualBayrak", group: "sport", gauge: "digital" },
+
+    /* ⏱️ Tek Kadran Analog Göstergeler (Single Analog Dial) */
+    { key: "deep-ocean", labelKey: "visualDeepOcean", group: "ambient", gauge: "analog" },
+    { key: "desert-dune", labelKey: "visualDesertDune", group: "sport", gauge: "analog" },
+    { key: "mini-timeless", labelKey: "visualMiniTimeless", group: "mini", gauge: "analog" },
+    { key: "tunnel", labelKey: "visualTunnel", group: "race", gauge: "analog" },
+    { key: "glow", labelKey: "visualGlow", group: "ambient", gauge: "analog" },
+    { key: "yildiz", labelKey: "visualYildiz", group: "ambient", gauge: "analog" },
   ];
 
   function loop() {

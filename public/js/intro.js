@@ -1,9 +1,10 @@
 /**
  * Açılış turu — yalnızca web (Tesla tarayıcısı dahil).
  * iOS native cluster / Capacitor uygulamasında gösterilmez.
+ * Bir kez gösterilir; “Bir daha sorma” işaretliyse localStorage + cookie’ye yazılır.
  */
 const SiteIntro = (() => {
-  const SEEN_KEY = "etubu_intro_seen";
+  const SEEN_KEY = "etubu_intro_seen_v2";
   const SLIDE_COUNT = 4;
   let index = 0;
   let startX = 0;
@@ -32,27 +33,41 @@ const SiteIntro = (() => {
     return false;
   }
 
+  /** Kalıcı veya bu sekme için daha önce kapatıldı mı? */
   function hasSeen() {
-    try {
-      if (sessionStorage.getItem(SEEN_KEY) === "1") return true;
-    } catch (_) {}
-    const persist = typeof Consent === "undefined" || Consent.allows("preferences");
-    if (!persist) return false;
     try {
       if (localStorage.getItem(SEEN_KEY) === "1") return true;
     } catch (_) {}
     try {
-      return document.cookie.split(";").some((c) => c.trim().startsWith(SEEN_KEY + "=1"));
+      if (document.cookie.split(";").some((c) => c.trim().startsWith(SEEN_KEY + "=1"))) return true;
+    } catch (_) {}
+    try {
+      if (sessionStorage.getItem(SEEN_KEY) === "1") return true;
     } catch (_) {}
     return false;
   }
 
-  function markSeen() {
+  function dontAskChecked() {
+    const box = document.getElementById("introDontAsk");
+    // Varsayılan: bir daha sorma (kutucuk yoksa da kalıcı)
+    if (!box) return true;
+    return !!box.checked;
+  }
+
+  /**
+   * @param {boolean} [permanent] — true: localStorage + cookie; false: yalnız session
+   */
+  function markSeen(permanent) {
+    const persist = permanent !== false;
     try {
       sessionStorage.setItem(SEEN_KEY, "1");
     } catch (_) {}
-    const persist = typeof Consent === "undefined" || Consent.allows("preferences");
-    if (!persist) return;
+    if (!persist) {
+      try {
+        localStorage.removeItem(SEEN_KEY);
+      } catch (_) {}
+      return;
+    }
     try {
       localStorage.setItem(SEEN_KEY, "1");
     } catch (_) {}
@@ -106,7 +121,7 @@ const SiteIntro = (() => {
   }
 
   function close() {
-    markSeen();
+    markSeen(dontAskChecked());
     hideConsentOverlay();
     document.documentElement.classList.remove("etubu-intro");
     document.body.classList.remove("intro-open");
@@ -129,6 +144,8 @@ const SiteIntro = (() => {
     root.setAttribute("aria-hidden", "false");
     document.documentElement.classList.add("etubu-intro");
     document.body.classList.add("intro-open");
+    const box = document.getElementById("introDontAsk");
+    if (box) box.checked = true;
     setSlide(0);
     typeof Ads !== "undefined" && Ads.renderIntroSlots?.();
   }
@@ -193,11 +210,11 @@ const SiteIntro = (() => {
 
     const stage = root.querySelector(".intro-stage");
     stage?.addEventListener("pointerdown", (e) => {
-      if (e.target.closest("button, a")) return;
+      if (e.target.closest("button, a, label, input")) return;
       startX = e.clientX;
     });
     stage?.addEventListener("pointerup", (e) => {
-      if (e.target.closest("button, a")) return;
+      if (e.target.closest("button, a, label, input")) return;
       const dx = e.clientX - startX;
       if (dx < -48) {
         if (index >= SLIDE_COUNT - 1) close();
@@ -231,6 +248,7 @@ const SiteIntro = (() => {
       hideShell();
       return;
     }
+    // Cookie banner beklerken intro’yu açma; seçim sonrası bir kez kontrol et
     if (typeof Consent !== "undefined" && !Consent.hasChoice()) {
       hideShell();
       Consent.onChange(() => {
@@ -256,6 +274,6 @@ const SiteIntro = (() => {
 
   start();
 
-  return { init, open, close };
+  return { init, open, close, hasSeen, markSeen };
 })();
 window.SiteIntro = SiteIntro;

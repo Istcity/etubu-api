@@ -10,72 +10,60 @@ class EtubuAudioEngine {
   constructor() {
     this.DEFAULT_VOICE = "tesla";
     this.VOICE_GROUP_ORDER = ["ev", "exhaust", "race", "fx"];
-    /** ClusterTheme.rawValue / webKey → base pack */
+    /** ClusterTheme.rawValue / webKey → 5 premium packs */
     this.THEME_PACK_MAP = {
       tesla: "tesla",
       "calm-ev": "tesla",
       "sport-ev": "sport-ev",
-      "ion-whisper": "ion-whisper",
+      "ion-whisper": "tesla",
       "boost-launch": "sport-ev",
       "exhaust-v8": "exhaust-v8",
       "exhaust-turbo": "exhaust-turbo",
       "asphalt-roar": "exhaust-v8",
-      "cruiser-vtwin": "cruiser-vtwin",
-      "exhaust-diesel": "exhaust-diesel",
+      "cruiser-vtwin": "exhaust-v8",
+      "exhaust-diesel": "exhaust-turbo",
       "formula-scream": "formula-scream",
-      "sportbike-rr": "sportbike-rr",
-      "jet-hum": "jet-hum",
+      "sportbike-rr": "formula-scream",
+      "jet-hum": "formula-scream",
       "pulse-drive": "sport-ev",
-      "grain-stage": "jet-hum",
+      "grain-stage": "formula-scream",
       "silent-mode": "silent-mode",
+      "shift-cage": "exhaust-v8",
       aurora: "tesla",
       plasma: "sport-ev",
       redline: "exhaust-v8",
       neon: "sport-ev",
-      warp: "jet-hum",
+      warp: "formula-scream",
       tunnel: "formula-scream",
-      cyberLime: "ion-whisper",
+      cyberLime: "tesla",
       electricIce: "tesla",
       solarFlare: "sport-ev",
       violetStorm: "sport-ev",
       deepOcean: "tesla",
-      midnight: "exhaust-diesel",
+      midnight: "exhaust-turbo",
       plaidBoost: "tesla",
+      cyberStorm: "sport-ev",
+      desertDune: "tesla",
+      stealthOled: "tesla",
+      mapFocus: "tesla",
+      map3D: "tesla",
+      weatherSky: "tesla",
     };
     this.BASE_PACKS = [
       "tesla",
       "sport-ev",
-      "ion-whisper",
       "exhaust-v8",
-      "formula-scream",
-      "sportbike-rr",
       "exhaust-turbo",
-      "cruiser-vtwin",
-      "exhaust-diesel",
-      "jet-hum",
+      "formula-scream",
     ];
+    /** 5 premium hero packs + silent. Theme aliases still resolve via THEME_PACK_MAP / PROFILES. */
     this.VOICES = [
-      // Elektrikli Araçlar (EV)
-      { key: "tesla", label: "⚡ Tesla Model S Plaid", theme: "glow", group: "ev" },
-      { key: "sport-ev", label: "🔋 Porsche Taycan Sport", theme: "plasma", group: "ev" },
-      { key: "ion-whisper", label: "✨ İyon Fısıltısı (Yumuşak EV)", theme: "glow", group: "ev" },
-
-      // Kaslı & Klasik Egzoz (Muscle & Exhaust)
+      { key: "tesla", label: "⚡ Hyper EV Plaid", theme: "plaidBoost", group: "ev" },
+      { key: "sport-ev", label: "🔋 Taycan Sport Sound", theme: "plasma", group: "ev" },
       { key: "exhaust-v8", label: "🔥 American V8 Muscle", theme: "redline", group: "exhaust" },
       { key: "exhaust-turbo", label: "💨 Twin-Turbo Boxer", theme: "redline", group: "exhaust" },
-      { key: "cruiser-vtwin", label: "🦅 V-Twin Chopper", theme: "redline", group: "exhaust" },
-      { key: "exhaust-diesel", label: "🚛 Heavy Torque Diesel", theme: "midnight", group: "exhaust" },
-
-      // Yarış & Yüksek Devir (Race & Motorsport)
-      { key: "formula-scream", label: "🏁 Formula 1 V10", theme: "plasma", group: "race" },
-      { key: "sportbike-rr", label: "🏍️ Superbike 1200 RR", theme: "plasma", group: "race" },
-      { key: "shift-cage", label: "🏆 Seq-Shift Track GT (N e-Shift)", theme: "redline", group: "race" },
-
-      // Fütüristik & Warp (Sci-Fi)
-      { key: "jet-hum", label: "🛸 Sci-Fi Warp Drive", theme: "warp", group: "fx" },
-
-      // Sessiz Mod
-      { key: "silent-mode", label: "🔇 Sessiz Mod (Yalnızca Gösterge)", theme: "glow", group: "ev" },
+      { key: "formula-scream", label: "🏁 Formula V10 / Superbike", theme: "tunnel", group: "race" },
+      { key: "silent-mode", label: "🔇 Silent (cluster only)", theme: "glow", group: "ev" },
     ];
 
     /**
@@ -83,8 +71,9 @@ class EtubuAudioEngine {
      */
     this.PROFILES = {
       tesla: {
-        idleHz: 40, midHz: 85, midSpan: 140, idleGain: 0.04, midGain: 0.22,
-        windGain: 0, filterHz: 900, filterQ: 0.55, master: 1.35,
+        /* Porsche ESS continuous: pitch tracks load + speed, clear harmonic rise */
+        idleHz: 48, midHz: 110, midSpan: 220, idleGain: 0.045, midGain: 0.2,
+        windGain: 0, filterHz: 1600, filterQ: 0.48, master: 1.42,
         drive: "ev_modely_body_loop.wav", driveGain: 0.76,
         drive2: "ev_hum_soft_loop.wav", drive2Gain: 0.28,
         regen: "ev_modely_rev_body_loop.wav", regenGain: 0.65,
@@ -94,8 +83,8 @@ class EtubuAudioEngine {
           high: "bands/ev_high_v2.wav",
         },
         bandEdges: { midStart: 12, highStart: 70 },
-        gears: 1, waveIdle: "sine", waveMid: "sine", bodyMul: 0.3,
-        harmMul: 0.04, subMul: 0.12, sampleLed: true,
+        gears: 6, eShift: true, ess: true, waveIdle: "sine", waveMid: "sine", bodyMul: 0.22,
+        harmMul: 0.09, subMul: 0.14, sampleLed: true, essMul: 0.32,
       },
       /* EV — body-EQ’lu Chalmers + yumuşak hum (ıslık bandı kesik) */
       "calm-ev": {
@@ -110,12 +99,13 @@ class EtubuAudioEngine {
           high: "bands/ev_high_v2.wav",
         },
         bandEdges: { midStart: 12, highStart: 68 },
-        gears: 1, waveIdle: "sine", waveMid: "sine", bodyMul: 0.32,
-        harmMul: 0.04, subMul: 0.14, sampleLed: true,
+        gears: 6, eShift: true, ess: true, waveIdle: "sine", waveMid: "sine", bodyMul: 0.32,
+        harmMul: 0.04, subMul: 0.14, sampleLed: true, ess: true, essMul: 0.32,
       },
       "sport-ev": {
-        idleHz: 52, midHz: 110, midSpan: 200, idleGain: 0.032, midGain: 0.24,
-        windGain: 0, filterHz: 1200, filterQ: 0.65, master: 1.38,
+        /* Hyundai Ioniq N e-Shift + Porsche ESS blend: 8 virtual gears from speed×APS */
+        idleHz: 55, midHz: 125, midSpan: 260, idleGain: 0.034, midGain: 0.22,
+        windGain: 0, filterHz: 2400, filterQ: 0.52, master: 1.48,
         drive: "ev_modely_body_loop.wav", driveGain: 0.74,
         drive2: "ev_hum_sport_loop.wav", drive2Gain: 0.3,
         regen: "ev_modely_rev_body_loop.wav", regenGain: 0.68,
@@ -125,8 +115,8 @@ class EtubuAudioEngine {
           high: "bands/ev_high_v2.wav",
         },
         bandEdges: { midStart: 14, highStart: 75 },
-        gears: 1, waveIdle: "sine", waveMid: "sine", bodyMul: 0.24,
-        harmMul: 0.05, subMul: 0.1, sampleLed: true,
+        gears: 8, eShift: true, ess: true, waveIdle: "sine", waveMid: "triangle",
+        bodyMul: 0.2, harmMul: 0.11, subMul: 0.11, sampleLed: true, essMul: 0.32,
       },
       "ion-whisper": {
         idleHz: 60, midHz: 130, midSpan: 240, idleGain: 0.028, midGain: 0.2,
@@ -140,8 +130,8 @@ class EtubuAudioEngine {
           high: "bands/ev_high_v2.wav",
         },
         bandEdges: { midStart: 10, highStart: 70 },
-        gears: 1, waveIdle: "sine", waveMid: "sine", bodyMul: 0.16,
-        harmMul: 0.05, subMul: 0.08, sampleLed: true,
+        gears: 6, eShift: true, ess: true, waveIdle: "sine", waveMid: "sine", bodyMul: 0.16,
+        harmMul: 0.05, subMul: 0.08, sampleLed: true, ess: true, essMul: 0.32,
       },
       "volt-shift": {
         idleHz: 48, midHz: 105, midSpan: 190, idleGain: 0.035, midGain: 0.24,
@@ -155,8 +145,8 @@ class EtubuAudioEngine {
           high: "bands/ev_high_v2.wav",
         },
         bandEdges: { midStart: 12, highStart: 72 },
-        gears: 1, waveIdle: "sine", waveMid: "sine", bodyMul: 0.22,
-        harmMul: 0.05, subMul: 0.1, sampleLed: true,
+        gears: 6, eShift: true, ess: true, waveIdle: "sine", waveMid: "sine", bodyMul: 0.22,
+        harmMul: 0.05, subMul: 0.1, sampleLed: true, ess: true, essMul: 0.32,
       },
       "boost-launch": {
         idleHz: 58, midHz: 125, midSpan: 260, idleGain: 0.03, midGain: 0.26,
@@ -170,14 +160,14 @@ class EtubuAudioEngine {
           high: "bands/ev_high_v2.wav",
         },
         bandEdges: { midStart: 16, highStart: 80 },
-        gears: 1, waveIdle: "sine", waveMid: "triangle", bodyMul: 0.18,
-        harmMul: 0.06, subMul: 0.09, sampleLed: true,
+        gears: 6, eShift: true, ess: true, waveIdle: "sine", waveMid: "triangle", bodyMul: 0.18,
+        harmMul: 0.06, subMul: 0.09, sampleLed: true, ess: true, essMul: 0.32,
       },
 
       /* ICE */
       "exhaust-v8": {
         idleHz: 40, midHz: 88, midSpan: 200, idleGain: 0.05, midGain: 0.28,
-        windGain: 0, filterHz: 900, filterQ: 0.7, master: 1.52,
+        windGain: 0, filterHz: 1800, filterQ: 0.7, master: 1.55,
         drive: "v8_exhaust_loop.wav", driveGain: 0.82,
         drive2: "v8_exhaust_loop.wav", drive2Gain: 0.22,
         loops: {
@@ -186,12 +176,12 @@ class EtubuAudioEngine {
           high: "bands/ice_high_v2.wav",
         },
         bandEdges: { midStart: 14, highStart: 95 },
-        gears: 6, ice: true, waveIdle: "triangle", waveMid: "sawtooth", bodyMul: 0.28,
-        harmMul: 0.12, subMul: 0.2, sampleLed: true,
+        gears: 6, eShift: true, ice: true, waveIdle: "triangle", waveMid: "sawtooth", bodyMul: 0.28,
+        harmMul: 0.12, subMul: 0.2, sampleLed: true, ess: true, essMul: 0.32,
       },
       "exhaust-turbo": {
         idleHz: 48, midHz: 115, midSpan: 260, idleGain: 0.04, midGain: 0.26,
-        windGain: 0, filterHz: 1200, filterQ: 0.75, master: 1.46,
+        windGain: 0, filterHz: 2000, filterQ: 0.75, master: 1.52,
         drive: "combustion_rich_loop.wav", driveGain: 0.84,
         drive2: "ref_sim_load_throttle.wav", drive2Gain: 0.22,
         loops: {
@@ -200,8 +190,8 @@ class EtubuAudioEngine {
           high: "bands/turbo_high_v2.wav",
         },
         bandEdges: { midStart: 16, highStart: 100 },
-        gears: 6, ice: true, waveIdle: "triangle", waveMid: "sawtooth", bodyMul: 0.22,
-        harmMul: 0.1, subMul: 0.12, sampleLed: true,
+        gears: 6, eShift: true, ice: true, waveIdle: "triangle", waveMid: "sawtooth", bodyMul: 0.22,
+        harmMul: 0.1, subMul: 0.12, sampleLed: true, ess: true, essMul: 0.32,
       },
       "exhaust-diesel": {
         idleHz: 28, midHz: 60, midSpan: 120, idleGain: 0.07, midGain: 0.24,
@@ -214,8 +204,8 @@ class EtubuAudioEngine {
           high: "bands/diesel_high_v2.wav",
         },
         bandEdges: { midStart: 12, highStart: 85 },
-        gears: 6, ice: true, waveIdle: "triangle", waveMid: "triangle", bodyMul: 0.36,
-        harmMul: 0.08, subMul: 0.26, sampleLed: true,
+        gears: 6, eShift: true, ice: true, waveIdle: "triangle", waveMid: "triangle", bodyMul: 0.36,
+        harmMul: 0.08, subMul: 0.26, sampleLed: true, ess: true, essMul: 0.32,
       },
       "asphalt-roar": {
         idleHz: 36, midHz: 82, midSpan: 190, idleGain: 0.05, midGain: 0.28,
@@ -228,8 +218,8 @@ class EtubuAudioEngine {
           high: "bands/ice_high_v2.wav",
         },
         bandEdges: { midStart: 14, highStart: 88 },
-        gears: 5, ice: true, waveIdle: "triangle", waveMid: "sawtooth", bodyMul: 0.26,
-        harmMul: 0.12, subMul: 0.16, sampleLed: true,
+        gears: 5, eShift: true, ice: true, waveIdle: "triangle", waveMid: "sawtooth", bodyMul: 0.26,
+        harmMul: 0.12, subMul: 0.16, sampleLed: true, ess: true, essMul: 0.32,
       },
       "thunder-bass": {
         idleHz: 22, midHz: 44, midSpan: 100, idleGain: 0.075, midGain: 0.22,
@@ -242,8 +232,8 @@ class EtubuAudioEngine {
           high: "bands/ice_high_v2.wav",
         },
         bandEdges: { midStart: 10, highStart: 80 },
-        gears: 4, ice: true, waveIdle: "sine", waveMid: "triangle", bodyMul: 0.42,
-        harmMul: 0.08, subMul: 0.32, sampleLed: true,
+        gears: 4, eShift: true, ice: true, waveIdle: "sine", waveMid: "triangle", bodyMul: 0.42,
+        harmMul: 0.08, subMul: 0.32, sampleLed: true, ess: true, essMul: 0.32,
       },
       "cruiser-vtwin": {
         idleHz: 24, midHz: 50, midSpan: 85, idleGain: 0.06, midGain: 0.26,
@@ -256,8 +246,8 @@ class EtubuAudioEngine {
           high: "bands/ice_high_v2.wav",
         },
         bandEdges: { midStart: 12, highStart: 70 },
-        gears: 5, ice: true, waveIdle: "triangle", waveMid: "sawtooth", bodyMul: 0.3,
-        harmMul: 0.14, subMul: 0.24, sampleLed: true,
+        gears: 5, eShift: true, ice: true, waveIdle: "triangle", waveMid: "sawtooth", bodyMul: 0.3,
+        harmMul: 0.14, subMul: 0.24, sampleLed: true, ess: true, essMul: 0.32,
       },
 
       /* Formula 1 / 1200 RR — özel yüksek devir loop’lar */
@@ -272,8 +262,8 @@ class EtubuAudioEngine {
           high: "bands/formula_high_v2.wav",
         },
         bandEdges: { midStart: 20, highStart: 110 },
-        gears: 8, ice: true, waveIdle: "sawtooth", waveMid: "sawtooth", bodyMul: 0.14,
-        harmMul: 0.1, subMul: 0.08, sampleLed: true,
+        gears: 8, eShift: true, ice: true, waveIdle: "sawtooth", waveMid: "sawtooth", bodyMul: 0.14,
+        harmMul: 0.1, subMul: 0.08, sampleLed: true, ess: true, essMul: 0.32,
       },
       "sportbike-rr": {
         idleHz: 120, midHz: 250, midSpan: 480, idleGain: 0.028, midGain: 0.22,
@@ -286,8 +276,8 @@ class EtubuAudioEngine {
           high: "bands/sportbike_high_v2.wav",
         },
         bandEdges: { midStart: 22, highStart: 115 },
-        gears: 6, ice: true, waveIdle: "triangle", waveMid: "sawtooth", bodyMul: 0.12,
-        harmMul: 0.1, subMul: 0.07, sampleLed: true,
+        gears: 6, eShift: true, ice: true, waveIdle: "triangle", waveMid: "sawtooth", bodyMul: 0.12,
+        harmMul: 0.1, subMul: 0.07, sampleLed: true, ess: true, essMul: 0.32,
       },
 
       "jet-hum": {
@@ -295,16 +285,16 @@ class EtubuAudioEngine {
         windGain: 0, filterHz: 2000, filterQ: 0.8, master: 1.34,
         drive: "ev_hum_sport_loop.wav", driveGain: 0.62,
         drive2: "ev_modely_rev_body_loop.wav", drive2Gain: 0.28,
-        gears: 1, waveIdle: "sine", waveMid: "triangle", bodyMul: 0.12,
-        harmMul: 0.06, subMul: 0.08, sampleLed: true,
+        gears: 6, eShift: true, ess: true, waveIdle: "sine", waveMid: "triangle", bodyMul: 0.12,
+        harmMul: 0.06, subMul: 0.08, sampleLed: true, ess: true, essMul: 0.32,
       },
       "pulse-drive": {
         idleHz: 58, midHz: 140, midSpan: 260, idleGain: 0.03, midGain: 0.24,
         windGain: 0, filterHz: 1600, filterQ: 0.85, master: 1.32,
         drive: "ev_hum_soft_loop.wav", driveGain: 0.66,
         drive2: "ev_id3_body_loop.wav", drive2Gain: 0.3,
-        gears: 1, waveIdle: "sine", waveMid: "triangle", bodyMul: 0.14,
-        harmMul: 0.05, subMul: 0.08, sampleLed: true,
+        gears: 6, eShift: true, ess: true, waveIdle: "sine", waveMid: "triangle", bodyMul: 0.14,
+        harmMul: 0.05, subMul: 0.08, sampleLed: true, ess: true, essMul: 0.32,
       },
 
       /* Simülasyon (RevHeadz UX: load + gear) */
@@ -313,16 +303,16 @@ class EtubuAudioEngine {
         windGain: 0, filterHz: 980, filterQ: 0.65, master: 1.55,
         drive: "ref_sim_load_throttle.wav", driveGain: 0.86,
         drive2: "v8_exhaust_loop.wav", drive2Gain: 0.14,
-        gears: 6, ice: true, waveIdle: "triangle", waveMid: "sawtooth", bodyMul: 0.3,
-        harmMul: 0.12, subMul: 0.22, sampleLed: true,
+        gears: 6, eShift: true, ice: true, waveIdle: "triangle", waveMid: "sawtooth", bodyMul: 0.3,
+        harmMul: 0.12, subMul: 0.22, sampleLed: true, ess: true, essMul: 0.32,
       },
       "shift-cage": {
         idleHz: 48, midHz: 100, midSpan: 280, idleGain: 0.045, midGain: 0.28,
         windGain: 0, filterHz: 1400, filterQ: 0.75, master: 1.52,
         drive: "ref_sim_shift_cage.wav", driveGain: 0.84,
         drive2: "v8_exhaust_loop.wav", drive2Gain: 0.2,
-        gears: 7, ice: true, waveIdle: "triangle", waveMid: "sawtooth", bodyMul: 0.24,
-        harmMul: 0.14, subMul: 0.14, sampleLed: true,
+        gears: 7, eShift: true, ice: true, waveIdle: "triangle", waveMid: "sawtooth", bodyMul: 0.24,
+        harmMul: 0.14, subMul: 0.14, sampleLed: true, ess: true, essMul: 0.32,
       },
 
       /* Prosedürel (WebAudio matematiksel karakter) */
@@ -331,16 +321,16 @@ class EtubuAudioEngine {
         windGain: 0, filterHz: 1600, filterQ: 0.7, master: 1.48,
         drive: "ref_proc_piston_sigma.wav", driveGain: 0.8,
         drive2: "ref_proc_intake_eq.wav", drive2Gain: 0.18,
-        gears: 5, ice: true, waveIdle: "triangle", waveMid: "triangle", bodyMul: 0.22,
-        harmMul: 0.16, subMul: 0.12, sampleLed: true,
+        gears: 5, eShift: true, ice: true, waveIdle: "triangle", waveMid: "triangle", bodyMul: 0.22,
+        harmMul: 0.16, subMul: 0.12, sampleLed: true, ess: true, essMul: 0.32,
       },
       "intake-eq": {
         idleHz: 52, midHz: 118, midSpan: 260, idleGain: 0.04, midGain: 0.24,
         windGain: 0, filterHz: 1900, filterQ: 0.8, master: 1.42,
         drive: "ref_proc_intake_eq.wav", driveGain: 0.78,
         drive2: "ref_proc_piston_sigma.wav", drive2Gain: 0.2,
-        gears: 1, waveIdle: "sine", waveMid: "triangle", bodyMul: 0.2,
-        harmMul: 0.1, subMul: 0.1, sampleLed: true,
+        gears: 6, eShift: true, ess: true, waveIdle: "sine", waveMid: "triangle", bodyMul: 0.2,
+        harmMul: 0.1, subMul: 0.1, sampleLed: true, ess: true, essMul: 0.32,
       },
 
       /* Studio bank (REV / Igniter yoğunluk) */
@@ -349,24 +339,24 @@ class EtubuAudioEngine {
         windGain: 0, filterHz: 1200, filterQ: 0.7, master: 1.56,
         drive: "ref_grain_ramp_forge.wav", driveGain: 0.88,
         drive2: "ref_sim_load_throttle.wav", drive2Gain: 0.16,
-        gears: 6, ice: true, waveIdle: "triangle", waveMid: "sawtooth", bodyMul: 0.26,
-        harmMul: 0.12, subMul: 0.18, sampleLed: true,
+        gears: 6, eShift: true, ice: true, waveIdle: "triangle", waveMid: "sawtooth", bodyMul: 0.26,
+        harmMul: 0.12, subMul: 0.18, sampleLed: true, ess: true, essMul: 0.32,
       },
       "grain-stage": {
         idleHz: 70, midHz: 160, midSpan: 360, idleGain: 0.035, midGain: 0.26,
         windGain: 0, filterHz: 2200, filterQ: 0.85, master: 1.54,
         drive: "ref_grain_stage_cut.wav", driveGain: 0.9,
         drive2: "ref_grain_ramp_forge.wav", drive2Gain: 0.14,
-        gears: 8, ice: true, waveIdle: "sawtooth", waveMid: "sawtooth", bodyMul: 0.14,
-        harmMul: 0.12, subMul: 0.08, sampleLed: true,
+        gears: 8, eShift: true, ice: true, waveIdle: "sawtooth", waveMid: "sawtooth", bodyMul: 0.14,
+        harmMul: 0.12, subMul: 0.08, sampleLed: true, ess: true, essMul: 0.32,
       },
     };
 
     this.SAMPLE_BASE = "assets/audio/loops/";
     this.SAMPLE_VER = "20260825a";
     /** Continuous feel — Speed drives pitch; Load drives volume (Drive.app) */
-    this.RATE_MIN = 0.72;
-    this.RATE_MAX = 1.55;
+    this.RATE_MIN = 0.62;
+    this.RATE_MAX = 1.72;
     /** Pitch follows GPS speed closely; load is volume-only */
     this.LERP_UP = 0.48;
     this.LERP_DOWN = 0.28;
@@ -666,8 +656,10 @@ class EtubuAudioEngine {
     a.playsInline = true;
     a.setAttribute("playsinline", "");
     a.setAttribute("webkit-playsinline", "");
-    // Motor-only yedek — combustion_rich / kabin rüzgarı YOK
-    a.src = this.SAMPLE_BASE + "v8_exhaust_loop.wav?v=" + this.SAMPLE_VER;
+    // Tesla / EV tarayıcısında EV sesini kullan — ICE sesini değil
+    const isTeslaCtx = !!(typeof CarBrowser !== "undefined" && CarBrowser.isTesla?.());
+    const fallbackFile = isTeslaCtx ? "ev_modely_body_loop.wav" : "v8_exhaust_loop.wav";
+    a.src = this.SAMPLE_BASE + fallbackFile + "?v=" + this.SAMPLE_VER;
     a.volume = 0.01;
     this._htmlAudio = a;
     return a;
@@ -751,6 +743,9 @@ class EtubuAudioEngine {
 
   _startResumePoll() {
     if (this._resumePoll != null) return;
+    const isTeslaCtx = !!(typeof CarBrowser !== "undefined" && CarBrowser.isTesla?.());
+    // Tesla'da daha agresif poll — Chromium/Qt audio kilidi geç açılabiliyor
+    const interval = isTeslaCtx ? 220 : 500;
     this._resumePoll = setInterval(() => {
       if (!this._running || !this._ctx) {
         this._stopResumePoll();
@@ -758,6 +753,12 @@ class EtubuAudioEngine {
       }
       if (this._ctx.state === "suspended") {
         this._ctx.resume().catch(() => {});
+        if (isTeslaCtx) {
+          // Tesla: ikinci deneme 80ms sonra (Qt event loop gecikmesi)
+          setTimeout(() => {
+            if (this._ctx?.state === "suspended") this._ctx.resume().catch(() => {});
+          }, 80);
+        }
         this._primeOutputSync();
         if (!this._htmlFallbackActive) {
           this._engageHtmlFallback(true).catch(() => {});
@@ -766,7 +767,7 @@ class EtubuAudioEngine {
         this._engageHtmlFallback(false);
         this._hideUnlockOverlay();
       }
-    }, 500);
+    }, interval);
   }
 
   _stopResumePoll() {
@@ -1029,7 +1030,7 @@ class EtubuAudioEngine {
     const feelKmh = this._smoothKmh;
     const norm = this._norm(feelKmh);
     // Gear / RPM from speed only — load does not fake pitch
-    this._gearInfo = this._gearFromNorm(norm, this._currentProfile());
+    this._gearInfo = this._gearFromNorm(norm, this._currentProfile(), this._throttleLoad || 0);
     if (this._throttleLoad > 0.08) {
       // Slight revs under load without owning pitch
       this._gearInfo = {
@@ -1359,13 +1360,45 @@ class EtubuAudioEngine {
       if (!this._ctx) return;
       if (this._ctx.state === "suspended") {
         this._ctx.resume().catch(() => {});
+        this._primeOutputSync();
       }
     });
     window.addEventListener("pageshow", () => {
       if (this._ctx?.state === "suspended") {
         this._ctx.resume().catch(() => {});
+        this._primeOutputSync();
       }
     });
+    // Tesla/Qt tarayıcısı: her dokunuşta AudioContext resume dene
+    // (Chromium embedded audio policy — jest olmadan açılmıyor)
+    const teslaResumeOnTouch = () => {
+      if (!this._ctx) return;
+      if (this._ctx.state === "suspended") {
+        this._primeOutputSync();
+        this._ctx.resume().then(() => {
+          if (this._ctx.state === "running") {
+            this._unlocked = true;
+            this._hideUnlockOverlay();
+            if (this._pendingUnlockStart) {
+              const key = this._pendingUnlockStart;
+              this._pendingUnlockStart = null;
+              this.start(key).catch(() => {});
+            } else if (this._running) {
+              this._applyParams(this._smoothKmh, true);
+            }
+          }
+        }).catch(() => {});
+      }
+    };
+    try {
+      const isTeslaCtx = !!(typeof CarBrowser !== "undefined" && CarBrowser.isTesla?.());
+      if (isTeslaCtx) {
+        // Tesla: touchstart, pointerdown ve click üçlüsü — Qt loop gecikmesini yakala
+        document.addEventListener("touchstart", teslaResumeOnTouch, { passive: true, capture: true });
+        document.addEventListener("pointerdown", teslaResumeOnTouch, { passive: true, capture: true });
+        document.addEventListener("click", teslaResumeOnTouch, { capture: true });
+      }
+    } catch (_) {}
   }
 
   /* ---------- buffers ---------- */
@@ -1446,81 +1479,54 @@ class EtubuAudioEngine {
 
     const nodes = {};
     const sources = [];
-    // Kabin: sawtooth cızırtı yapar → sine/triangle
-    const waveIdle = cabin ? "sine" : profile.waveIdle || (profile.ice ? "triangle" : "sine");
-    const waveMid = cabin
-      ? "triangle"
-      : profile.waveMid || (profile.ice ? "sawtooth" : "triangle");
-    const fq = cabin ? Math.min(0.55, profile.filterQ || 0.6) : profile.filterQ;
-    const fBase = cabin ? Math.min(1600, profile.filterHz || 1200) : profile.filterHz;
-
-    // --- Idle katmanı (düşük hız) ---
-    const idleOsc = ctx.createOscillator();
-    idleOsc.type = waveIdle;
-    idleOsc.frequency.value = profile.idleHz;
-    const idleFilter = ctx.createBiquadFilter();
-    idleFilter.type = "lowpass";
-    idleFilter.frequency.value = fBase * 0.5;
-    idleFilter.Q.value = fq;
-    const idleGain = ctx.createGain();
-    idleGain.gain.value = 0.0001;
-    idleOsc.connect(idleFilter);
-    idleFilter.connect(idleGain);
-    idleGain.connect(bus);
-    sources.push(idleOsc);
-    nodes.idle = { osc: idleOsc, filter: idleFilter, gain: idleGain };
-
-    // --- Mid katmanı (crossfade ile girer) ---
-    const midOsc = ctx.createOscillator();
-    midOsc.type = waveMid;
-    midOsc.frequency.value = profile.midHz;
-    const midFilter = ctx.createBiquadFilter();
-    midFilter.type = "lowpass";
-    midFilter.frequency.value = fBase;
-    midFilter.Q.value = fq;
-    const midGain = ctx.createGain();
-    midGain.gain.value = 0.0001;
-    midOsc.connect(midFilter);
-    midFilter.connect(midGain);
-    midGain.connect(bus);
-    sources.push(midOsc);
-    nodes.mid = { osc: midOsc, filter: midFilter, gain: midGain };
-
-    // Harmonic / gövde — lowpass only (ıslık yok)
-    const bodyOsc = ctx.createOscillator();
-    bodyOsc.type = "sine";
-    bodyOsc.frequency.value = profile.idleHz * 2;
-    const bodyGain = ctx.createGain();
-    bodyGain.gain.value = 0.0001;
-    bodyOsc.connect(bodyGain);
-    bodyGain.connect(bus);
-    sources.push(bodyOsc);
-    nodes.body = { osc: bodyOsc, gain: bodyGain };
-
-    const harmOsc = ctx.createOscillator();
-    harmOsc.type = "sine";
-    harmOsc.frequency.value = profile.midHz * 1.5;
-    const harmFilter = ctx.createBiquadFilter();
-    harmFilter.type = "lowpass";
-    harmFilter.frequency.value = Math.min(cabin ? 1800 : 2400, fBase * 1.1);
-    harmFilter.Q.value = 0.45;
-    const harmGain = ctx.createGain();
-    harmGain.gain.value = 0.0001;
-    harmOsc.connect(harmFilter);
-    harmFilter.connect(harmGain);
-    harmGain.connect(bus);
-    sources.push(harmOsc);
-    nodes.harm = { osc: harmOsc, filter: harmFilter, gain: harmGain };
+    // WAV bands lead; Porsche ESS / Hyundai ASD add quiet sine harmonics under samples.
+    const tipIn = ctx.createBiquadFilter();
+    tipIn.type = "lowpass";
+    tipIn.frequency.value = 850;
+    tipIn.Q.value = 0.55;
+    tipIn.connect(bus);
+    nodes.tipIn = tipIn;
 
     const subOsc = ctx.createOscillator();
     subOsc.type = "sine";
-    subOsc.frequency.value = Math.max(28, profile.idleHz * 0.5);
+    subOsc.frequency.value = 45;
+    const shaper = ctx.createWaveShaper();
+    shaper.curve = this._softSatCurve(0.35);
+    shaper.oversample = "2x";
+    const subLp = ctx.createBiquadFilter();
+    subLp.type = "lowpass";
+    subLp.frequency.value = 90;
+    subLp.Q.value = 0.4;
     const subGain = ctx.createGain();
     subGain.gain.value = 0.0001;
-    subOsc.connect(subGain);
+    subOsc.connect(shaper);
+    shaper.connect(subLp);
+    subLp.connect(subGain);
     subGain.connect(bus);
     sources.push(subOsc);
-    nodes.sub = { osc: subOsc, gain: subGain };
+    nodes.sub = { osc: subOsc, gain: subGain, filter: subLp, shaper };
+
+    const makeTone = (hz, type, lpHz) => {
+      const o = ctx.createOscillator();
+      o.type = type || "sine";
+      o.frequency.value = hz;
+      const f = ctx.createBiquadFilter();
+      f.type = "lowpass";
+      f.frequency.value = lpHz;
+      f.Q.value = 0.55;
+      const g = ctx.createGain();
+      g.gain.value = 0.0001;
+      o.connect(f);
+      f.connect(g);
+      g.connect(tipIn);
+      sources.push(o);
+      return { osc: o, filter: f, gain: g };
+    };
+    // ESS layers: fundamental + 2nd harmonic (Porsche clear rising tone)
+    nodes.idle = makeTone(profile.idleHz || 48, profile.waveIdle || "sine", 420);
+    nodes.mid = makeTone(profile.midHz || 110, profile.waveMid || "sine", 1800);
+    nodes.body = makeTone((profile.midHz || 110) * 0.72, "sine", 900);
+    nodes.harm = makeTone((profile.midHz || 110) * 2.0, "sine", 3200);
 
     // Rüzgar / ıslık / EMF — bilinçli olarak kapalı (ıslık şikayeti)
     if (this.ENABLE_WIND) {
@@ -1651,6 +1657,18 @@ class EtubuAudioEngine {
     return null;
   }
 
+  /** Soft tanh-like saturation curve for sub-bass body (not a lead synth). */
+  _softSatCurve(amount = 0.35) {
+    const n = 256;
+    const curve = new Float32Array(n);
+    const k = 1 + amount * 3;
+    for (let i = 0; i < n; i++) {
+      const x = (i * 2) / (n - 1) - 1;
+      curve[i] = Math.tanh(k * x) / Math.tanh(k);
+    }
+    return curve;
+  }
+
   /** Smoothstep 0..1 */
   _smoothstep(x) {
     const t = Math.max(0, Math.min(1, x));
@@ -1658,27 +1676,25 @@ class EtubuAudioEngine {
   }
 
   /**
-   * Band position: Speed primary (pitch bands), Load secondary for edge push.
-   * Drive.app: bands follow speed; load does not own the spectrum.
+   * Band weights from normalized RPM + throttle load (NOT raw km/h).
+   * idle 0.00–0.35 · mid 0.25–0.75 · high 0.65–1.0 with soft overlaps.
+   * 1st-gear tip-in at 30 km/h → high RPM → high band; 6th-gear cruise → mid/idle.
    */
-  _bandWeights(kmh, edges, loadPos) {
-    const mid0 = edges?.midStart ?? 12;
-    const high0 = edges?.highStart ?? 72;
-    const speedPos = Math.max(0, Math.min(1, kmh / Math.max(40, this._maxKmh)));
-    const pos =
-      loadPos != null && Number.isFinite(loadPos)
-        ? Math.max(0, Math.min(1, speedPos * 0.78 + loadPos * 0.22))
-        : speedPos;
-    // Map 0..1 → pseudo-kmh along profile edges for smoothstep reuse
-    const feel = mid0 + pos * Math.max(20, high0 + 40 - mid0);
-    const fade = 42;
-    let idle = 1 - this._smoothstep((feel - (mid0 - fade)) / fade);
-    let high = this._smoothstep((feel - (high0 - fade * 0.85)) / (fade * 1.35));
-    let mid = this._smoothstep((feel - (mid0 - fade * 0.55)) / fade);
-    mid = Math.min(mid, 1 - high * 0.88);
-    mid = Math.max(0, mid);
-    idle = Math.max(0, idle);
-    high = Math.max(0, high);
+  _bandWeights(kmh, edges, loadPos, profile, rpm) {
+    const currentRpm = Math.max(
+      0.08,
+      Math.min(1.0, rpm != null && Number.isFinite(rpm) ? rpm : this._engineRpm || 0.2)
+    );
+    const load = Math.max(0, Math.min(1.0, loadPos || 0));
+    // Throttle bites the top end without inventing speed-based layers
+    const r = Math.min(1, currentRpm + load * (profile?.ice ? 0.08 : 0.12));
+
+    const idle = 1 - this._smoothstep((r - 0.12) / 0.28);
+    let mid = this._smoothstep((r - 0.22) / 0.18);
+    const midFadeOut = 1 - this._smoothstep((r - 0.62) / 0.22);
+    mid = Math.max(0, mid * midFadeOut);
+    const high = Math.max(0, this._smoothstep((r - 0.58) / 0.22));
+
     const sum = idle + mid + high || 1;
     const i = idle / sum;
     const m = mid / sum;
@@ -1727,7 +1743,7 @@ class EtubuAudioEngine {
       gain.gain.setValueAtTime(0.0001, t0);
       src.connect(filter);
       filter.connect(gain);
-      gain.connect(graph.bus);
+      gain.connect(graph.nodes.tipIn || graph.bus);
       src.start(t0);
       graph.sources.push(src);
       graph.nodes[kind] = { src, filter, gain };
@@ -1796,15 +1812,18 @@ class EtubuAudioEngine {
         (targetRegen > this._regenLoad ? 0.52 : 0.18);
       this._brakeLoad = Math.max(this._regenLoad * 0.9, this._regenFromAccel(this._extAccel) * 0.55);
 
-      // Drive.app: Speed = Pitch (primary); Load only nudges revs
+      // Drive.app: Speed sets baseline; throttle dominates tip-in (esp. EV / low gear)
       const speedRpm = this._norm(this._smoothKmh);
+      const thr = this._throttleLoad;
       const targetRpm = Math.max(
         0.08,
         Math.min(
           1,
-          speedRpm * 0.82 +
-            this._throttleLoad * 0.14 +
-            this._regenLoad * 0.28
+          speedRpm * 0.42 +
+            thr * 0.52 +
+            this._regenLoad * 0.22 +
+            // ICE keeps more road-speed coupling via gearFromNorm in applyParams
+            speedRpm * 0.12
         )
       );
       const rpmRise = targetRpm >= this._engineRpm - 0.01;
@@ -1900,52 +1919,75 @@ class EtubuAudioEngine {
     return Math.min(1, Math.max(0, kmh / Math.max(40, this._maxKmh)));
   }
 
-  /** Vites yalnızca gerçek motor (ice) seslerinde; EV/fx tek sürekli yükseliş */
+  /** ICE + Hyundai e-Shift EV packs use virtual gearbox; Porsche ESS stays single-ratio. */
   _effectiveGears(p) {
-    if (!p?.ice) return 1;
-    return Math.max(1, p.gears || 1);
+    if (p?.ice || p?.eShift) return Math.max(1, p.gears || 1);
+    return 1;
   }
 
-  _gearFromNorm(norm, profileOrGears) {
+  /**
+   * Hyundai N e-Shift / Porsche ESS virtual RPM.
+   * Patent-style: gear from speed×APS; RPM ∝ speed × gear_ratio (normalized).
+   * High APS delays upshift (hold lower gear → higher revs).
+   */
+  _gearFromNorm(norm, profileOrGears, throttle = 0) {
     const p =
       profileOrGears && typeof profileOrGears === "object"
         ? profileOrGears
         : { gears: profileOrGears, ice: (profileOrGears || 1) > 1 };
     const g = this._effectiveGears(p);
     const n = Math.max(0, Math.min(1, Number(norm) || 0));
+    const aps = Math.max(0, Math.min(1, Number(throttle) || 0));
 
     if (g <= 1) {
-      // EV: Tek oran - logaritmik hızlanma eğrisi (Porsche Taycan / Tesla Plaid)
-      // İlk kalkışta (0-50 km/s) hissedilir tırmanış, yüksek hızda oturan aerodinamik ton
-      const evCurve = Math.pow(n, 0.82);
-      return { gear: 1, rpm: 0.1 + evCurve * 0.9 };
+      // Porsche ESS continuous: speed^0.72 + APS bite (load-audible accel)
+      // Low-speed AVAS-like rise (~0–50 km/h feels intentional)
+      const speedTerm = Math.pow(n, 0.72) * 0.58;
+      const apsTerm = aps * 0.34;
+      const lowBoost = n < 0.28 ? (0.28 - n) * 0.12 : 0; // clearer crawl tone
+      return { gear: 1, rpm: Math.max(0.1, Math.min(1, 0.1 + speedTerm + apsTerm + lowBoost)) };
     }
 
-    // Hyundai Ioniq 5 N e-Shift Aşamalı Vites Dağılımı (Progressive Dual-Clutch):
-    // Alt vitesler (1 ve 2) şehir içi seri kalkış için dar; üst vitesler uzun oranlıdır
+    // Relative gear ratios (Hyundai 8DCT-inspired, descending)
+    const RATIOS_8 = [4.71, 3.14, 2.11, 1.67, 1.29, 1.0, 0.84, 0.67];
+    const RATIOS_7 = [4.4, 2.9, 2.0, 1.5, 1.15, 0.92, 0.75];
+    const RATIOS_6 = [4.0, 2.6, 1.8, 1.35, 1.05, 0.82];
+    const ratios =
+      g >= 8 ? RATIOS_8 : g === 7 ? RATIOS_7 : g === 6 ? RATIOS_6
+        : Array.from({ length: g }, (_, i) => 3.6 / (1 + i * 0.45));
+
+    // Progressive splits; high APS stretches lower gears (delayed upshift)
+    const apsHold = 0.04 + aps * 0.10;
     let splits;
-    if (g === 7) {
-      splits = [0.18, 0.33, 0.49, 0.67, 0.83, 0.94, 1.0];
+    if (g === 8) {
+      splits = [0.14 + apsHold, 0.26 + apsHold * 0.8, 0.40 + apsHold * 0.55, 0.54 + apsHold * 0.35, 0.68, 0.80, 0.91, 1.0];
+    } else if (g === 7) {
+      splits = [0.16 + apsHold, 0.30 + apsHold * 0.75, 0.46 + apsHold * 0.5, 0.62, 0.78, 0.90, 1.0];
     } else if (g === 6) {
-      splits = [0.20, 0.37, 0.55, 0.73, 0.88, 1.0];
-    } else if (g === 8) {
-      splits = [0.15, 0.28, 0.42, 0.57, 0.72, 0.84, 0.94, 1.0];
+      splits = [0.18 + apsHold, 0.34 + apsHold * 0.7, 0.52 + apsHold * 0.4, 0.70, 0.86, 1.0];
     } else {
       splits = Array.from({ length: g }, (_, i) => (i + 1) / g);
     }
+    // Clamp monotonic
+    for (let i = 1; i < splits.length; i++) {
+      splits[i] = Math.max(splits[i], splits[i - 1] + 0.04);
+    }
+    splits[splits.length - 1] = 1;
 
     let slot = 0;
-    while (slot < g - 1 && n > splits[slot]) {
-      slot++;
-    }
+    while (slot < g - 1 && n > splits[slot]) slot++;
 
     const prevSplit = slot === 0 ? 0 : splits[slot - 1];
     const nextSplit = splits[slot];
     const range = Math.max(0.01, nextSplit - prevSplit);
     const local = Math.max(0, Math.min(1, (n - prevSplit) / range));
 
-    // Her viteste 2000 RPM tabanından 7800 RPM kesiciye doğru devir tırmanışı
-    const rpm = 0.24 + local * 0.74;
+    // VSE ∝ V × ga  (normalized against tallest ratio)
+    const ratio = ratios[Math.min(slot, ratios.length - 1)];
+    const ratioMax = ratios[0];
+    const vse = (n * (ratio / ratioMax)) * 0.72 + local * 0.28;
+    // APS adds tip-in rev without inventing a higher gear
+    const rpm = Math.max(0.16, Math.min(1, 0.18 + vse * 0.72 + aps * 0.12 + local * 0.08));
     return { gear: slot + 1, rpm };
   }
 
@@ -1976,14 +2018,14 @@ class EtubuAudioEngine {
     const norm = this._norm(kmh);
     const feelNorm = Math.max(0, Math.min(1, norm));
 
-    // Vites ve Devir Hesabı (Hyundai Ioniq 5 N e-Shift DCT Mantığı)
-    const gearInfo = this._gearFromNorm(feelNorm, p);
+    // Vites ve Devir Hesabı (Hyundai Ioniq 5 N e-Shift + Porsche ESS)
+    const gearInfo = this._gearFromNorm(feelNorm, p, load);
     let rpm = gearInfo.rpm;
 
-    if (p.ice) {
+    if (p.ice || p.eShift) {
       if (this._lastGear > 0 && gearInfo.gear !== this._lastGear) {
         if (gearInfo.gear > this._lastGear) {
-          // Vites Yükseltme (Up-shift): 75ms mikro tork kesintisi (shift cut) + egzoz patırtısı
+          // Vites Yükseltme (Up-shift): 75ms mikro tork kesintisi (shift cut)
           this._shiftKick = cabin ? 0.24 : 0.35;
           this._shiftCutUntil = performance.now() + 75;
         } else {
@@ -2001,121 +2043,76 @@ class EtubuAudioEngine {
       this._shiftKick = 0;
     }
 
-    this._gearInfo = { gear: p.ice ? gearInfo.gear : 1, rpm };
+    this._gearInfo = { gear: p.ice || p.eShift ? gearInfo.gear : 1, rpm };
 
     const vol = Math.max(0.16, this._volume) * (p.master || 1) * (cabin ? 1.05 : 1.2);
     const floor = this.AUDIBLE_FLOOR * vol;
 
-    // —— SÜRÜŞ YÜKÜ VE SABİT HIZ UĞULTU ÖNLEME (HYUNDAI & PORSCHE MODELİ) ——
-    // 1. Sabit Hızda Süzülme (Cruising):
-    // Araç hareket halindeyse (feelNorm > 0.06) ve ne sert gaz ne sert fren varsa
+    // —— SÜRÜŞ YÜKÜ (HYUNDAI ASD + PORSCHE ESS) ——
+    // Volume ∝ APS × virtual RPM (patent: sound tracks torque + engine speed)
     const isCruising = feelNorm > 0.06 && load < 0.18 && regen < 0.18;
-    
-    // Sabit hızda ses seviyesi %35-40 geri çekilir (uğultu / drone engelleme)
-    const cruiseAttenuation = isCruising ? Math.max(0.60, 0.62 + load * 2.1) : 1.0;
-
-    // 2. Hızlanırken Gaz Yükü (Throttle Acceleration Boost):
-    // Gaza basıldığında motor anında yırtıcılaşır (+20% - +40%)
-    const accelBoost = 1.0 + load * (cabin ? 0.28 : 0.42);
-
-    // 3. Vites Atma Anında Mikro Tork Kesintisi (DCT Shift Cut):
+    const cruiseAttenuation = isCruising ? Math.max(0.38, 0.40 + load * 2.6) : 1.0;
+    const accelBoost = 1.0 + load * (cabin ? 0.55 : 0.85);
     const isShiftCut = this._shiftCutUntil && performance.now() < this._shiftCutUntil;
-    const shiftCutDuck = isShiftCut ? 0.45 : 1.0;
-
-    // 4. Logaritmik Hız Hacmi (0-50 km/s kalkış doygunluğu):
-    const speedCurve = Math.pow(feelNorm, 0.74);
-    const speedVol = 0.20 + speedCurve * 0.80;
-
-    // Toplam dinamik ses gücü (Punch):
-    const punch = speedVol * accelBoost * cruiseAttenuation * shiftCutDuck;
+    const shiftCutDuck = isShiftCut ? 0.25 : 1.0;
+    // RPM-weighted volume (Hyundai): quiet at idle revs, loud near redline under APS
+    const rpmVol = 0.22 + Math.pow(Math.max(0.08, rpm), 0.85) * 0.78;
+    const apsVol = 0.38 + load * 0.62;
+    const speedCurve = Math.pow(feelNorm, 0.70);
+    const speedVol = 0.18 + speedCurve * 0.55;
+    const punch = Math.max(0.2, rpmVol * apsVol * (0.55 + speedVol * 0.45)) * accelBoost * cruiseAttenuation * shiftCutDuck;
 
     const hasSample = !!(n.drive || n.drive2 || n.loopIdle || n.loopMid || n.loopHigh || n.regen);
     const sampleLed = !!p.sampleLed && hasSample;
-    const oscScale = sampleLed ? (cabin ? (feelNorm < 0.08 ? 0.35 : 0.22) : feelNorm < 0.08 ? 0.85 : 0.55) : 1;
+    // Porsche ESS harmonics under WAV (quiet; samples stay dominant)
+    const oscScale = (p.ess !== false ? (p.essMul || 0.32) : 0) * (cabin ? 0.8 : 1.05);
 
-    // Rölanti dururken etkin, hızlandıkça yerini sürüş sesine bırakır
-    const idleW = Math.max(0, 1 - feelNorm * 2.5);
-    const midW = Math.min(1, Math.max(0, feelNorm * 2.2));
-
-    const idleHz = p.idleHz * (0.9 + rpm * 0.45 + load * 0.06);
-    const midHz = p.midHz + rpm * p.midSpan;
-    const bodyHz = idleHz * 2.05;
-    const bodyMul = (p.bodyMul != null ? p.bodyMul : 0.2) * oscScale;
-    const harmMul = (p.harmMul != null ? p.harmMul : 0.08) * oscScale * (cabin ? 0.45 : 1);
-    const subMul = (p.subMul != null ? p.subMul : 0.1) * (cabin ? 0.85 : 1);
-
-    this._targetParam(n.idle.osc.frequency, idleHz, tau, force);
-    this._targetParam(n.mid.osc.frequency, midHz, tau, force);
-    this._targetParam(n.body.osc.frequency, bodyHz, tau, force);
-
-    // —— DİNAMİK ALÇAK GEÇİREN FİLTRE (PORSCHE TAYCAN PESS MODELİ) ——
-    // Hızlanırken boğaz 2800-3400 Hz'e açılır (yırtıcı kükreme)
-    // Sabit hızda ve süzülmede 950-1200 Hz'e kapanır (uğultusuz kadife ton)
-    const baseFilt = p.filterHz || 1200;
-    const dynFilterCutoff = isCruising
-      ? Math.min(cabin ? 1600 : 2000, baseFilt * (0.65 + feelNorm * 0.35))
-      : Math.min(cabin ? 2800 : 3600, baseFilt * (0.75 + feelNorm * 0.65 + load * 0.75));
-
-    this._targetParam(
-      n.idle.filter.frequency,
-      Math.min(dynFilterCutoff, baseFilt * (0.35 + feelNorm * 0.3)),
-      tau,
-      force
-    );
-    this._targetParam(
-      n.mid.filter.frequency,
-      Math.min(dynFilterCutoff, baseFilt * (0.55 + rpm * 0.55 + load * 0.2)),
-      tau,
-      force
-    );
-
-    let idleGain = Math.max(floor * 0.55, idleW * (p.idleGain || 0.08) * vol * 1.25 * oscScale);
-    let midGain = Math.max(
-      midW > 0.02 ? floor * 0.35 : 0.0001,
-      midW * (p.midGain || 0.22) * vol * punch * oscScale
-    );
-    if (feelNorm < 0.05 && load < 0.05 && regen < 0.05) {
-      idleGain = Math.max(idleGain, floor * 0.95, 0.1 * vol);
+    // —— THROTTLE TIP-IN (850 Hz cruise → 3800 Hz WOT throat open) ——
+    const tipInHz = isCruising
+      ? 700 + load * 350
+      : 700 + load * 3400 + Math.min(600, feelNorm * 500);
+    if (n.tipIn) {
+      this._targetParam(n.tipIn.frequency, Math.min(3800, tipInHz), rising ? tau * 0.55 : tau * 1.2, force);
     }
 
-    this._targetParam(n.idle.gain.gain, idleGain, tau, force);
-    this._targetParam(n.mid.gain.gain, midGain, tau, force);
-    this._targetParam(
-      n.body.gain.gain,
-      Math.max(0.0001, (0.03 + midW * 0.08 + load * 0.05 + regen * 0.04) * vol * bodyMul * (isCruising ? 0.75 : 1)),
-      tau,
-      force
-    );
-
-    if (n.harm) {
-      this._targetParam(n.harm.osc.frequency, midHz * 1.4 + load * 20, tau, force);
-      this._targetParam(
-        n.harm.filter.frequency,
-        Math.min(dynFilterCutoff, baseFilt * (0.85 + rpm * 0.25)),
-        tau,
-        force
-      );
-      this._targetParam(
-        n.harm.gain.gain,
-        Math.max(0.0001, midW * harmMul * vol * punch),
-        tau,
-        force
-      );
+    // Porsche ESS / Hyundai ASD harmonics — quiet sine stack under WAV bands
+    const rpmFeel = (p.ice || p.eShift)
+      ? rpm
+      : Math.max(0.08, Math.min(1, this._engineRpm || feelNorm * 0.5 + load * 0.45));
+    if (oscScale > 0.001) {
+      const fundHz = (p.idleHz || 48) + rpmFeel * ((p.midHz || 110) - (p.idleHz || 48)) * 2.4
+        + load * 40;
+      const midHz = fundHz * 1.55 + load * 80;
+      const bodyHz = fundHz * 0.85;
+      const harmHz = fundHz * 2.15;
+      this._targetParam(n.idle.osc.frequency, Math.min(900, fundHz), tau, force);
+      this._targetParam(n.mid.osc.frequency, Math.min(2200, midHz), tau, force);
+      this._targetParam(n.body.osc.frequency, Math.min(1200, bodyHz), tau, force);
+      if (n.harm) this._targetParam(n.harm.osc.frequency, Math.min(3600, harmHz), tau, force);
+      const essGate = Math.max(0.08, feelNorm * 0.55 + load * 0.7 + rpmFeel * 0.35);
+      const idleLvl = Math.max(0.0001, (p.idleGain || 0.04) * oscScale * essGate * vol * punch * 0.55);
+      const midLvl = Math.max(0.0001, (p.midGain || 0.2) * oscScale * essGate * vol * punch * 0.7);
+      const bodyLvl = Math.max(0.0001, (p.bodyMul || 0.2) * 0.08 * oscScale * essGate * vol * punch);
+      const harmLvl = Math.max(0.0001, (p.harmMul || 0.08) * oscScale * essGate * vol * punch * (0.4 + load * 0.8));
+      this._targetParam(n.idle.gain.gain, idleLvl, tau, force);
+      this._targetParam(n.mid.gain.gain, midLvl, tau, force);
+      this._targetParam(n.body.gain.gain, bodyLvl, tau, force);
+      if (n.harm) this._targetParam(n.harm.gain.gain, harmLvl, tau, force);
+    } else {
+      this._targetParam(n.idle.gain.gain, 0.0001, tau, force);
+      this._targetParam(n.mid.gain.gain, 0.0001, tau, force);
+      this._targetParam(n.body.gain.gain, 0.0001, tau, force);
+      if (n.harm) this._targetParam(n.harm.gain.gain, 0.0001, tau, force);
     }
 
+    // Soft sub body (40–55 Hz), load-sensitive
     if (n.sub) {
-      this._targetParam(
-        n.sub.osc.frequency,
-        Math.max(28, idleHz * 0.48 + load * 6 + regen * 4),
-        tau,
-        force
-      );
-      this._targetParam(
-        n.sub.gain.gain,
-        Math.max(0.0001, (0.04 + midW * 0.1 + load * 0.12 + regen * 0.08) * vol * subMul),
-        tau,
-        force
-      );
+      const subHz = 42 + load * 10 + (p.ice ? 4 : 0);
+      this._targetParam(n.sub.osc.frequency, subHz, tau, force);
+      const subLvl = sampleLed
+        ? Math.max(0.0001, (0.018 + load * 0.04 + feelNorm * 0.012) * vol * (cabin ? 0.7 : 1))
+        : 0.0001;
+      this._targetParam(n.sub.gain.gain, subLvl, tau, force);
     }
 
     if (n.wind) {
@@ -2126,42 +2123,50 @@ class EtubuAudioEngine {
 
     if (n.road) this._targetParam(n.road.gain.gain, 0.0001, tau, force);
 
-    // Playback rate — Vitesli motorlarda devirle birebir senkron düşüş/tırmanış, EV'de kesintisiz logaritmik
-    const rateRaw = p.ice
-      ? (0.64 + rpm * 0.86 + load * 0.06)
-      : (0.72 + Math.pow(feelNorm, 0.78) * 0.92 + load * 0.06);
+    // Playback rate — ICE/e-Shift track virtual RPM; ESS uses flywheel RPM
+    const rateRaw = (p.ice || p.eShift)
+      ? (0.64 + rpmFeel * 0.86 + load * 0.08)
+      : (0.70 + Math.pow(rpmFeel, 0.74) * 0.95 + load * 0.12);
     const rate = Math.max(this.RATE_MIN || 0.70, Math.min(this.RATE_MAX || 1.80, rateRaw));
 
     const bands = graph.bands || this._resolveLoopBands(p);
     const driveDuck = 1 - regen * 0.45;
     const loadPos = Math.max(0, Math.min(1, load * 0.9 + regen * 0.45 + feelNorm * 0.12));
     if (bands && (n.loopIdle || n.loopMid || n.loopHigh)) {
-      const w = this._bandWeights(kmh, bands.edges, loadPos);
-      const applyBand = (node, weight, baseGain, rateMul) => {
+      const w = this._bandWeights(kmh, bands.edges, loadPos, p, rpmFeel);
+      const applyBand = (node, weight, baseGain, targetRateVal) => {
         if (!node?.src) return;
         const level = Math.max(
           weight > 0.02 ? floor * 0.25 : 0.0001,
           weight * baseGain * vol * punch * driveDuck * (cabin ? 1 : 1.05)
         );
         this._targetParam(node.gain.gain, level, tau, force);
-        this._targetRate(node.src.playbackRate, rate * rateMul, rateTau, force);
+        this._targetRate(node.src.playbackRate, targetRateVal, rateTau, force);
+        // Per-band LP follows tip-in throat (850→3800)
         this._targetParam(
           node.filter.frequency,
-          Math.min(dynFilterCutoff, (p.filterHz || 1200) * (0.65 + feelNorm * 0.55 + load * 0.04)),
-          tau,
+          Math.min(3800, tipInHz * (0.85 + weight * 0.2)),
+          rising ? tau * 0.6 : tau,
           force
         );
       };
-      applyBand(n.loopIdle, w.idle, bands.gains.idle, 0.97);
-      applyBand(n.loopMid, w.mid, bands.gains.mid, 1.0);
-      applyBand(n.loopHigh, w.high, bands.gains.high, 1.03);
+      // Multi-track: each band stays in its acoustic sweet-spot
+      const idleRate = 0.78 + Math.max(0, Math.min(0.42, (rpmFeel - 0.12) * 0.95));
+      const midRate = 0.72 + Math.max(0, Math.min(0.58, (rpmFeel - 0.18) * 0.88));
+      const highRate = 0.70 + Math.max(0, Math.min(0.72, (rpmFeel - 0.35) * 0.95));
+      applyBand(n.loopIdle, w.idle, bands.gains.idle, idleRate);
+      applyBand(n.loopMid, w.mid, bands.gains.mid, midRate);
+      applyBand(n.loopHigh, w.high, bands.gains.high, highRate);
       if (n.drive) this._targetParam(n.drive.gain.gain, 0.0001, tau, force);
       if (n.drive2) this._targetParam(n.drive2.gain.gain, 0.0001, tau, force);
     } else {
+      // Legacy drive/drive2 fallback when band files missing
+      const idleW = Math.max(0, 1 - rpmFeel * 2.2);
+      const midW = Math.min(1, Math.max(0, rpmFeel * 2.0));
       if (n.drive) {
         const driveLevel = Math.max(
           floor * 0.25,
-          (idleW * 0.15 + midW * 0.95 + feelNorm * 0.35) *
+          (idleW * 0.15 + midW * 0.95 + rpmFeel * 0.35) *
             (p.driveGain || 0.5) *
             vol *
             punch *
@@ -2172,7 +2177,7 @@ class EtubuAudioEngine {
         this._targetRate(n.drive.src.playbackRate, rate, rateTau, force);
         this._targetParam(
           n.drive.filter.frequency,
-          Math.min(dynFilterCutoff, (p.filterHz || 1200) * (0.7 + feelNorm * 0.55 + load * 0.04)),
+          Math.min(3800, tipInHz),
           tau,
           force
         );
@@ -2181,7 +2186,7 @@ class EtubuAudioEngine {
       if (n.drive2) {
         const d2 = Math.max(
           floor * 0.15,
-          (idleW * 0.1 + midW * 0.8 + feelNorm * 0.3) *
+          (idleW * 0.1 + midW * 0.8 + rpmFeel * 0.3) *
             (p.drive2Gain || 0.25) *
             vol *
             punch *
@@ -2192,7 +2197,7 @@ class EtubuAudioEngine {
         this._targetRate(n.drive2.src.playbackRate, rate * 0.98 + 0.01, rateTau, force);
         this._targetParam(
           n.drive2.filter.frequency,
-          Math.min(dynFilterCutoff, (p.filterHz || 1200) * (0.65 + feelNorm * 0.5)),
+          Math.min(3800, tipInHz * 0.9),
           tau,
           force
         );
@@ -2214,7 +2219,7 @@ class EtubuAudioEngine {
       );
       this._targetParam(
         n.regen.filter.frequency,
-        Math.min(cabin ? 2000 : 2400, (p.filterHz || 1200) * (0.7 + rpm * 0.3 + regen * 0.15)),
+        Math.min(cabin ? 2000 : 2400, tipInHz * (0.7 + regen * 0.2)),
         tau,
         force
       );

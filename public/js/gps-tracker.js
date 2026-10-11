@@ -714,39 +714,37 @@ const GpsTracker = (() => {
       }
 
       if (cycle < 16) {
-        // Radar A: 4.8 km → 220 m (far→critical)
+        // Radar A: hard accel then hold — audible tip-in + rising revs
         const u = cycle / 16;
         const d = 4800 * (1 - u) + 220 * u;
         lng = CAM_A + d / mPerDegLng;
-        kmh = 88 + u * 28;
-        trend = 10;
+        kmh = 35 + u * 85; // 35→120
+        trend = 18; // strong APS
       } else if (cycle < 26) {
-        // Radar B yaklaşımı
         const u = (cycle - 16) / 10;
         const d = 2400 * (1 - u) + 180 * u;
         lng = CAM_B + d / mPerDegLng;
-        kmh = 108;
-        trend = -3;
+        kmh = 118 - u * 8;
+        trend = u < 0.3 ? 6 : -8; // lift → coast
       } else if (cycle < 34) {
-        // Koridor girişine yaklaş (900→180 m) — giriş tetiklensin
         const u = (cycle - 26) / 8;
         const d = 900 * (1 - u) + 180 * u;
         lng = CAM_C + d / mPerDegLng;
-        kmh = 102;
-        trend = -2;
+        kmh = 95 + u * 25;
+        trend = 14;
       } else if (cycle < 58) {
-        // Koridor içi: girişten itibaren 2.4 km ilerle, ort. takip + limit salınımı
         const u = (cycle - 34) / 24;
         const traveled = Math.min(2350, u * 2350);
         lng = CAM_C - traveled / mPerDegLng;
-        kmh = 108 + Math.sin(u * Math.PI * 3) * 16; // ~92–124 (aşım da)
-        trend = Math.cos(u * Math.PI * 3) * 8;
+        // Pulse accel/coast so e-Shift + punch are obvious
+        const pulse = Math.sin(u * Math.PI * 5);
+        kmh = 100 + pulse * 28;
+        trend = Math.cos(u * Math.PI * 5) * 16;
       } else {
-        // Çıkış sonrası kısa sakin
         const u = (cycle - 58) / 14;
         lng = CAM_C - (2400 + u * 400) / mPerDegLng;
-        kmh = 88 - u * 10;
-        trend = -4;
+        kmh = 90 - u * 40;
+        trend = -12;
       }
 
       lat = LAT + Math.sin(t * 0.12) * 0.00006;

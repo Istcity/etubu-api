@@ -121,8 +121,8 @@ body.motion-page {
   position: absolute;
   inset: 0;
   overflow: hidden;
-  opacity: 0.35;
-  [perspective:200px];
+  perspective: 200px;
+  -webkit-perspective: 200px;
   z-index: 0;
 }
 
@@ -497,6 +497,37 @@ body.motion-page {
   gap: 12px;
 }
 
+@media (max-width: 900px) {
+  .motion-nav {
+    padding: 10px 18px;
+    border-radius: 24px;
+    margin-top: 10px;
+  }
+  .motion-nav__links {
+    display: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .motion-nav {
+    padding: 8px 14px;
+    border-radius: 20px;
+  }
+  .motion-brand img {
+    height: 28px;
+  }
+  .motion-brand span.tag {
+    display: none;
+  }
+  .motion-nav__actions .btn-motion--ghost {
+    display: none;
+  }
+  .btn-motion {
+    padding: 8px 16px;
+    font-size: 0.84rem;
+  }
+}
+
 /* Premium Buttons */
 .btn-motion {
   display: inline-flex;
@@ -589,14 +620,16 @@ body.motion-page {
 
 .motion-hero h1 {
   font-family: var(--font-brand);
-  font-size: clamp(2.5rem, 6vw, 4.8rem);
+  font-size: clamp(1.85rem, 6.2vw, 4.5rem);
   font-weight: 800;
-  line-height: 1.1;
+  line-height: 1.15;
   letter-spacing: -0.03em;
   margin-bottom: 20px;
   background: linear-gradient(180deg, #ffffff 30%, #94a3b8 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .motion-hero h1 span.gradient {
@@ -608,9 +641,10 @@ body.motion-page {
 .motion-hero p.subtitle {
   max-width: 680px;
   margin: 0 auto 36px;
-  font-size: 1.18rem;
+  font-size: clamp(0.98rem, 2.5vw, 1.18rem);
   color: var(--text-secondary);
   line-height: 1.7;
+  overflow-wrap: break-word;
 }
 
 .hero-cta-group {
@@ -1221,23 +1255,25 @@ input[type="range"].motion-slider::-webkit-slider-thumb:hover {
 
 .section-title {
   font-family: var(--font-brand);
-  font-size: clamp(2rem, 4vw, 3rem);
+  font-size: clamp(1.65rem, 4vw, 3rem);
   font-weight: 800;
   line-height: 1.15;
   color: var(--text-primary);
   margin-bottom: 16px;
+  overflow-wrap: break-word;
 }
 
 .section-subtitle {
-  font-size: 1.05rem;
+  font-size: clamp(0.92rem, 2.2vw, 1.05rem);
   color: var(--text-secondary);
   line-height: 1.6;
+  overflow-wrap: break-word;
 }
 
 /* Feature 3D Cards Grid */
 .cards-grid-3d {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
   gap: 24px;
 }
 
@@ -1641,7 +1677,7 @@ canvas#telemetryGraphCanvas {
    ========================================================================== */
 .pricing-grid-motion {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
   gap: 28px;
   margin-bottom: 48px;
 }

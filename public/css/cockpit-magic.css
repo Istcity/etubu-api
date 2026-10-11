@@ -450,21 +450,134 @@
   box-shadow: 0 0 12px rgba(0, 240, 255, 0.15) !important;
 }
 
-/* 8. TELEMETRY WINGS (Warning & Avg Speed Sides) */
+/* 8. TELEMETRY WINGS (Warning & Avg Speed Sides) — KOMPAKT & MİNİMAL TASARIM */
+.speed-hud-content {
+  display: grid !important;
+  grid-template-columns: minmax(80px, 130px) 1fr minmax(80px, 130px) !important;
+  align-items: center !important;
+  justify-items: center !important;
+  gap: clamp(8px, 1.8vw, 16px) !important;
+  width: min(1040px, 96vw) !important;
+  padding: clamp(6px, 1.2vh, 12px) clamp(8px, 1.5vw, 16px) !important;
+}
+
 .hud-side--warn, .hud-side--avg {
-  background: rgba(13, 22, 41, 0.45);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 20px;
-  padding: 14px 16px;
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
-  transition: transform 0.25s ease, border-color 0.25s ease;
+  background: rgba(13, 22, 41, 0.4) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 14px !important;
+  padding: 6px 10px !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  box-shadow: 0 8px 20px -4px rgba(0, 0, 0, 0.5) !important;
+  transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease !important;
+  width: 100% !important;
+  max-width: 130px !important;
+  min-height: auto !important;
+  gap: 2px !important;
 }
 
 .hud-side--warn:hover, .hud-side--avg:hover {
-  border-color: rgba(0, 240, 255, 0.3);
-  transform: translateY(-2px) translateZ(6px);
+  border-color: rgba(0, 240, 255, 0.3) !important;
+  transform: translateY(-2px) translateZ(6px) !important;
+}
+
+/* Yol Uyarıları Kompakt İçerik */
+.hud-side--warn .hud-label {
+  font-size: 0.6rem !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+  opacity: 0.65 !important;
+  margin-bottom: 1px !important;
+}
+
+.hud-side--warn .hud-value {
+  font-size: 0.8rem !important;
+  font-weight: 700 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  max-width: 100% !important;
+  display: block !important;
+}
+
+.hud-side--warn .hud-warn-meta {
+  font-size: 0.68rem !important;
+  opacity: 0.8 !important;
+}
+
+.hud-side--warn .warn-reel {
+  height: 28px !important;
+  width: 100% !important;
+  margin: 1px auto 0 !important;
+}
+
+.hud-side--warn .crit-near {
+  max-height: 40px !important;
+  overflow-y: auto !important;
+  font-size: 0.62rem !important;
+}
+
+/* Ortalama Hız Kompakt İçerik */
+.hud-side--avg .avg-speed-panel {
+  padding: 0 !important;
+  gap: 2px !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.hud-side--avg .avg-speed-label {
+  font-size: 0.6rem !important;
+  letter-spacing: 0.08em !important;
+  opacity: 0.65 !important;
+}
+
+.hud-side--avg .avg-speed-value {
+  font-size: 1.05rem !important;
+  font-weight: 800 !important;
+  font-family: "Orbitron", monospace !important;
+  color: #ffffff !important;
+}
+
+.hud-side--avg .avg-speed-value small {
+  font-size: 0.58rem !important;
+  color: #00f0ff !important;
+}
+
+.hud-side--avg .avg-speed-reset {
+  font-size: 0.6rem !important;
+  padding: 2px 8px !important;
+  border-radius: 999px !important;
+  margin-top: 2px !important;
+}
+
+/* Mobil Cihazlarda Yol Uyarısı Kadranı Ezmesin */
+@media (max-width: 768px) {
+  .speed-hud-content {
+    grid-template-columns: 1fr 1fr !important;
+    grid-template-rows: auto auto !important;
+    gap: 8px !important;
+    width: 100% !important;
+    padding: 6px 8px !important;
+  }
+  .speed-gauge-stack {
+    grid-column: 1 / -1 !important;
+    order: 1 !important;
+    width: 100% !important;
+    margin-bottom: 4px !important;
+  }
+  .hud-side--warn {
+    grid-column: 1 !important;
+    order: 2 !important;
+    max-width: none !important;
+    padding: 6px 8px !important;
+  }
+  .hud-side--avg {
+    grid-column: 2 !important;
+    order: 3 !important;
+    max-width: none !important;
+    padding: 6px 8px !important;
+  }
 }
 
 /* 9. THEME CHIPS ELEVATION */

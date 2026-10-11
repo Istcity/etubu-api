@@ -10,6 +10,8 @@ files_to_upload = [
     ("public/index-app.html", "public_html/index-app.html"),
     ("public/css/cockpit-magic.css", "public_html/css/cockpit-magic.css"),
     ("public/js/app.js", "public_html/js/app.js"),
+    ("public/js/scene.js", "public_html/js/scene.js"),
+    ("public/js/i18n.js", "public_html/js/i18n.js"),
     ("public/index.html", "public_html/index.html"),
     ("public/css/motion-storefront.css", "public_html/css/motion-storefront.css"),
     ("public/css/style.css", "public_html/css/style.css"),

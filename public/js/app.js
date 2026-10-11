@@ -341,19 +341,22 @@
     const prev = visualSelect.value;
     visualSelect.innerHTML = "";
     const gaugeGroups = {
+      dual: document.createElement("optgroup"),
       digital: document.createElement("optgroup"),
       analog: document.createElement("optgroup"),
     };
-    gaugeGroups.digital.label = t("visualGroupDigital");
-    gaugeGroups.analog.label = t("visualGroupAnalog");
+    gaugeGroups.dual.label = t("visualGroupDual") || "⚡ Çift Kadran (Hız + Güç/kW)";
+    gaugeGroups.digital.label = t("visualGroupDigital") || "📱 Tek Kadran (Dijital)";
+    gaugeGroups.analog.label = t("visualGroupAnalog") || "⏱️ Tek Kadran (Analog)";
     Scene.getModes().forEach((m) => {
       const opt = document.createElement("option");
       opt.value = m.key;
       const translated = t(m.labelKey);
       opt.textContent = translated === m.labelKey ? (m.label || m.key) : translated;
-      const gid = m.gauge === "analog" ? "analog" : "digital";
+      const gid = m.gauge === "dual" ? "dual" : (m.gauge === "analog" ? "analog" : "digital");
       gaugeGroups[gid].appendChild(opt);
     });
+    if (gaugeGroups.dual.children.length) visualSelect.appendChild(gaugeGroups.dual);
     if (gaugeGroups.digital.children.length) visualSelect.appendChild(gaugeGroups.digital);
     if (gaugeGroups.analog.children.length) visualSelect.appendChild(gaugeGroups.analog);
     const validVis = new Set([...visualSelect.options].map((o) => o.value));
