@@ -300,20 +300,43 @@
 
     updateSpeed(kmh) {
       this.speedKmH = Math.max(0, Math.min(260, kmh));
+      const normSpeed = this.speedKmH / 260;
       
       // Update speedometer text
       if (this.speedGaugeVal) {
         this.speedGaugeVal.textContent = Math.round(this.speedKmH);
       }
       
-      // Update secondary metrics
+      // Secondary metrics
+      const rpm = Math.round(800 + normSpeed * 16500);
+      const kw = Math.round(Math.pow(normSpeed, 1.35) * 750);
+
       if (this.rpmMetricVal) {
-        const rpm = Math.round(800 + (this.speedKmH / 260) * 16500);
         this.rpmMetricVal.textContent = rpm.toLocaleString() + ' RPM';
       }
       if (this.powerMetricVal) {
-        const kw = Math.round((Math.pow(this.speedKmH / 260, 1.4)) * 750);
         this.powerMetricVal.textContent = (this.speedKmH > 0 ? '+' : '') + kw + ' kW';
+      }
+
+      // 1. SOL KADRAN (Hız İbresi ve Arkı)
+      const speedAngle = -135 + normSpeed * 270;
+      if (this.speedNeedleWrap) {
+        this.speedNeedleWrap.style.transform = `rotate(${speedAngle}deg)`;
+      }
+      if (this.speedProgressArc) {
+        // Çevre = 2 * PI * 70 ≈ 440; 270 derecelik yay boyutu ≈ 330
+        const dashOffset = 440 - normSpeed * 330;
+        this.speedProgressArc.style.strokeDashoffset = dashOffset;
+      }
+
+      // 2. SAĞ KADRAN (Güç & Devir İbresi ve Arkı)
+      const powerAngle = -135 + (kw / 750) * 270;
+      if (this.powerNeedleWrap) {
+        this.powerNeedleWrap.style.transform = `rotate(${powerAngle}deg)`;
+      }
+      if (this.powerProgressArc) {
+        const powerDashOffset = 440 - (kw / 750) * 330;
+        this.powerProgressArc.style.strokeDashoffset = powerDashOffset;
       }
 
       this.updateSynthParameters();
@@ -329,6 +352,26 @@
       this.powerMetricVal = document.getElementById('powerMetricVal');
       this.spectrumCanvas = document.getElementById('audioSpectrumCanvas');
       this.exportWavBtn = document.getElementById('studioExportBtn');
+
+      // Çift Kadran Elementleri
+      this.speedNeedleWrap = document.getElementById('dialSpeedNeedleWrap');
+      this.speedProgressArc = document.getElementById('dialSpeedProgress');
+      this.powerNeedleWrap = document.getElementById('dialPowerNeedleWrap');
+      this.powerProgressArc = document.getElementById('dialPowerProgress');
+      this.cockpitCard = document.getElementById('cockpitGaugeCard');
+
+      // Kadran Tema Seçici
+      const themeButtons = document.querySelectorAll('.gauge-theme-btn');
+      themeButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+          themeButtons.forEach(b => b.classList.remove('is-active'));
+          btn.classList.add('is-active');
+          const targetTheme = btn.dataset.gaugeTheme;
+          if (this.cockpitCard && targetTheme) {
+            this.cockpitCard.className = `cockpit-gauge-card ${targetTheme}`;
+          }
+        });
+      });
 
       // Bind Start/Stop Button
       if (this.startStopBtn) {

@@ -385,14 +385,61 @@
           <canvas id="audioSpectrumCanvas" width="540" height="160"></canvas>
         </div>
 
-        <!-- Gaz Pedalı & Hız Göstergesi Kadranı -->
-        <div class="cockpit-gauge-card">
-          <div class="gauge-display">
-            <div class="gauge-speed-val" id="gaugeSpeedVal">0</div>
-            <div class="gauge-unit">KM / SAAT HIZ</div>
-            <div class="gauge-secondary-metrics">
-              <div class="metric-item">DEVİR: <strong id="rpmMetricVal">800 RPM</strong></div>
-              <div class="metric-item">GÜÇ: <strong id="powerMetricVal">0 kW</strong></div>
+        <!-- Gaz Pedalı & Çift Kadranlı Kokpit Göstergesi (Dual Gauge Cluster) -->
+        <div class="cockpit-gauge-card theme-plaid" id="cockpitGaugeCard">
+          <!-- Kadran Tema Seçici Butonları -->
+          <div class="gauge-themes-bar" role="tablist" aria-label="Kadran Temaları">
+            <button class="gauge-theme-btn is-active" data-gauge-theme="theme-plaid" type="button">
+              ⚡ Plaid Cyber
+            </button>
+            <button class="gauge-theme-btn" data-gauge-theme="theme-taycan" type="button">
+              🏎️ Taycan Chrono
+            </button>
+            <button class="gauge-theme-btn" data-gauge-theme="theme-tron" type="button">
+              🌌 Tron Grid
+            </button>
+            <button class="gauge-theme-btn" data-gauge-theme="theme-redline" type="button">
+              🔴 Redline Carbon
+            </button>
+            <button class="gauge-theme-btn" data-gauge-theme="theme-eco" type="button">
+              🟢 Eco Dynamics
+            </button>
+          </div>
+
+          <!-- Çift Kadran Kümesi -->
+          <div class="dual-gauge-cluster">
+            <!-- Sol Kadran: Hız Göstergesi (Speedometer) -->
+            <div class="gauge-dial" id="dialSpeed" title="Hız Göstergesi">
+              <svg class="dial-svg" viewBox="0 0 160 160">
+                <circle class="dial-track" cx="80" cy="80" r="70"></circle>
+                <circle class="dial-progress" id="dialSpeedProgress" cx="80" cy="80" r="70"></circle>
+              </svg>
+              <div class="dial-needle-wrap" id="dialSpeedNeedleWrap">
+                <div class="dial-needle"></div>
+              </div>
+              <div class="dial-center-cap"></div>
+              <div class="dial-inner-text">
+                <div class="dial-main-val" id="gaugeSpeedVal">0</div>
+                <div class="dial-main-unit">KM/H</div>
+                <div class="dial-sub-label">ANLIK HIZ</div>
+              </div>
+            </div>
+
+            <!-- Sağ Kadran: Güç & Devir Göstergesi (Power & RPM) -->
+            <div class="gauge-dial" id="dialPower" title="Güç ve Devir Göstergesi">
+              <svg class="dial-svg" viewBox="0 0 160 160">
+                <circle class="dial-track" cx="80" cy="80" r="70"></circle>
+                <circle class="dial-progress" id="dialPowerProgress" cx="80" cy="80" r="70"></circle>
+              </svg>
+              <div class="dial-needle-wrap" id="dialPowerNeedleWrap">
+                <div class="dial-needle" style="background: linear-gradient(to top, transparent, #8b5cf6); box-shadow: 0 0 10px #8b5cf6;"></div>
+              </div>
+              <div class="dial-center-cap" style="border-color: #8b5cf6; box-shadow: 0 0 8px #8b5cf6;"></div>
+              <div class="dial-inner-text">
+                <div class="dial-main-val" id="powerMetricVal" style="font-size: 1.6rem;">0 kW</div>
+                <div class="dial-main-unit" id="rpmMetricVal">800 RPM</div>
+                <div class="dial-sub-label">MOTOR GÜCÜ</div>
+              </div>
             </div>
           </div>
 
