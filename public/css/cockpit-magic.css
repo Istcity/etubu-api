@@ -551,3 +551,121 @@
     font-size: 1.5rem;
   }
 }
+
+/* 12. IN-COCKPIT SOUND ENGINE PRESETS BAR (No separate screen needed!) */
+.hud-sound-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 14px auto 8px;
+  flex-wrap: wrap;
+  max-width: 680px;
+  padding: 6px 12px;
+  background: rgba(3, 7, 18, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.sound-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(255, 255, 255, 0.04);
+  color: #94a3b8;
+  font-family: var(--font-sans, system-ui);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  outline: none;
+  white-space: nowrap;
+}
+
+.sound-chip:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  border-color: rgba(0, 240, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+.sound-chip.is-active {
+  background: linear-gradient(135deg, rgba(0, 240, 255, 0.2) 0%, rgba(139, 92, 246, 0.25) 100%);
+  border-color: #00f0ff;
+  color: #ffffff;
+  box-shadow: 0 0 16px rgba(0, 240, 255, 0.4);
+}
+
+.sound-chip-icon {
+  font-size: 0.88rem;
+  line-height: 1;
+}
+
+/* 13. DUAL VS SINGLE GAUGE THEME WRAPPER */
+.theme-chips-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.theme-group-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #00f0ff;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(0, 240, 255, 0.08);
+  border: 1px solid rgba(0, 240, 255, 0.2);
+}
+
+/* 14. LEGAL SAFETY & DISCLAIMER BAR */
+.safety-disclaimer-pill {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 8px 18px;
+  margin: 14px auto 0;
+  background: rgba(3, 7, 18, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  font-size: 0.74rem;
+  color: #94a3b8;
+  max-width: 820px;
+  text-align: center;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.safety-disclaimer-pill a {
+  color: #00f0ff;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.safety-disclaimer-pill a:hover {
+  color: #ffffff;
+  text-decoration: underline;
+}
+
+@media (max-width: 768px) {
+  .safety-disclaimer-pill {
+    flex-direction: column;
+    gap: 4px;
+    border-radius: 12px;
+    padding: 8px 12px;
+    font-size: 0.7rem;
+  }
+}
+

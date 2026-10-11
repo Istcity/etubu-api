@@ -2411,20 +2411,44 @@
     }
   });
 
+  // In-Cockpit Ses Motoru Seçici (Ayrı ekrana gitmeden anında ses değişimi)
+  document.querySelectorAll(".sound-chip[data-voice-goto]").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      const vKey = chip.dataset.voiceGoto;
+      if (!vKey) return;
+      document.querySelectorAll(".sound-chip[data-voice-goto]").forEach((c) => {
+        c.classList.toggle("is-active", c.dataset.voiceGoto === vKey);
+      });
+      if (voiceSelect) {
+        voiceSelect.value = vKey;
+        voiceSelect.dispatchEvent(new Event("change", { bubbles: true }));
+      } else if (typeof AudioEngine !== "undefined") {
+        AudioEngine.start(vKey);
+      }
+    });
+  });
+
+  // Kadran Temaları: Çift Kadran ve Tek Kadran Desteği
   document.querySelectorAll("[data-theme-goto]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const key = btn.dataset.themeGoto;
+      const mode = btn.dataset.gaugeMode;
       if (!key) return;
-      if (["plaid", "taycan", "tron", "redline", "eco"].includes(key)) {
+
+      document.querySelectorAll("[data-theme-goto]").forEach((b) => {
+        b.classList.toggle("is-on", b.dataset.themeGoto === key);
+      });
+
+      if (mode === "dual" || ["plaid", "taycan", "tron", "redline", "eco"].includes(key)) {
         speedGaugeWrap?.setAttribute("data-dual-theme", key);
         setGaugeScreen("dual");
         if (dualDriveMode) dualDriveMode.textContent = key.toUpperCase();
-        document.querySelectorAll("[data-theme-goto]").forEach((b) => {
-          b.classList.toggle("is-on", b.dataset.themeGoto === key);
-        });
         triggerGaugeTransitionSpin();
         return;
       }
+
+      // Tek Kadran Temaları (Single Gauge)
+      setGaugeScreen("digital");
       if (visualSelect) {
         visualSelect.value = key;
         visualSelect.dispatchEvent(new Event("change", { bubbles: true }));
