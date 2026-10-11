@@ -607,7 +607,40 @@
   line-height: 1;
 }
 
-/* 13. DUAL VS SINGLE GAUGE THEME WRAPPER */
+/* 13. DUAL VS SINGLE GAUGE THEME WRAPPER & DRAWER CHIPS */
+.dock-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.dock-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+  margin-bottom: 6px;
+}
+
+.dock-group-tag {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--cyan, #00f0ff);
+  margin-top: 6px;
+  margin-bottom: 2px;
+  display: block;
+  width: 100%;
+}
+
+.dock-chips .sound-chip,
+.dock-chips .theme-chip {
+  padding: 4px 10px !important;
+  font-size: 0.72rem !important;
+}
+
 .theme-chips-container {
   display: flex;
   align-items: center;

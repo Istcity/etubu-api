@@ -552,33 +552,6 @@
             <!-- Magic UI Border Beam on Cockpit Pod -->
             <div class="magic-border-beam" aria-hidden="true"></div>
           </div>
-          <!-- In-Cockpit Ses Motoru Seçici (Ayrı ekrana gerek kalmadan doğrudan kokpit içi canlı ses değişimi) -->
-          <div class="hud-sound-bar" id="hudSoundBar" role="radiogroup" aria-label="Ses Motoru Seçimi">
-            <button type="button" class="sound-chip is-active" data-voice-goto="tesla" title="Hyper EV Plaid">
-              <span class="sound-chip-icon">⚡</span>
-              <span class="sound-chip-name">Hyper EV</span>
-            </button>
-            <button type="button" class="sound-chip" data-voice-goto="sport-ev" title="Taycan Sport Sound">
-              <span class="sound-chip-icon">🔋</span>
-              <span class="sound-chip-name">Taycan Sport</span>
-            </button>
-            <button type="button" class="sound-chip" data-voice-goto="exhaust-v8" title="American V8 Muscle">
-              <span class="sound-chip-icon">🔥</span>
-              <span class="sound-chip-name">V8 Muscle</span>
-            </button>
-            <button type="button" class="sound-chip" data-voice-goto="exhaust-turbo" title="Twin-Turbo Boxer">
-              <span class="sound-chip-icon">💨</span>
-              <span class="sound-chip-name">Twin-Turbo</span>
-            </button>
-            <button type="button" class="sound-chip" data-voice-goto="formula-scream" title="Formula V10 Superbike">
-              <span class="sound-chip-icon">🏁</span>
-              <span class="sound-chip-name">Formula V10</span>
-            </button>
-            <button type="button" class="sound-chip" data-voice-goto="silent-mode" title="Sessiz Mod">
-              <span class="sound-chip-icon">🔇</span>
-              <span class="sound-chip-name">Sessiz</span>
-            </button>
-          </div>
 
           <div class="gauge-dots" id="gaugeDots" role="tablist" aria-label="Gauge screens">
             <button type="button" class="gauge-dot active" data-gauge-goto="digital" aria-label="Digital" title="Digital"></button>
@@ -586,26 +559,6 @@
             <button type="button" class="gauge-dot" data-gauge-goto="analog" aria-label="Analog" title="Analog"></button>
             <button type="button" class="gauge-dot" data-gauge-goto="minimal" aria-label="Minimal" title="Minimal"></button>
             <button type="button" class="gauge-dot" data-gauge-goto="bars" aria-label="Bars" title="Bars"></button>
-          </div>
-
-          <!-- Kadran Temaları: Çift Kadran ve Tek Kadran Ayrımı (Premium EV Temaları) -->
-          <div class="theme-chips-container" role="group" aria-label="Sürüş ve Kadran Temaları">
-            <span class="theme-group-badge">Çift Kadran</span>
-            <div class="theme-chips theme-chips--dual" id="themeChipsDual">
-              <button type="button" class="theme-chip is-on" data-theme-goto="plaid" data-gauge-mode="dual">⚡ Plaid Cyber</button>
-              <button type="button" class="theme-chip" data-theme-goto="taycan" data-gauge-mode="dual">🏎️ Taycan Chrono</button>
-              <button type="button" class="theme-chip" data-theme-goto="tron" data-gauge-mode="dual">🌌 Tron Matrix</button>
-              <button type="button" class="theme-chip" data-theme-goto="redline" data-gauge-mode="dual">🔴 Redline Carbon</button>
-              <button type="button" class="theme-chip" data-theme-goto="eco" data-gauge-mode="dual">🟢 Zenith Eco</button>
-            </div>
-            <span class="theme-group-badge">Tek Kadran</span>
-            <div class="theme-chips theme-chips--single" id="themeChipsSingle">
-              <button type="button" class="theme-chip" data-theme-goto="stealth-hud" data-gauge-mode="single">🌑 Stealth OLED</button>
-              <button type="button" class="theme-chip" data-theme-goto="night-city" data-gauge-mode="single">🏙️ Night City</button>
-              <button type="button" class="theme-chip" data-theme-goto="deep-ocean" data-gauge-mode="single">🌊 Deep Ocean</button>
-              <button type="button" class="theme-chip" data-theme-goto="cyber-storm" data-gauge-mode="single">⚡ Cyber Storm</button>
-              <button type="button" class="theme-chip" data-theme-goto="warp" data-gauge-mode="single">🚀 Warp Speed</button>
-            </div>
           </div>
         </div>
 
@@ -618,19 +571,9 @@
             </div>
             <div class="avg-speed-meta" id="avgSpeedMeta" hidden></div>
             <button type="button" class="avg-speed-reset" id="avgSpeedReset" data-i18n="avgSpeedReset">Sıfırla</button>
+          </div>
+        </div>
       </div>
-      <!-- Trafik Güvenliği ve Tüketici / KVKK Yasal Bilgilendirme Rozeti -->
-      <aside class="safety-disclaimer-pill" aria-label="Trafik Güvenliği ve Yasal Bilgilendirme">
-        <span>⚠️ <strong>Trafik Güvenliği:</strong> Sürüş sırasında dikkatinizi yoldan ayırmayınız. Hız limitlerine uyunuz.</span>
-        <span>•</span>
-        <a href="privacy.html">KVKK &amp; Gizlilik</a>
-        <span>•</span>
-        <a href="terms.html">Kullanım Koşulları</a>
-        <span>•</span>
-        <a href="returns.html">İptal &amp; İade</a>
-        <span>•</span>
-        <button type="button" class="link-btn" data-consent-open style="color: #00f0ff; background: none; border: none; font-size: inherit; cursor: pointer; text-decoration: underline;">Çerezler</button>
-      </aside>
     </div>
     <div class="radar-alert" id="radarAlert" hidden aria-hidden="true"></div>
   </section>
@@ -703,16 +646,42 @@
   </button>
 
   <aside class="control-dock glass-panel" id="controlDock">
-    <label class="field" id="voiceField">
-      <span data-i18n="voiceTheme">Ses Motoru</span>
+    <div class="field" id="voiceField">
+      <label for="voiceSelect" data-i18n="voiceTheme">Ses Motoru</label>
       <select id="voiceSelect"></select>
+      <div class="dock-chips dock-chips--voice" id="dockVoiceChips">
+        <button type="button" class="sound-chip is-active" data-voice-goto="tesla" title="Hyper EV Plaid">⚡ Hyper EV</button>
+        <button type="button" class="sound-chip" data-voice-goto="sport-ev" title="Taycan Sport">🔋 Taycan</button>
+        <button type="button" class="sound-chip" data-voice-goto="exhaust-v8" title="American V8 Muscle">🔥 V8 Muscle</button>
+        <button type="button" class="sound-chip" data-voice-goto="exhaust-turbo" title="Twin-Turbo Boxer">💨 Twin-Turbo</button>
+        <button type="button" class="sound-chip" data-voice-goto="formula-scream" title="Formula V10">🏁 Formula V10</button>
+        <button type="button" class="sound-chip" data-voice-goto="silent-mode" title="Sessiz Mod">🔇 Sessiz</button>
+      </div>
       <span class="field-hint lock-hint" id="voiceLockHint" hidden data-i18n="catalogLocked">Kilitli — Sürüş yaparak veya davetle açın</span>
-    </label>
+    </div>
 
-    <label class="field" id="visualField">
-      <span data-i18n="visualTheme">Görsel Tema</span>
+    <div class="field" id="visualField">
+      <label for="visualSelect" data-i18n="visualTheme">Görsel Tema</label>
       <select id="visualSelect"></select>
-    </label>
+      <div class="dock-chips dock-chips--themes">
+        <span class="dock-group-tag">Çift Kadran</span>
+        <div class="dock-chip-row">
+          <button type="button" class="theme-chip is-on" data-theme-goto="plaid" data-gauge-mode="dual">⚡ Plaid Cyber</button>
+          <button type="button" class="theme-chip" data-theme-goto="taycan" data-gauge-mode="dual">🏎️ Taycan Chrono</button>
+          <button type="button" class="theme-chip" data-theme-goto="tron" data-gauge-mode="dual">🌌 Tron Matrix</button>
+          <button type="button" class="theme-chip" data-theme-goto="redline" data-gauge-mode="dual">🔴 Redline Carbon</button>
+          <button type="button" class="theme-chip" data-theme-goto="eco" data-gauge-mode="dual">🟢 Zenith Eco</button>
+        </div>
+        <span class="dock-group-tag">Tek Kadran</span>
+        <div class="dock-chip-row">
+          <button type="button" class="theme-chip" data-theme-goto="stealth-hud" data-gauge-mode="single">🌑 Stealth OLED</button>
+          <button type="button" class="theme-chip" data-theme-goto="night-city" data-gauge-mode="single">🏙️ Night City</button>
+          <button type="button" class="theme-chip" data-theme-goto="deep-ocean" data-gauge-mode="single">🌊 Deep Ocean</button>
+          <button type="button" class="theme-chip" data-theme-goto="cyber-storm" data-gauge-mode="single">⚡ Cyber Storm</button>
+          <button type="button" class="theme-chip" data-theme-goto="warp" data-gauge-mode="single">🚀 Warp Speed</button>
+        </div>
+      </div>
+    </div>
 
     <button type="button" class="start-circle magic-shimmer-btn" id="startBtn" data-i18n="start">BAŞLAT</button>
     <button type="button" class="btn-ghost btn-ghost--sm demo-btn" id="demoBtn" data-i18n="demoMode">Deneme Sürüşü</button>
