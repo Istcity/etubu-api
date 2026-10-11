@@ -518,25 +518,125 @@
       </div>
 
       <!-- ==========================================================================
-           İNTERAKTİF TELEMETRİ HUD VE GRAFİKLER (MOTION.SO STYLE)
+           İNTERAKTİF TELEMETRİ GRAFİKLERİ — MOTION.SO SOL KART DÜZENİ
            ========================================================================== -->
-      <div class="telemetry-showcase" id="telemetry">
-        <div class="telemetry-header">
-          <div>
-            <h3 style="font-family: var(--font-brand); font-size: 1.4rem; color: #fff; margin-bottom: 4px;">Canlı Telemetri &amp; Akustik Eğrisi</h3>
-            <p style="color: var(--text-muted); font-size: 0.88rem;">Anlık motor yükü, tork üretimi, rejeneratif enerji ve akustik dalga dinamikleri</p>
+      <div class="telemetry-split-layout" id="telemetry">
+        <!-- Sol Taraf: Motion.so Tarzı Etkileşimli Kartlar -->
+        <div class="telemetry-left-cards" role="tablist" aria-label="Telemetri Grafiği Seçenekleri">
+          <!-- Kart 1: Güç & Tork -->
+          <div class="telemetry-side-card is-active" data-mode="power" role="tab" tabindex="0" aria-selected="true">
+            <div class="side-card-top">
+              <div class="side-card-title-wrap">
+                <div class="side-card-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                  </svg>
+                </div>
+                <span class="side-card-title">Anlık Güç &amp; Tork</span>
+              </div>
+              <span class="side-card-live-badge" id="sideBadgePower">+520 kW</span>
+            </div>
+            <p class="side-card-desc">İvmelenme anında bataryadan çekilen anlık güç, tork eğrisi ve G-kuvveti tepkisi.</p>
           </div>
 
-          <div class="telemetry-tabs">
-            <button class="telemetry-tab is-active" data-mode="power" type="button">Güç (kW)</button>
-            <button class="telemetry-tab" data-mode="rpm" type="button">Motor Devri (RPM)</button>
-            <button class="telemetry-tab" data-mode="regen" type="button">Rejenerasyon (kW)</button>
-            <button class="telemetry-tab" data-mode="efficiency" type="button">Tüketim (Wh/km)</button>
+          <!-- Kart 2: RPM Dynamics -->
+          <div class="telemetry-side-card" data-mode="rpm" role="tab" tabindex="0" aria-selected="false">
+            <div class="side-card-top">
+              <div class="side-card-title-wrap">
+                <div class="side-card-icon" style="color: var(--violet);">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                  </svg>
+                </div>
+                <span class="side-card-title">Motor Devri (RPM)</span>
+              </div>
+              <span class="side-card-live-badge" id="sideBadgeRpm" style="color: var(--violet); border-color: rgba(139, 92, 246, 0.3);">16.500 RPM</span>
+            </div>
+            <p class="side-card-desc">0’dan 18.000+ RPM’e kadar rotor dönüş hızı, harmonik vites ve frekans yükselişi.</p>
+          </div>
+
+          <!-- Kart 3: Rejenerasyon -->
+          <div class="telemetry-side-card" data-mode="regen" role="tab" tabindex="0" aria-selected="false">
+            <div class="side-card-top">
+              <div class="side-card-title-wrap">
+                <div class="side-card-icon" style="color: var(--emerald);">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                    <path d="M23 4v6h-6"></path>
+                    <path d="M1 20v-6h6"></path>
+                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                  </svg>
+                </div>
+                <span class="side-card-title">Kinetik Rejenerasyon</span>
+              </div>
+              <span class="side-card-live-badge" id="sideBadgeRegen" style="color: var(--emerald); border-color: rgba(16, 185, 129, 0.3);">%92 Geri Kazanım</span>
+            </div>
+            <p class="side-card-desc">Gaz pedalından ayak çekildiğinde oluşan ters akım freni ve kinetik enerji dolumu.</p>
+          </div>
+
+          <!-- Kart 4: Akustik Spektrum -->
+          <div class="telemetry-side-card" data-mode="spectrum" role="tab" tabindex="0" aria-selected="false">
+            <div class="side-card-top">
+              <div class="side-card-title-wrap">
+                <div class="side-card-icon" style="color: #ec4899;">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                    <path d="M2 10v4M6 4v16M10 8v8M14 2v20M18 6v12M22 10v4"></path>
+                  </svg>
+                </div>
+                <span class="side-card-title">Akustik Spektrum &amp; Ses</span>
+              </div>
+              <span class="side-card-live-badge" id="sideBadgeSpectrum" style="color: #ec4899; border-color: rgba(236, 72, 153, 0.3);">20Hz — 20kHz</span>
+            </div>
+            <p class="side-card-desc">evsoundfx motorunun ürettiği inverter ıslığı, sub-bass rezonansı ve yapay motor dalgası.</p>
           </div>
         </div>
 
-        <div class="telemetry-canvas-container">
-          <canvas id="telemetryGraphCanvas"></canvas>
+        <!-- Sağ Taraf: Büyük Fütüristik Telemetri Sahnesi -->
+        <div class="telemetry-right-stage">
+          <div class="stage-top-hud">
+            <div class="stage-title-group">
+              <h3 id="stageTitle">Anlık Güç &amp; Tork Analizi</h3>
+              <p id="stageSubtitle">Gerçek zamanlı mikro-telemetri ve motor yük eğrisi</p>
+            </div>
+
+            <div class="stage-metrics-pills">
+              <div class="metric-hud-pill">
+                <span class="lbl">ANLIK DEĞER</span>
+                <strong class="val" id="stageMetricLive">420 kW</strong>
+              </div>
+              <div class="metric-hud-pill">
+                <span class="lbl">TEPE (PEAK)</span>
+                <strong class="val" id="stageMetricPeak">650 kW</strong>
+              </div>
+              <div class="metric-hud-pill">
+                <span class="lbl">DURUM</span>
+                <strong class="val" id="stageMetricStatus" style="color: var(--cyan);">OPTİMAL</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- Canvas & Tooltip Container -->
+          <div class="telemetry-canvas-container">
+            <div class="telemetry-tooltip" id="telemetryTooltip">Değer: 420 kW</div>
+            <canvas id="telemetryGraphCanvas"></canvas>
+          </div>
+
+          <!-- Alt Kontrol ve Bilgi Çubuğu -->
+          <div class="stage-bottom-bar">
+            <div class="stage-bottom-status">
+              <span class="pulse-indicator"></span>
+              <span id="stageTelemetryStatusText">CANLI TELEMETRİ AKIŞI AKTİF (60 FPS)</span>
+            </div>
+
+            <div class="stage-actions-group">
+              <button class="btn-stage-toggle is-active" id="btnSyncThrottle" type="button">
+                ⚡ Sanal Gaza Bağla
+              </button>
+              <button class="btn-stage-toggle" id="btnPauseTelemetry" type="button">
+                ⏸️ Duraklat
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </section>

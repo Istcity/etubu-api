@@ -842,61 +842,330 @@ input[type="range"].motion-slider::-webkit-slider-thumb:hover {
   color: var(--cyan);
 }
 
-/* Interactive Telemetry & Graph Showcase */
-.telemetry-showcase {
+/* ==========================================================================
+   MOTION.SO SPLIT TELEMETRY — LEFT CARDS & RIGHT STAGE
+   ========================================================================== */
+.telemetry-split-layout {
   margin-top: 48px;
-  background: rgba(6, 11, 24, 0.85);
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  gap: 28px;
+  align-items: stretch;
+}
+
+@media (max-width: 980px) {
+  .telemetry-split-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Sol Kartlar (Left Navigation Side Cards) */
+.telemetry-left-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.telemetry-side-card {
+  position: relative;
+  background: rgba(13, 22, 41, 0.6);
+  border: 1px solid var(--border-subtle);
+  border-radius: 20px;
+  padding: 20px 22px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  overflow: hidden;
+  user-select: none;
+}
+
+.telemetry-side-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: transparent;
+  transition: all 0.25s ease;
+  border-radius: 4px 0 0 4px;
+}
+
+.telemetry-side-card:hover {
+  background: rgba(18, 30, 56, 0.8);
+  border-color: rgba(0, 240, 255, 0.3);
+  transform: translateX(4px);
+}
+
+.telemetry-side-card.is-active {
+  background: linear-gradient(135deg, rgba(0, 240, 255, 0.12) 0%, rgba(13, 22, 41, 0.9) 100%);
+  border-color: var(--cyan);
+  box-shadow: 
+    0 12px 30px -8px rgba(0, 240, 255, 0.25),
+    inset 0 0 20px rgba(0, 240, 255, 0.08);
+  transform: translateX(6px);
+}
+
+.telemetry-side-card.is-active::before {
+  background: var(--cyan);
+  box-shadow: 0 0 14px var(--cyan);
+}
+
+.telemetry-side-card[data-mode="rpm"].is-active {
+  border-color: var(--violet);
+  box-shadow: 0 12px 30px -8px rgba(139, 92, 246, 0.25), inset 0 0 20px rgba(139, 92, 246, 0.08);
+}
+.telemetry-side-card[data-mode="rpm"].is-active::before {
+  background: var(--violet);
+  box-shadow: 0 0 14px var(--violet);
+}
+
+.telemetry-side-card[data-mode="regen"].is-active {
+  border-color: var(--emerald);
+  box-shadow: 0 12px 30px -8px rgba(16, 185, 129, 0.25), inset 0 0 20px rgba(16, 185, 129, 0.08);
+}
+.telemetry-side-card[data-mode="regen"].is-active::before {
+  background: var(--emerald);
+  box-shadow: 0 0 14px var(--emerald);
+}
+
+.telemetry-side-card[data-mode="spectrum"].is-active {
+  border-color: #ec4899;
+  box-shadow: 0 12px 30px -8px rgba(236, 72, 153, 0.25), inset 0 0 20px rgba(236, 72, 153, 0.08);
+}
+.telemetry-side-card[data-mode="spectrum"].is-active::before {
+  background: #ec4899;
+  box-shadow: 0 0 14px #ec4899;
+}
+
+.side-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.side-card-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.side-card-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--cyan);
+  transition: transform 0.2s ease;
+}
+
+.telemetry-side-card.is-active .side-card-icon {
+  background: rgba(0, 240, 255, 0.2);
+  color: #ffffff;
+  transform: scale(1.1);
+}
+
+.side-card-title {
+  font-family: var(--font-brand);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.side-card-live-badge {
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--cyan);
+  border: 1px solid rgba(0, 240, 255, 0.2);
+}
+
+.side-card-desc {
+  font-size: 0.84rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin-left: 48px;
+}
+
+/* Sağ Büyük Telemetri Sahnesi (Right Stage) */
+.telemetry-right-stage {
+  background: linear-gradient(180deg, rgba(6, 11, 24, 0.95) 0%, rgba(3, 7, 18, 0.98) 100%);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 28px;
-  padding: 32px;
-  box-shadow: 0 25px 50px -12px rgba(0,0,0,0.7);
+  padding: 28px 32px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: 
+    0 25px 60px -15px rgba(0, 0, 0, 0.8),
+    0 0 35px -5px rgba(0, 240, 255, 0.15);
+  position: relative;
+  overflow: hidden;
+  backdrop-filter: blur(24px);
 }
 
-.telemetry-header {
+.telemetry-right-stage::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle, rgba(0, 240, 255, 0.07) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.stage-top-hud {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
   flex-wrap: wrap;
   gap: 16px;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 18px;
 }
 
-.telemetry-tabs {
-  display: flex;
-  gap: 8px;
-  background: rgba(255, 255, 255, 0.05);
-  padding: 4px;
-  border-radius: 999px;
+.stage-title-group h3 {
+  font-family: var(--font-brand);
+  font-size: 1.45rem;
+  color: var(--text-primary);
+  margin-bottom: 4px;
 }
 
-.telemetry-tab {
-  padding: 6px 16px;
-  border-radius: 999px;
-  border: none;
-  background: transparent;
+.stage-title-group p {
+  font-size: 0.86rem;
   color: var(--text-muted);
-  font-size: 0.84rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
 }
 
-.telemetry-tab.is-active {
-  background: var(--cyan);
-  color: #030712;
-  box-shadow: 0 0 12px var(--cyan);
+.stage-metrics-pills {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
+.metric-hud-pill {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 8px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.metric-hud-pill span.lbl {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.metric-hud-pill strong.val {
+  font-family: var(--font-mono);
+  font-size: 1.05rem;
+  color: var(--text-primary);
+}
+
+/* Canvas Container & Interactive Scrubber */
 .telemetry-canvas-container {
   width: 100%;
-  height: 240px;
+  height: 280px;
   position: relative;
+  margin-bottom: 20px;
 }
 
 canvas#telemetryGraphCanvas {
   width: 100%;
   height: 100%;
   display: block;
+}
+
+/* Tooltip on graph hover */
+.telemetry-tooltip {
+  position: absolute;
+  top: 20px;
+  pointer-events: none;
+  background: rgba(3, 7, 18, 0.95);
+  border: 1px solid var(--cyan);
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  color: #ffffff;
+  box-shadow: 0 0 20px rgba(0, 240, 255, 0.35);
+  opacity: 0;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+  transform: translate(-50%, -100%);
+  z-index: 10;
+  white-space: nowrap;
+}
+
+/* Stage Bottom Controls */
+.stage-bottom-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 16px;
+}
+
+.stage-bottom-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.stage-bottom-status .pulse-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--cyan);
+  box-shadow: 0 0 10px var(--cyan);
+  animation: blink 1.2s infinite;
+}
+
+.stage-actions-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn-stage-toggle {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-stage-toggle:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.btn-stage-toggle.is-active {
+  background: rgba(0, 240, 255, 0.15);
+  border-color: var(--cyan);
+  color: var(--cyan);
 }
 
 /* ==========================================================================

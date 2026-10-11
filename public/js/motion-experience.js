@@ -1,7 +1,7 @@
 /**
  * ETUBU MOTION EXPERIENCE & TELEMETRY ENGINE
  * Inspired by motion.so — Micro-Interactions, 3D Physics Tilts,
- * Live Telemetry HUD Graphs, Strict Security Sanitizers & Ambient Lights.
+ * Split Left-Card Navigation, Live Interactive Telemetry HUD, Hover Scrubbers & Ambient Lighting.
  */
 
 (function () {
@@ -10,13 +10,65 @@
   class MotionExperience {
     constructor() {
       this.telemetryCanvas = document.getElementById('telemetryGraphCanvas');
-      this.currentTelemetryMode = 'power';
+      this.tooltip = document.getElementById('telemetryTooltip');
+      this.currentMode = 'power';
       this.telemetryHistory = [];
-      this.maxHistoryPoints = 60;
-      this.simSpeed = 0;
+      this.maxHistoryPoints = 70;
+      this.isPaused = false;
+      this.syncWithThrottle = true;
+      this.mouseX = -1;
+      this.mouseY = -1;
+
+      // Mode configurations for rich graphics
+      this.MODES = {
+        power: {
+          title: 'Anlık Güç & Tork Analizi',
+          subtitle: 'Çift motor inverter yükü ve anlık tork çıkış eğrisi',
+          unit: 'kW',
+          maxVal: 750,
+          color: '#00f0ff',
+          glowColor: 'rgba(0, 240, 255, 0.4)',
+          gradientStart: 'rgba(0, 240, 255, 0.28)',
+          gradientEnd: 'rgba(0, 240, 255, 0.01)',
+          peakVal: '650 kW'
+        },
+        rpm: {
+          title: 'Dinamik Motor Devri (RPM) & Rotor Hızı',
+          subtitle: 'Harmonik vites geçişleri ve yüksek devir inverter senkronu',
+          unit: 'RPM',
+          maxVal: 18500,
+          color: '#8b5cf6',
+          glowColor: 'rgba(139, 92, 246, 0.4)',
+          gradientStart: 'rgba(139, 92, 246, 0.28)',
+          gradientEnd: 'rgba(139, 92, 246, 0.01)',
+          peakVal: '17.800 RPM'
+        },
+        regen: {
+          title: 'Kinetik Rejenerasyon & Enerji Geri Kazanımı',
+          subtitle: 'Frenleme anında bataryaya aktarılan dinamik şarj akımı',
+          unit: 'kW',
+          maxVal: 85,
+          color: '#10b981',
+          glowColor: 'rgba(16, 185, 129, 0.4)',
+          gradientStart: 'rgba(16, 185, 129, 0.28)',
+          gradientEnd: 'rgba(16, 185, 129, 0.01)',
+          peakVal: '78 kW Regen'
+        },
+        spectrum: {
+          title: 'Akustik Dalga Boyu & Harmonik Spektrum',
+          subtitle: 'evsoundfx motorunun ürettiği 20 Hz - 20 kHz ses dalgası',
+          unit: 'Hz',
+          maxVal: 12000,
+          color: '#ec4899',
+          glowColor: 'rgba(236, 72, 153, 0.4)',
+          gradientStart: 'rgba(236, 72, 153, 0.28)',
+          gradientEnd: 'rgba(236, 72, 153, 0.01)',
+          peakVal: '9.800 Hz Whine'
+        }
+      };
 
       this.init3DTilt();
-      this.initTelemetryCanvas();
+      this.initSplitTelemetry();
       this.initAmbientLighting();
       this.initSecurityShield();
     }
@@ -35,8 +87,8 @@
           const centerX = rect.width / 2;
           const centerY = rect.height / 2;
 
-          const rotateX = ((y - centerY) / centerY) * -7;
-          const rotateY = ((x - centerX) / centerX) * 7;
+          const rotateX = ((y - centerY) / centerY) * -6;
+          const rotateY = ((x - centerX) / centerX) * 6;
 
           card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateY(-6px)`;
         });
@@ -48,42 +100,120 @@
     }
 
     /* ----------------------------------------------------
-       2. INTERACTIVE TELEMETRY GRAPH SHOWCASE (motion.so style)
+       2. MOTION.SO SPLIT TELEMETRY — LEFT CARDS & RIGHT STAGE
        ---------------------------------------------------- */
-    initTelemetryCanvas() {
+    initSplitTelemetry() {
       if (!this.telemetryCanvas) return;
       this.ctx = this.telemetryCanvas.getContext('2d');
 
-      // Setup tabs
-      const tabs = document.querySelectorAll('.telemetry-tab');
-      tabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-          tabs.forEach(t => t.classList.remove('is-active'));
-          tab.classList.add('is-active');
-          this.currentTelemetryMode = tab.dataset.mode || 'power';
+      // Sol Kart Tıklama Olayları
+      const sideCards = document.querySelectorAll('.telemetry-side-card');
+      sideCards.forEach(card => {
+        card.addEventListener('click', () => {
+          const mode = card.dataset.mode;
+          if (!mode || !this.MODES[mode]) return;
+
+          sideCards.forEach(c => {
+            c.classList.remove('is-active');
+            c.setAttribute('aria-selected', 'false');
+          });
+          card.classList.add('is-active');
+          card.setAttribute('aria-selected', 'true');
+
+          this.switchMode(mode);
         });
       });
 
-      // Pre-fill history
-      for (let i = 0; i < this.maxHistoryPoints; i++) {
-        this.telemetryHistory.push({
-          power: 40 + Math.sin(i * 0.2) * 25 + Math.random() * 5,
-          rpm: 2500 + Math.sin(i * 0.15) * 1800,
-          regen: Math.max(0, -Math.sin(i * 0.2) * 20),
-          efficiency: 145 + Math.cos(i * 0.1) * 20
+      // Kontrol Butonları
+      const pauseBtn = document.getElementById('btnPauseTelemetry');
+      if (pauseBtn) {
+        pauseBtn.addEventListener('click', () => {
+          this.isPaused = !this.isPaused;
+          pauseBtn.innerHTML = this.isPaused ? '▶️ Devam Et' : '⏸️ Duraklat';
+          pauseBtn.classList.toggle('is-active', this.isPaused);
+          const statusText = document.getElementById('stageTelemetryStatusText');
+          if (statusText) {
+            statusText.textContent = this.isPaused ? 'TELEMETRİ DONDURULDU (PAUSED)' : 'CANLI TELEMETRİ AKIŞI AKTİF (60 FPS)';
+          }
         });
+      }
+
+      const syncBtn = document.getElementById('btnSyncThrottle');
+      if (syncBtn) {
+        syncBtn.addEventListener('click', () => {
+          this.syncWithThrottle = !this.syncWithThrottle;
+          syncBtn.classList.toggle('is-active', this.syncWithThrottle);
+        });
+      }
+
+      // Mouse Hover Scrubber on Canvas
+      this.telemetryCanvas.addEventListener('mousemove', (e) => {
+        const rect = this.telemetryCanvas.getBoundingClientRect();
+        this.mouseX = e.clientX - rect.left;
+        this.mouseY = e.clientY - rect.top;
+      });
+
+      this.telemetryCanvas.addEventListener('mouseleave', () => {
+        this.mouseX = -1;
+        this.mouseY = -1;
+        if (this.tooltip) {
+          this.tooltip.style.opacity = '0';
+        }
+      });
+
+      // Initial history population
+      for (let i = 0; i < this.maxHistoryPoints; i++) {
+        this.telemetryHistory.push(this.generatePoint(i));
       }
 
       this.startTelemetryLoop();
     }
 
+    switchMode(mode) {
+      this.currentMode = mode;
+      const config = this.MODES[mode];
+
+      // Update right stage headers
+      const titleEl = document.getElementById('stageTitle');
+      const subEl = document.getElementById('stageSubtitle');
+      const peakEl = document.getElementById('stageMetricPeak');
+
+      if (titleEl) titleEl.textContent = config.title;
+      if (subEl) subEl.textContent = config.subtitle;
+      if (peakEl) peakEl.textContent = config.peakVal;
+
+      // Animate stage with subtle pulse
+      const stage = document.querySelector('.telemetry-right-stage');
+      if (stage) {
+        stage.style.transition = 'box-shadow 0.3s ease';
+        stage.style.boxShadow = `0 25px 60px -15px rgba(0, 0, 0, 0.8), 0 0 35px -5px ${config.glowColor}`;
+      }
+    }
+
+    generatePoint(tick) {
+      let speedKmH = 65;
+      if (this.syncWithThrottle && window.etubuSoundStudio) {
+        speedKmH = window.etubuSoundStudio.speedKmH;
+      }
+      const speedNorm = Math.min(Math.max(speedKmH / 260, 0), 1);
+
+      return {
+        power: Math.round(speedNorm * 650 + Math.sin(tick * 0.1) * 25 + Math.random() * 8),
+        rpm: Math.round(800 + speedNorm * 16500 + Math.sin(tick * 0.15) * 200),
+        regen: Math.round(speedNorm < 0.08 ? 35 : Math.max(0, 20 - speedNorm * 20) + Math.sin(tick * 0.1) * 4),
+        spectrum: Math.round(400 + speedNorm * 8800 + Math.sin(tick * 0.25) * 600)
+      };
+    }
+
     startTelemetryLoop() {
       const canvas = this.telemetryCanvas;
       const ctx = this.ctx;
-
       let tick = 0;
+
       const render = () => {
         tick++;
+
+        // Canvas Boyutlandırma
         if (canvas.width !== canvas.clientWidth) {
           canvas.width = canvas.clientWidth;
           canvas.height = canvas.clientHeight;
@@ -94,77 +224,54 @@
 
         ctx.clearRect(0, 0, w, h);
 
-        // Update data point
-        const activeSpeed = window.etubuSoundStudio ? window.etubuSoundStudio.speedKmH : 60;
-        const speedNorm = activeSpeed / 260;
-        const livePower = speedNorm * 650 + Math.sin(tick * 0.08) * 15;
-        const liveRpm = 800 + speedNorm * 16500;
-        const liveRegen = speedNorm < 0.1 ? 30 : Math.max(0, 15 - speedNorm * 15);
-        const liveEfficiency = 135 + Math.sin(tick * 0.05) * 25;
-
-        if (tick % 3 === 0) {
+        // Tarihçe Güncelleme (her 2 framede bir)
+        if (!this.isPaused && tick % 2 === 0) {
           this.telemetryHistory.shift();
-          this.telemetryHistory.push({
-            power: livePower,
-            rpm: liveRpm,
-            regen: liveRegen,
-            efficiency: liveEfficiency
-          });
+          this.telemetryHistory.push(this.generatePoint(tick));
         }
 
-        // Draw grid lines
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+        const config = this.MODES[this.currentMode];
+        const lastVal = this.telemetryHistory[this.telemetryHistory.length - 1][this.currentMode];
+
+        // Sol Kart Rozetlerini ve Sağ Canlı Değeri Güncelle
+        this.updateBadges(lastVal);
+
+        // 1. Fütüristik Izgara Çizgileri (Grid)
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
         ctx.lineWidth = 1;
-        const gridStep = 40;
-        for (let y = 0; y < h; y += gridStep) {
+        const gridStepY = 35;
+        for (let y = 0; y < h; y += gridStepY) {
           ctx.beginPath();
           ctx.moveTo(0, y);
           ctx.lineTo(w, y);
           ctx.stroke();
         }
 
-        // Mode configurations
-        let maxVal = 750;
-        let strokeColor = '#00f0ff';
-        let fillColorStart = 'rgba(0, 240, 255, 0.25)';
-        let keyName = 'power';
-        let unit = 'kW';
-
-        if (this.currentTelemetryMode === 'rpm') {
-          maxVal = 18000;
-          strokeColor = '#8b5cf6';
-          fillColorStart = 'rgba(139, 92, 246, 0.25)';
-          keyName = 'rpm';
-          unit = 'RPM';
-        } else if (this.currentTelemetryMode === 'regen') {
-          maxVal = 60;
-          strokeColor = '#10b981';
-          fillColorStart = 'rgba(16, 185, 129, 0.25)';
-          keyName = 'regen';
-          unit = 'kW Regen';
-        } else if (this.currentTelemetryMode === 'efficiency') {
-          maxVal = 250;
-          strokeColor = '#f59e0b';
-          fillColorStart = 'rgba(245, 158, 11, 0.25)';
-          keyName = 'efficiency';
-          unit = 'Wh/km';
+        const gridStepX = 60;
+        for (let x = 0; x < w; x += gridStepX) {
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, h);
+          ctx.stroke();
         }
 
-        // Draw smooth bezier curve
-        ctx.beginPath();
+        // 2. Noktaları Hesapla
         const stepX = w / (this.telemetryHistory.length - 1);
-        
         const points = this.telemetryHistory.map((item, idx) => {
-          const val = item[keyName];
-          const normY = Math.min(Math.max(val / maxVal, 0), 1);
+          const val = item[this.currentMode];
+          const normY = Math.min(Math.max(val / config.maxVal, 0.02), 0.98);
           return {
             x: idx * stepX,
-            y: h - normY * (h - 30) - 15
+            y: h - normY * (h - 30) - 15,
+            val: val
           };
         });
 
-        if (points.length > 0) {
+        if (points.length > 1) {
+          // 3. Akıcı Bezier Eğrisi (Spline Path)
+          ctx.beginPath();
           ctx.moveTo(points[0].x, points[0].y);
+
           for (let i = 0; i < points.length - 1; i++) {
             const xc = (points[i].x + points[i + 1].x) / 2;
             const yc = (points[i].y + points[i + 1].y) / 2;
@@ -172,39 +279,111 @@
           }
           ctx.lineTo(points[points.length - 1].x, points[points.length - 1].y);
 
-          // Line stroke
-          ctx.strokeStyle = strokeColor;
+          // 4. Çizgi Konturu ve Neon Parıltısı
+          ctx.strokeStyle = config.color;
           ctx.lineWidth = 3;
-          ctx.shadowColor = strokeColor;
-          ctx.shadowBlur = 12;
+          ctx.shadowColor = config.color;
+          ctx.shadowBlur = 14;
           ctx.stroke();
 
-          // Gradient area fill
+          // 5. Degrade Alan Doldurma
           ctx.lineTo(w, h);
           ctx.lineTo(0, h);
           ctx.closePath();
 
           const grad = ctx.createLinearGradient(0, 0, 0, h);
-          grad.addColorStop(0, fillColorStart);
-          grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          grad.addColorStop(0, config.gradientStart);
+          grad.addColorStop(1, config.gradientEnd);
           ctx.fillStyle = grad;
           ctx.shadowBlur = 0;
           ctx.fill();
 
-          // Draw active pulse point on the latest reading
-          const lastPoint = points[points.length - 1];
+          // 6. Uç Noktada Nabız Gibi Atan Dalga Halkaları (Pulse Radar Effect)
+          const lastPt = points[points.length - 1];
+          const pulseRadius = 6 + (Math.sin(tick * 0.1) + 1) * 6;
+
+          // Dış genişleyen halka
           ctx.beginPath();
-          ctx.arc(lastPoint.x - 4, lastPoint.y, 6, 0, Math.PI * 2);
+          ctx.arc(lastPt.x - 4, lastPt.y, pulseRadius, 0, Math.PI * 2);
+          ctx.strokeStyle = config.color;
+          ctx.lineWidth = 1.5;
+          ctx.globalAlpha = Math.max(0, 1 - pulseRadius / 18);
+          ctx.stroke();
+          ctx.globalAlpha = 1.0;
+
+          // İç katı nokta
+          ctx.beginPath();
+          ctx.arc(lastPt.x - 4, lastPt.y, 5, 0, Math.PI * 2);
           ctx.fillStyle = '#ffffff';
-          ctx.shadowColor = strokeColor;
-          ctx.shadowBlur = 15;
+          ctx.shadowColor = config.color;
+          ctx.shadowBlur = 18;
           ctx.fill();
+          ctx.shadowBlur = 0;
+
+          // 7. İnteraktif Fare Gezintisi (Scrubber Line & Tooltip)
+          if (this.mouseX >= 0 && this.mouseX <= w) {
+            // En yakın veri noktasını bul
+            const closestIdx = Math.round(this.mouseX / stepX);
+            const clampedIdx = Math.max(0, Math.min(points.length - 1, closestIdx));
+            const targetPt = points[clampedIdx];
+
+            // Dikey Scrubber Çizgisi
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath();
+            ctx.moveTo(targetPt.x, 0);
+            ctx.lineTo(targetPt.x, h);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Scrubber Kesişim Noktası
+            ctx.beginPath();
+            ctx.arc(targetPt.x, targetPt.y, 7, 0, Math.PI * 2);
+            ctx.fillStyle = config.color;
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.fill();
+            ctx.stroke();
+
+            // Tooltip Göster
+            if (this.tooltip) {
+              this.tooltip.style.opacity = '1';
+              this.tooltip.style.left = `${targetPt.x}px`;
+              this.tooltip.style.top = `${targetPt.y - 12}px`;
+              this.tooltip.innerHTML = `<span>${config.title.split(' ')[0]}: <strong>${targetPt.val.toLocaleString()} ${config.unit}</strong></span>`;
+            }
+          }
         }
 
         requestAnimationFrame(render);
       };
 
       requestAnimationFrame(render);
+    }
+
+    updateBadges(currentVal) {
+      const config = this.MODES[this.currentMode];
+      
+      // Sağ sahne canlı değer kutusu
+      const liveMetricEl = document.getElementById('stageMetricLive');
+      if (liveMetricEl) {
+        liveMetricEl.textContent = `${currentVal.toLocaleString()} ${config.unit}`;
+      }
+
+      // Sol kart minik sayaç rozetleri
+      const pBadge = document.getElementById('sideBadgePower');
+      const rBadge = document.getElementById('sideBadgeRpm');
+      const gBadge = document.getElementById('sideBadgeRegen');
+      const sBadge = document.getElementById('sideBadgeSpectrum');
+
+      const latest = this.telemetryHistory[this.telemetryHistory.length - 1];
+      if (!latest) return;
+
+      if (pBadge) pBadge.textContent = `+${latest.power} kW`;
+      if (rBadge) rBadge.textContent = `${latest.rpm.toLocaleString()} RPM`;
+      if (gBadge) gBadge.textContent = `%${Math.min(99, Math.round(latest.regen * 1.8))}`;
+      if (sBadge) sBadge.textContent = `${latest.spectrum} Hz`;
     }
 
     /* ----------------------------------------------------
@@ -226,19 +405,6 @@
        4. SECURITY SHIELD & DATA INTEGRITY ENGINE
        ---------------------------------------------------- */
     initSecurityShield() {
-      // Input sanitization & safe navigation
-      const sanitizeAndRedirect = (url) => {
-        try {
-          const parsed = new URL(url, window.location.origin);
-          if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
-            return parsed.href;
-          }
-        } catch (e) {
-          return '/app.html';
-        }
-        return '/app.html';
-      };
-
       // Ensure click handlers use secure attributes
       document.querySelectorAll('a[target="_blank"]').forEach(a => {
         a.setAttribute('rel', 'noopener noreferrer');
@@ -256,7 +422,7 @@
       // App entry handler
       const startLinks = document.querySelectorAll('.js-start-app');
       startLinks.forEach(link => {
-        link.addEventListener('click', (e) => {
+        link.addEventListener('click', () => {
           try {
             localStorage.setItem('etubu_dash', '1');
             document.cookie = 'etubu_dash=1;max-age=31536000;path=/;SameSite=Lax;Secure';
