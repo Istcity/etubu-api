@@ -43,6 +43,17 @@
   const analogSpeedValue = $("analogSpeedValue");
   const minimalSpeedValue = $("minimalSpeedValue");
   const barsSpeedValue = $("barsSpeedValue");
+  const dualSpeedVal = $("dualSpeedVal");
+  const dualSpeedUnit = $("dualSpeedUnit");
+  const dualSpeedNeedle = $("dualSpeedNeedle");
+  const dualSpeedProgress = $("dualSpeedProgress");
+  const dualPowerVal = $("dualPowerVal");
+  const dualPowerNeedle = $("dualPowerNeedle");
+  const dualPowerProgress = $("dualPowerProgress");
+  const dualDriveMode = $("dualDriveMode");
+  const dualGear = $("dualGear");
+  const gBarRegen = $("gBarRegen");
+  const gBarPower = $("gBarPower");
   const speedBarEqL = $("speedBarEqL");
   const speedBarEqR = $("speedBarEqR");
   const EQ_SEGMENTS = 24;
@@ -392,7 +403,7 @@
     }
   }
 
-  const GAUGE_SCREENS = ["digital", "minimal", "bars"];
+  const GAUGE_SCREENS = ["digital", "dual", "analog", "minimal", "bars"];
   const GAUGE_KEY = "etubu_gauge_screen";
   let gaugeScreen = "digital";
 
@@ -486,6 +497,39 @@
         analogNeedle.style.transform = `rotate(${q}deg)`;
       }
     }
+    // Çift Kadran (Dual Gauge): Sol Hız Kadranı + Sağ Güç/kW & Regen Kadranı
+    if (dualSpeedNeedle || dualSpeedProgress) {
+      const isMph = typeof I18n !== "undefined" && I18n.isMph();
+      const speedVal = isMph ? kmh * 0.621371192 : kmh;
+      const speedRatio = Math.min(1, Math.max(0, speedVal / 280));
+      const speedAngle = -135 + speedRatio * 270;
+      if (dualSpeedNeedle) dualSpeedNeedle.style.transform = `rotate(${speedAngle}deg)`;
+      if (dualSpeedProgress) {
+        const speedDashOffset = 415 - speedRatio * 310;
+        dualSpeedProgress.style.strokeDashoffset = String(speedDashOffset);
+      }
+    }
+    if (dualPowerNeedle || dualPowerProgress) {
+      const loadNow =
+        typeof AudioEngine !== "undefined" && AudioEngine.getLoad
+          ? AudioEngine.getLoad()
+          : 0;
+      let kw = 0;
+      if (kmh > 0.5) {
+        kw = Math.round(kmh * 1.85 + loadNow * 220);
+      }
+      if (dualPowerVal) dualPowerVal.textContent = String(kw);
+      const powerRatio = Math.min(1, Math.max(0, kw / 650));
+      const powerAngle = -135 + powerRatio * 270;
+      if (dualPowerNeedle) dualPowerNeedle.style.transform = `rotate(${powerAngle}deg)`;
+      if (dualPowerProgress) {
+        const powerDashOffset = 415 - powerRatio * 310;
+        dualPowerProgress.style.strokeDashoffset = String(powerDashOffset);
+      }
+      if (gBarPower) gBarPower.style.opacity = String(0.2 + powerRatio * 0.8);
+      if (gBarRegen) gBarRegen.style.opacity = kmh < 3 ? "0.2" : (loadNow < 0.2 ? "0.85" : "0.2");
+    }
+
     // Yan equalizer: hız (pitch) + yük (volume) — Drive.app senkronu
     const loadNow =
       typeof AudioEngine !== "undefined" && AudioEngine.getLoad
@@ -510,6 +554,8 @@
       gaugeLastShown = shown;
       const shownStr = String(shown);
       if (speedValue) speedValue.textContent = shownStr;
+      if (dualSpeedVal) dualSpeedVal.textContent = shownStr;
+      if (dualSpeedUnit) dualSpeedUnit.textContent = isMph ? "MPH" : "KM/H";
       if (analogSpeedValue) analogSpeedValue.textContent = shownStr;
       if (minimalSpeedValue) minimalSpeedValue.textContent = shownStr;
       if (barsSpeedValue) barsSpeedValue.textContent = shownStr;
@@ -676,6 +722,9 @@
       setGaugeScreen(meta.gauge, false);
     }
     setSpeedColors(hudDisplayKmh, readMaxKmh());
+    document.querySelectorAll("[data-theme-goto]").forEach((btn) => {
+      btn.classList.toggle("is-on", btn.dataset.themeGoto === modeKey);
+    });
     syncMapOpacityUi();
     if (prev && prev !== modeKey) {
       triggerGaugeTransitionSpin();
@@ -1560,15 +1609,20 @@
     syncStartStopUi();
 
     AudioEngine.kickUnlock?.();
-    if (isAuto && voiceSelect) {
-      voiceSelect.value = "silent-mode";
-      Picker?.refreshAll?.();
+    // Otomatik açılış sessize zorlamasın. Sessiz yalnızca kullanıcı ses menüsünden seçtiyse kalsın.
+    if (isAuto && voiceSelect && (!voiceSelect.value || voiceSelect.value === "silent-mode")) {
+      let userPicked = false;
+      try { userPicked = localStorage.getItem("etubu_voice_user") === "1"; } catch (_) {}
+      if (!userPicked || !voiceSelect.value) {
+        voiceSelect.value = "tesla";
+        prefSet("voice", "tesla");
+        Picker?.refreshAll?.();
+      }
     }
 
-    const voice =
-      unlocked() || voiceSelect?.value === "silent-mode"
-        ? (voiceSelect?.value || "silent-mode")
-        : DEFAULT_VOICE();
+    let voice = voiceSelect?.value || "tesla";
+    if (!unlocked() && voice !== "silent-mode") voice = DEFAULT_VOICE();
+    if (isAuto && voice === "silent-mode") voice = "tesla";
     const visual = unlocked() ? visualSelect?.value : DEFAULT_VISUAL();
     applyVisualTheme(visual);
     const vMeta = AudioEngine.getVoices().find((v) => v.key === voice);
@@ -1611,6 +1665,8 @@
     const unlockOnFirstTouch = () => {
       AudioEngine.kickUnlock?.();
       clearDriveMute();
+      RadarAlert.primeAudio?.();
+      WarnVoice.prime?.();
       AudioEngine.ensureCtx?.().then(() => {
         AudioEngine.start(voice).catch(() => {});
       }).catch(() => {});
@@ -2338,6 +2394,7 @@
     }
     const v = AudioEngine.getVoices().find((x) => x.key === voiceSelect.value);
     void v;
+    try { localStorage.setItem("etubu_voice_user", "1"); } catch (_) {}
     prefSet("voice", voiceSelect.value);
     if (voiceSelect.value !== "silent-mode" && AudioEngine.isMuted?.()) {
       AudioEngine.setMuted(false);
@@ -2352,6 +2409,30 @@
         MusicHub.applyMix?.();
       });
     }
+  });
+
+  document.querySelectorAll("[data-theme-goto]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const key = btn.dataset.themeGoto;
+      if (!key) return;
+      if (["plaid", "taycan", "tron", "redline", "eco"].includes(key)) {
+        speedGaugeWrap?.setAttribute("data-dual-theme", key);
+        setGaugeScreen("dual");
+        if (dualDriveMode) dualDriveMode.textContent = key.toUpperCase();
+        document.querySelectorAll("[data-theme-goto]").forEach((b) => {
+          b.classList.toggle("is-on", b.dataset.themeGoto === key);
+        });
+        triggerGaugeTransitionSpin();
+        return;
+      }
+      if (visualSelect) {
+        visualSelect.value = key;
+        visualSelect.dispatchEvent(new Event("change", { bubbles: true }));
+      } else {
+        applyVisualTheme(key);
+        prefSet("visual", key);
+      }
+    });
   });
 
   visualSelect?.addEventListener("change", () => {

@@ -1,0 +1,553 @@
+/* ==========================================================================
+   ETUBU COCKPIT — MAGIC UI & MOTION AESTHETICS STANDARD
+   In-Car Cockpit HUD, Dual-Gauge Cluster, Magic Retro Grid & Border Beam
+   ========================================================================== */
+
+/* 1. MAGIC RETRO GRID (3D Perspective Horizon in Cockpit) */
+.magic-retro-grid {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 1;
+  overflow: hidden;
+  perspective: 500px;
+  opacity: 0.32;
+  transition: opacity 0.5s ease;
+}
+
+.magic-retro-grid::after {
+  content: "";
+  position: absolute;
+  inset: -100% 0;
+  background-image: 
+    linear-gradient(to right, rgba(0, 240, 255, 0.14) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 240, 255, 0.14) 1px, transparent 1px);
+  background-size: 50px 50px;
+  transform: rotateX(65deg) translateY(-20%);
+  transform-origin: 50% 100%;
+  animation: retro-grid-scroll 24s linear infinite;
+  mask-image: radial-gradient(ellipse 90% 70% at 50% 45%, #000 20%, transparent 85%);
+  -webkit-mask-image: radial-gradient(ellipse 90% 70% at 50% 45%, #000 20%, transparent 85%);
+}
+
+@keyframes retro-grid-scroll {
+  0% { transform: rotateX(65deg) translateY(0); }
+  100% { transform: rotateX(65deg) translateY(50px); }
+}
+
+/* Ambient Glow spot behind HUD */
+.ambient-glow--cockpit {
+  position: fixed;
+  width: 600px;
+  height: 600px;
+  top: 45%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  filter: blur(140px);
+  background: radial-gradient(circle, rgba(0, 240, 255, 0.16) 0%, rgba(139, 92, 246, 0.08) 50%, transparent 75%);
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.7;
+}
+
+/* 2. MAGIC UI BORDER BEAM EFFECT */
+.magic-border-beam {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 2;
+}
+
+.magic-border-beam::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  padding: 2px;
+  background: conic-gradient(
+    from var(--beam-angle, 0deg) at 50% 50%,
+    transparent 0deg,
+    transparent 280deg,
+    rgba(0, 240, 255, 0.4) 320deg,
+    #00f0ff 345deg,
+    #8b5cf6 360deg
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: beam-spin 4s linear infinite;
+}
+
+@keyframes beam-spin {
+  0% { --beam-angle: 0deg; }
+  100% { --beam-angle: 360deg; }
+}
+
+@property --beam-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+/* 3. MAGIC UI SHIMMER BUTTON (Tactile Glowing Action Button) */
+.magic-shimmer-btn {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid rgba(0, 240, 255, 0.4) !important;
+  background: linear-gradient(135deg, rgba(0, 240, 255, 0.22) 0%, rgba(139, 92, 246, 0.28) 100%), #030712 !important;
+  box-shadow: 
+    0 0 25px rgba(0, 240, 255, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease !important;
+}
+
+.magic-shimmer-btn::before {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0%,
+    transparent 65%,
+    rgba(255, 255, 255, 0.8) 85%,
+    transparent 100%
+  );
+  animation: shimmer-spin 3s linear infinite;
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0.6;
+}
+
+@keyframes shimmer-spin {
+  100% { transform: rotate(360deg); }
+}
+
+.magic-shimmer-btn:hover {
+  transform: scale(1.04) !important;
+  box-shadow: 0 0 35px rgba(0, 240, 255, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.5) !important;
+}
+
+.magic-shimmer-btn:active {
+  transform: scale(0.97) !important;
+}
+
+/* 4. DUAL-GAUGE CLUSTER SCREEN STYLING */
+.gauge-screen--dual {
+  width: 100%;
+  max-width: 580px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.dual-gauge-cluster {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(12px, 2.5vw, 24px);
+  width: 100%;
+  position: relative;
+}
+
+.gauge-dial {
+  position: relative;
+  width: clamp(140px, 22vw, 185px);
+  height: clamp(140px, 22vw, 185px);
+  border-radius: 50%;
+  background: radial-gradient(circle at center, rgba(13, 22, 41, 0.92) 0%, rgba(3, 7, 18, 0.98) 75%);
+  border: 2px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 
+    0 12px 30px -5px rgba(0, 0, 0, 0.85),
+    inset 0 0 25px rgba(0, 0, 0, 0.85);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  flex-shrink: 0;
+}
+
+.gauge-dial svg.dial-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.dial-track {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.08);
+  stroke-width: 7;
+  stroke-linecap: round;
+}
+
+.dial-progress {
+  fill: none;
+  stroke: var(--cyan, #00f0ff);
+  stroke-width: 7;
+  stroke-linecap: round;
+  stroke-dasharray: 415;
+  stroke-dashoffset: 415;
+  transition: stroke-dashoffset 0.12s linear, stroke 0.3s ease;
+  filter: drop-shadow(0 0 6px var(--cyan, #00f0ff));
+}
+
+.dial-progress--power {
+  stroke: #8b5cf6;
+  filter: drop-shadow(0 0 6px #8b5cf6);
+}
+
+.dial-needle-wrap {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  transition: transform 0.12s cubic-bezier(0.16, 1, 0.3, 1);
+  transform: rotate(-135deg);
+}
+
+.dial-needle {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  width: 3px;
+  height: clamp(48px, 7vw, 64px);
+  background: linear-gradient(to top, transparent 0%, var(--cyan, #00f0ff) 100%);
+  transform: translateX(-50%);
+  border-radius: 2px;
+  box-shadow: 0 0 10px var(--cyan, #00f0ff);
+}
+
+.dial-needle--power {
+  background: linear-gradient(to top, transparent 0%, #8b5cf6 100%);
+  box-shadow: 0 0 10px #8b5cf6;
+}
+
+.dial-center-cap {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #030712;
+  border: 2px solid var(--cyan, #00f0ff);
+  box-shadow: 0 0 8px var(--cyan, #00f0ff);
+  z-index: 3;
+}
+
+.dial-center-cap--power {
+  border-color: #8b5cf6;
+  box-shadow: 0 0 8px #8b5cf6;
+}
+
+.dial-inner-text {
+  position: relative;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+  margin-top: -4px;
+}
+
+.dial-main-val {
+  font-family: var(--theme-num-font, "Orbitron", monospace);
+  font-size: clamp(1.6rem, 3.4vw, 2.3rem);
+  font-weight: 900;
+  line-height: 1;
+  color: #ffffff;
+  text-shadow: 0 0 15px rgba(0, 240, 255, 0.45);
+}
+
+.dial-main-unit {
+  font-family: "Orbitron", monospace;
+  font-size: 0.65rem;
+  color: var(--cyan, #00f0ff);
+  letter-spacing: 0.12em;
+  margin-top: 4px;
+  font-weight: 700;
+}
+
+.dial-sub-label {
+  font-size: 0.58rem;
+  color: #64748b;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-top: 2px;
+  font-weight: 600;
+}
+
+/* 5. INTER-GAUGE BRIDGE (Center HUD Status) */
+.dual-center-bridge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(3, 7, 18, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+  min-width: 64px;
+}
+
+.dual-bridge-pill {
+  font-family: "Orbitron", monospace;
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(0, 240, 255, 0.15);
+  color: #00f0ff;
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.5);
+  text-transform: uppercase;
+}
+
+.dual-bridge-gear {
+  font-family: "Orbitron", monospace;
+  font-size: 1.5rem;
+  font-weight: 900;
+  line-height: 1;
+  color: #ffffff;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+}
+
+.dual-bridge-gmeter {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  width: 44px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  padding: 1px;
+}
+
+.g-center-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #ffffff;
+  flex-shrink: 0;
+}
+
+.g-bar {
+  height: 100%;
+  border-radius: 2px;
+  flex: 1;
+  transition: width 0.1s linear, background-color 0.2s ease;
+}
+
+.g-bar--regen {
+  background: rgba(16, 185, 129, 0.3);
+}
+
+.g-bar--power {
+  background: rgba(0, 240, 255, 0.3);
+}
+
+/* 6. DUAL GAUGE THEMES */
+/* Theme: Plaid (Cyan / Violet Hyper-Drive) */
+.speed-gauge-wrap[data-dual-theme="plaid"] .dial-progress { stroke: #00f0ff; filter: drop-shadow(0 0 8px #00f0ff); }
+.speed-gauge-wrap[data-dual-theme="plaid"] .dial-progress--power { stroke: #8b5cf6; filter: drop-shadow(0 0 8px #8b5cf6); }
+.speed-gauge-wrap[data-dual-theme="plaid"] .dial-needle { background: linear-gradient(to top, transparent, #00f0ff); box-shadow: 0 0 12px #00f0ff; }
+.speed-gauge-wrap[data-dual-theme="plaid"] .dial-needle--power { background: linear-gradient(to top, transparent, #8b5cf6); box-shadow: 0 0 12px #8b5cf6; }
+.speed-gauge-wrap[data-dual-theme="plaid"] .dual-bridge-pill { color: #00f0ff; border-color: rgba(0, 240, 255, 0.4); }
+
+/* Theme: Taycan (Sport Chrono Gold) */
+.speed-gauge-wrap[data-dual-theme="taycan"] .gauge-dial {
+  background: radial-gradient(circle, #1a1e29 0%, #080a10 80%);
+  border-color: rgba(234, 179, 8, 0.4);
+}
+.speed-gauge-wrap[data-dual-theme="taycan"] .dial-progress { stroke: #eab308; filter: drop-shadow(0 0 8px #eab308); }
+.speed-gauge-wrap[data-dual-theme="taycan"] .dial-progress--power { stroke: #f59e0b; filter: drop-shadow(0 0 8px #f59e0b); }
+.speed-gauge-wrap[data-dual-theme="taycan"] .dial-needle { background: linear-gradient(to top, transparent, #eab308); box-shadow: 0 0 12px #eab308; }
+.speed-gauge-wrap[data-dual-theme="taycan"] .dial-needle--power { background: linear-gradient(to top, transparent, #f59e0b); box-shadow: 0 0 12px #f59e0b; }
+.speed-gauge-wrap[data-dual-theme="taycan"] .dial-center-cap { border-color: #eab308; box-shadow: 0 0 8px #eab308; }
+.speed-gauge-wrap[data-dual-theme="taycan"] .dial-center-cap--power { border-color: #f59e0b; box-shadow: 0 0 8px #f59e0b; }
+.speed-gauge-wrap[data-dual-theme="taycan"] .dial-main-unit { color: #eab308; }
+.speed-gauge-wrap[data-dual-theme="taycan"] .dual-bridge-pill { color: #eab308; border-color: rgba(234, 179, 8, 0.4); background: rgba(234, 179, 8, 0.15); }
+
+/* Theme: Tron (Hyperspace Emerald) */
+.speed-gauge-wrap[data-dual-theme="tron"] .gauge-dial {
+  background: #020712;
+  border-color: rgba(16, 185, 129, 0.4);
+}
+.speed-gauge-wrap[data-dual-theme="tron"] .dial-progress { stroke: #10b981; filter: drop-shadow(0 0 8px #10b981); }
+.speed-gauge-wrap[data-dual-theme="tron"] .dial-progress--power { stroke: #06b6d4; filter: drop-shadow(0 0 8px #06b6d4); }
+.speed-gauge-wrap[data-dual-theme="tron"] .dial-needle { background: linear-gradient(to top, transparent, #10b981); box-shadow: 0 0 12px #10b981; }
+.speed-gauge-wrap[data-dual-theme="tron"] .dial-needle--power { background: linear-gradient(to top, transparent, #06b6d4); box-shadow: 0 0 12px #06b6d4; }
+.speed-gauge-wrap[data-dual-theme="tron"] .dial-center-cap { border-color: #10b981; box-shadow: 0 0 8px #10b981; }
+.speed-gauge-wrap[data-dual-theme="tron"] .dial-center-cap--power { border-color: #06b6d4; box-shadow: 0 0 8px #06b6d4; }
+.speed-gauge-wrap[data-dual-theme="tron"] .dial-main-unit { color: #10b981; }
+.speed-gauge-wrap[data-dual-theme="tron"] .dual-bridge-pill { color: #10b981; border-color: rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.15); }
+
+/* Theme: Redline (Motorsport Carbon Red) */
+.speed-gauge-wrap[data-dual-theme="redline"] .gauge-dial {
+  background: radial-gradient(circle, #1f1111 0%, #0a0404 80%);
+  border-color: rgba(239, 68, 68, 0.5);
+}
+.speed-gauge-wrap[data-dual-theme="redline"] .dial-progress { stroke: #ef4444; filter: drop-shadow(0 0 8px #ef4444); }
+.speed-gauge-wrap[data-dual-theme="redline"] .dial-progress--power { stroke: #f97316; filter: drop-shadow(0 0 8px #f97316); }
+.speed-gauge-wrap[data-dual-theme="redline"] .dial-needle { background: linear-gradient(to top, transparent, #ef4444); box-shadow: 0 0 12px #ef4444; }
+.speed-gauge-wrap[data-dual-theme="redline"] .dial-needle--power { background: linear-gradient(to top, transparent, #f97316); box-shadow: 0 0 12px #f97316; }
+.speed-gauge-wrap[data-dual-theme="redline"] .dial-center-cap { border-color: #ef4444; box-shadow: 0 0 8px #ef4444; }
+.speed-gauge-wrap[data-dual-theme="redline"] .dial-center-cap--power { border-color: #f97316; box-shadow: 0 0 8px #f97316; }
+.speed-gauge-wrap[data-dual-theme="redline"] .dial-main-unit { color: #ef4444; }
+.speed-gauge-wrap[data-dual-theme="redline"] .dual-bridge-pill { color: #ef4444; border-color: rgba(239, 68, 68, 0.5); background: rgba(239, 68, 68, 0.15); }
+
+/* Theme: Eco (Aerodynamic Mint Green) */
+.speed-gauge-wrap[data-dual-theme="eco"] .gauge-dial {
+  background: radial-gradient(circle, #091f1a 0%, #020b08 80%);
+  border-color: rgba(20, 184, 166, 0.4);
+}
+.speed-gauge-wrap[data-dual-theme="eco"] .dial-progress { stroke: #14b8a6; filter: drop-shadow(0 0 8px #14b8a6); }
+.speed-gauge-wrap[data-dual-theme="eco"] .dial-progress--power { stroke: #22c55e; filter: drop-shadow(0 0 8px #22c55e); }
+.speed-gauge-wrap[data-dual-theme="eco"] .dial-needle { background: linear-gradient(to top, transparent, #14b8a6); box-shadow: 0 0 12px #14b8a6; }
+.speed-gauge-wrap[data-dual-theme="eco"] .dial-needle--power { background: linear-gradient(to top, transparent, #22c55e); box-shadow: 0 0 12px #22c55e; }
+.speed-gauge-wrap[data-dual-theme="eco"] .dial-center-cap { border-color: #14b8a6; box-shadow: 0 0 8px #14b8a6; }
+.speed-gauge-wrap[data-dual-theme="eco"] .dial-center-cap--power { border-color: #22c55e; box-shadow: 0 0 8px #22c55e; }
+.speed-gauge-wrap[data-dual-theme="eco"] .dial-main-unit { color: #14b8a6; }
+.speed-gauge-wrap[data-dual-theme="eco"] .dual-bridge-pill { color: #14b8a6; border-color: rgba(20, 184, 166, 0.4); background: rgba(20, 184, 166, 0.15); }
+
+/* 7. TOP BAR & COCKPIT ERGONOMICS */
+.top-bar.glass-bar {
+  background: rgba(3, 7, 18, 0.72) !important;
+  backdrop-filter: blur(18px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(160%) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4) !important;
+}
+
+.trial-pill {
+  border-radius: 999px !important;
+  border: 1px solid rgba(0, 240, 255, 0.25) !important;
+  background: rgba(0, 240, 255, 0.08) !important;
+  color: #00f0ff !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.02em !important;
+  padding: 4px 14px !important;
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.15) !important;
+}
+
+/* 8. TELEMETRY WINGS (Warning & Avg Speed Sides) */
+.hud-side--warn, .hud-side--avg {
+  background: rgba(13, 22, 41, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 14px 16px;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+  transition: transform 0.25s ease, border-color 0.25s ease;
+}
+
+.hud-side--warn:hover, .hud-side--avg:hover {
+  border-color: rgba(0, 240, 255, 0.3);
+  transform: translateY(-2px) translateZ(6px);
+}
+
+/* 9. THEME CHIPS ELEVATION */
+.theme-chips {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.theme-chip {
+  padding: 5px 14px !important;
+  border-radius: 999px !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+  color: #94a3b8 !important;
+  font-size: 0.78rem !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.theme-chip:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+  transform: translateY(-1px);
+}
+
+.theme-chip.is-on {
+  background: rgba(0, 240, 255, 0.16) !important;
+  border-color: #00f0ff !important;
+  color: #00f0ff !important;
+  box-shadow: 0 0 14px rgba(0, 240, 255, 0.35) !important;
+}
+
+/* 10. GAUGE DOTS */
+.gauge-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.gauge-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  padding: 0;
+}
+
+.gauge-dot.active {
+  width: 22px;
+  border-radius: 999px;
+  background: #00f0ff;
+  border-color: #00f0ff;
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.6);
+}
+
+/* 11. RESPONSIVE BREAKPOINTS (Mobile & Landscape In-Car Screens) */
+@media (max-width: 640px) {
+  .dual-gauge-cluster {
+    gap: 8px;
+  }
+  .gauge-dial {
+    width: 135px;
+    height: 135px;
+  }
+  .dual-center-bridge {
+    padding: 4px 6px;
+    min-width: 48px;
+  }
+  .dual-bridge-gear {
+    font-size: 1.2rem;
+  }
+  .dial-main-val {
+    font-size: 1.5rem;
+  }
+}
