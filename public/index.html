@@ -2,179 +2,561 @@
 <html lang="tr">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ETUBU — Elektrikli Araç Sürüş Sesleri | GPS Senkron Motor Sesi</title>
-  <meta name="description" content="ETUBU ile EV'nize GPS hızına senkron gerçekçi motor sesleri. Ücretsiz başlayın; Premium 149 ₺/ay veya Ömür Boyu 1.499 ₺. Visa, Mastercard, Troy. 256-bit SSL." />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>ETUBU — Elektrikli Araç Ses Stüdyosu | GPS Senkron Motor Sesi & Fütüristik EV Akustiği</title>
+  <meta name="description" content="ETUBU ile elektrikli aracınıza GPS hızına senkron ultra-gerçekçi motor sesleri ekleyin. evsoundfx standardında canlı ses sentezleyici, fütüristik EV akustiği, telemetri grafikleri ve güvenli sürüş asistanı." />
+  <meta name="keywords" content="elektrikli araç sürüş sesleri, ev sound fx, gps motor sesi, elektrikli araba motor sesi, ev sound generator, yapay motor sesi, etubu, tesla motor sesi, taycan e-sound" />
   <meta name="robots" content="index, follow" />
   <link rel="canonical" href="https://etubu.com/" />
   <link rel="icon" type="image/png" href="/assets/brand/app-icon.png" />
-  <meta property="og:title" content="ETUBU — EV Driving Sounds" />
-  <meta property="og:description" content="GPS hızına senkron motor sesleri. Tesla tarayıcısı ve telefonda çalışır." />
+  <link rel="apple-touch-icon" href="/assets/brand/AppIcon-1024.png" />
+  
+  <!-- Social Media & Open Graph -->
+  <meta property="og:title" content="ETUBU — Elektrikli Araç Ses Stüdyosu & GPS Sürüş Akustiği" />
+  <meta property="og:description" content="evsoundfx standardında canlı motor sesi sentezleyici, GPS senkronize sürüş sesleri ve akıcı kokpit grafikleri." />
   <meta property="og:url" content="https://etubu.com/" />
   <meta property="og:image" content="https://etubu.com/assets/brand/logo-dark.png" />
   <meta property="og:type" content="website" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Syne:wght@700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/content.css" />
-  <link rel="stylesheet" href="css/paytr-storefront.css" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="ETUBU — EV Sound FX & GPS Driving Audio" />
+  <meta name="twitter:description" content="Elektrikli aracınıza gerçek zamanlı motor sesleri ekleyin. Web Audio stüdyosu ile hemen deneyin." />
+  <meta name="twitter:image" content="https://etubu.com/assets/brand/logo-horizontal.png" />
+
+  <!-- Security & Modern Fonts -->
+  <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Orbitron:wght@500;700;900&family=Syne:wght@700;800&display=swap" rel="stylesheet" />
+
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="css/motion-storefront.css?v=20261011" />
+  <link rel="stylesheet" href="css/paytr-storefront.css?v=20261011" />
+
+  <!-- Structured Data JSON-LD -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
-    "name": "ETUBU",
-    "applicationCategory": "EntertainmentApplication",
-    "operatingSystem": "Web, iOS",
-    "offers": [
-      { "@type": "Offer", "name": "Ücretsiz", "price": "0", "priceCurrency": "TRY" },
-      { "@type": "Offer", "name": "Aylık Premium", "price": "149", "priceCurrency": "TRY" },
-      { "@type": "Offer", "name": "Ömür Boyu", "price": "1499", "priceCurrency": "TRY" }
-    ],
-    "url": "https://etubu.com/",
-    "publisher": {
-      "@type": "Person",
-      "name": "Sinan Nergiz",
-      "email": "destek@etubu.com"
-    }
+    "@graph": [
+      {
+        "@type": "SoftwareApplication",
+        "name": "ETUBU",
+        "applicationCategory": "MultimediaApplication",
+        "operatingSystem": "Web, iOS Safari, Android Chrome, Smart Car Browser",
+        "description": "Elektrikli araçlar için gerçek zamanlı GPS senkron yapay motor sesleri, telemetri göstergeleri ve akıllı sürüş asistanı.",
+        "offers": [
+          { "@type": "Offer", "name": "Ücretsiz Paket", "price": "0", "priceCurrency": "TRY" },
+          { "@type": "Offer", "name": "Aylık Premium", "price": "149", "priceCurrency": "TRY" },
+          { "@type": "Offer", "name": "Ömür Boyu Lisans", "price": "1499", "priceCurrency": "TRY" }
+        ],
+        "url": "https://etubu.com/",
+        "publisher": {
+          "@type": "Person",
+          "name": "Sinan Nergiz",
+          "email": "destek@etubu.com"
+        }
+      }
+    ]
   }
   </script>
 </head>
-<body class="landing-page">
-  <div class="landing-wrap">
-    <header class="landing-nav">
-      <a class="landing-nav__brand" href="/">
-        <img src="assets/brand/logo-dark.png" alt="ETUBU" width="120" height="36" />
+<body class="motion-page">
+  <!-- Dynamic Ambient Glow Orbs (motion.so lighting) -->
+  <div class="ambient-glow ambient-glow--1"></div>
+  <div class="ambient-glow ambient-glow--2"></div>
+  <div class="ambient-glow ambient-glow--3"></div>
+
+  <div class="motion-container">
+    <!-- Ultra Modern Floating Navigation Bar -->
+    <header class="motion-nav">
+      <a class="motion-brand" href="/" aria-label="ETUBU Ana Sayfa">
+        <img src="assets/brand/logo.svg" alt="ETUBU" width="118" height="34" onerror="this.onerror=null; this.src='assets/brand/logo-dark.png';" />
+        <span class="tag">STUDIO v2.4</span>
       </a>
-      <nav class="landing-nav__links" aria-label="Ana menü">
-        <a href="/" class="is-active">Ana sayfa</a>
-        <a href="pricing.html">Fiyatlandırma</a>
-        <a href="/app.html">Uygulama</a>
-        <a href="about.html">Hakkımızda</a>
-        <a href="contact.html">İletişim</a>
+
+      <nav class="motion-nav__links" aria-label="Ana Menü">
+        <a href="/" class="motion-nav__link is-active">Ana Sayfa</a>
+        <a href="#sound-studio" class="motion-nav__link">Ses Stüdyosu</a>
+        <a href="#telemetry" class="motion-nav__link">Telemetri &amp; Grafikler</a>
+        <a href="pricing.html" class="motion-nav__link">Fiyatlandırma</a>
+        <a href="about.html" class="motion-nav__link">Hakkımızda</a>
+        <a href="contact.html" class="motion-nav__link">İletişim</a>
       </nav>
+
+      <div class="motion-nav__actions">
+        <a class="btn-motion btn-motion--ghost js-start-app" href="/app.html">Kokpit Aç</a>
+        <a class="btn-motion btn-motion--primary js-start-app" href="/app.html">
+          <span>Uygulamayı Başlat</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+            <polyline points="12 5 19 12 12 19"></polyline>
+          </svg>
+        </a>
+      </div>
     </header>
 
-    <section class="landing-hero">
-      <h1>ETUBU</h1>
-      <p class="lede">Elektrikli aracınıza GPS hızına senkron gerçekçi motor sesleri. Tesla tarayıcısı ve telefonda çalışır — dijital hizmet, anında erişim.</p>
-      <div class="landing-cta-row">
-        <a class="btn-primary" href="/app.html">Uygulamayı başlat</a>
-        <a class="btn-ghost" href="pricing.html">Paketler ve fiyatlar</a>
+    <!-- Hero Section with Motion.so Aesthetics -->
+    <section class="motion-hero">
+      <div class="hero-pill">
+        <span class="dot"></span>
+        <span>YENİ NESİL EV SES SENTEZLEYİCİSİ · SIFIR GECİKME</span>
       </div>
-      <p class="ssl-line">
-        <img src="assets/payment/ssl-secure.svg" alt="" width="120" height="32" />
-        256-bit SSL Güvenli Ödeme · Visa · Mastercard · Troy
+
+      <h1>Elektrikli Aracınıza <br /><span class="gradient">Canlı Motor Ruhu</span> Kazandırın</h1>
+      
+      <p class="subtitle">
+        etubu.com ve evsoundfx teknolojisiyle geliştirilmiş, GPS hızına mikrosaniye senkron yapay motor sesleri. 
+        Akıllı araç tarayıcınızda veya telefonunuzda anında çalışır — hiçbir donanım takılması gerekmez.
       </p>
-    </section>
 
-    <section class="landing-section" id="ozellikler" aria-labelledby="feat-title">
-      <h2 id="feat-title">Ne sunuyoruz?</h2>
-      <p class="section-sub">Eğlence odaklı dijital yazılım. Konum verisi yalnızca cihazınızda işlenir; sürüş rotası sunucuya gönderilmez.</p>
-      <div class="feature-grid">
-        <article class="feature-card">
-          <h3>GPS senkron ses</h3>
-          <p>Hızlandıkça motor devri yükselir, yavaşladıkça rölantiye döner — anlık tepki.</p>
-        </article>
-        <article class="feature-card">
-          <h3>Tesla &amp; mobil</h3>
-          <p>Model 3 / Y / S / X tarayıcısı ve iOS / Android telefonlarla uyumlu.</p>
-        </article>
-        <article class="feature-card">
-          <h3>Yol uyarıları</h3>
-          <p>Radar ve hız koridoru farkındalığı ile sürüşe odaklanmayı destekler.</p>
-        </article>
+      <div class="hero-cta-group">
+        <a class="btn-motion btn-motion--primary btn-large js-start-app" href="/app.html">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+          </svg>
+          <span>Kokpiti Başlat (Ücretsiz)</span>
+        </a>
+        <a class="btn-motion btn-motion--sound" href="#sound-studio">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 18V5l12-2v13"></path>
+            <circle cx="6" cy="18" r="3"></circle>
+            <circle cx="18" cy="16" r="3"></circle>
+          </svg>
+          <span>Sanal Gaz Pedalını Dene</span>
+        </a>
+      </div>
+
+      <div class="hero-security-strip">
+        <span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+          256-bit SSL Uçtan Uca Güvenli
+        </span>
+        <span>•</span>
+        <span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+          </svg>
+          Sıfır Donanım Modifikasyonu
+        </span>
+        <span>•</span>
+        <span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 14 14"></polyline>
+          </svg>
+          GPS Hızına Tam Senkron
+        </span>
+        <span>•</span>
+        <span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+          </svg>
+          PayTR &amp; Troy Lisanslı
+        </span>
       </div>
     </section>
 
-    <section class="landing-section" id="fiyatlandirma" aria-labelledby="price-title">
-      <h2 id="price-title">Paketler ve fiyatlar</h2>
-      <p class="section-sub">Fiyatlar KDV dahil TL olarak gösterilir. Ödeme anında görünen tutar geçerlidir. Detay: <a href="pricing.html">Fiyatlandırma</a>.</p>
-      <div class="price-grid" aria-label="Ürün paketleri">
-        <article class="price-card">
-          <h2>Ücretsiz</h2>
-          <p class="price-amount">0 ₺</p>
-          <p class="price-note">Süresiz · temel özellikler</p>
-          <ul>
-            <li>GPS senkron motor sesleri</li>
-            <li>Temel temalar</li>
-            <li>Radar / hız uyarıları</li>
-          </ul>
-          <a class="price-cta" href="/app.html">Hemen kullan</a>
-        </article>
-        <article class="price-card price-card--featured">
-          <p class="price-badge">Popüler</p>
-          <h2>Aylık Premium</h2>
-          <p class="price-amount">149 ₺ <small>/ ay</small></p>
-          <p class="price-note">~ $3 / ay · abonelik</p>
-          <ul>
-            <li>Tüm ses motorları</li>
-            <li>Tüm görsel temalar</li>
-            <li>İstediğiniz zaman iptal</li>
-          </ul>
-          <a class="price-cta" href="/app.html">Satın al</a>
-        </article>
-        <article class="price-card">
-          <h2>Ömür Boyu</h2>
-          <p class="price-amount">1.499 ₺</p>
-          <p class="price-note">~ $30 · tek seferlik</p>
-          <ul>
-            <li>Tüm katalog</li>
-            <li>Reklamların kaldırılması</li>
-            <li>Süresiz erişim</li>
-          </ul>
-          <a class="price-cta" href="/app.html">Satın al</a>
-        </article>
-      </div>
-      <div class="payment-badges" aria-label="Güvenlik ve kartlar">
-        <img src="assets/payment/ssl-secure.svg" alt="256-bit SSL Güvenli Ödeme" width="140" height="36" />
-        <img src="assets/payment/visa.svg" alt="Visa" width="90" height="29" />
-        <img src="assets/payment/mastercard.svg" alt="Mastercard" width="90" height="29" />
-        <img src="assets/payment/troy.svg" alt="Troy" width="90" height="36" />
-      </div>
-    </section>
-
-    <section class="landing-section" aria-labelledby="legal-title">
-      <h2 id="legal-title">Yasal ve güvenli alışveriş</h2>
-      <p class="section-sub">Mesafeli satış, iade, gizlilik ve teslimat koşulları aşağıda ve footer’da her zaman erişilebilir.</p>
-      <ul>
-        <li><a href="distance-sales.html">Mesafeli Satış / Hizmet Sözleşmesi</a></li>
-        <li><a href="returns.html">İptal ve İade Koşulları</a></li>
-        <li><a href="privacy.html">Gizlilik Politikası ve KVKK</a></li>
-        <li><a href="shipping-delivery.html">Teslimat Koşulları</a></li>
-        <li><a href="contact.html">İletişim bilgileri</a></li>
-      </ul>
-    </section>
-
-    <footer class="site-legal-footer">
-      <div class="site-legal-footer__grid">
-        <div>
-          <strong>ETUBU</strong>
-          <p>Yetkili: Sinan Nergiz</p>
-          <p><a href="mailto:destek@etubu.com">destek@etubu.com</a></p>
-          <p><a href="tel:+905305115800">+90 530 511 58 00</a></p>
-          <p>Adres: İstasyon Mah. TOKİ Göl Konutları<br />B1-3 Blok No: 28, Küçükçekmece / İstanbul</p>
+    <!-- ==========================================================================
+         EVSOUNDFX.COM TARZI SES STÜDYOSU & AKUSTİK SENTEZLEYİCİ
+         ========================================================================== -->
+    <section class="sound-studio-wrapper" id="sound-studio" aria-label="Canlı Ses Stüdyosu">
+      <div class="studio-header">
+        <div class="studio-header-title">
+          <div class="icon-badge">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2v20M17 5v14M7 9v6M22 8v8M2 11v2"></path>
+            </svg>
+          </div>
+          <div>
+            <h2>Canlı EV Ses Stüdyosu</h2>
+            <p>evsoundfx mimarisiyle çalışan gerçek zamanlı Web Audio osilatör ve harmonik sentezleyici</p>
+          </div>
         </div>
-        <div>
-          <strong>Yasal</strong>
+
+        <div class="studio-status-badge">
+          <span class="live-dot"></span>
+          <span>CANLI SES SENTEZİ AKTİF</span>
+        </div>
+      </div>
+
+      <!-- Ses Preset Çipleri -->
+      <div class="sound-presets-bar">
+        <button class="preset-chip is-active" data-preset="plaid" aria-label="Hyper EV Plaid Sesi">
+          <div class="preset-name">
+            <span>⚡ Plaid Whine</span>
+            <span style="color: #00f0ff;">9.8 kHz</span>
+          </div>
+          <div class="preset-desc">Süperiletken Çift Inverter</div>
+        </button>
+
+        <button class="preset-chip" data-preset="taycan" aria-label="Taycan E-Sound">
+          <div class="preset-name">
+            <span>🔋 Taycan Sport</span>
+            <span style="color: #8b5cf6;">480 Hz</span>
+          </div>
+          <div class="preset-desc">Akustik Spor Porsche Tınısı</div>
+        </button>
+
+        <button class="preset-chip" data-preset="warp" aria-label="Cyber Hyperspace Sesi">
+          <div class="preset-name">
+            <span>🌌 Tron Warp</span>
+            <span style="color: #10b981;">Sci-Fi</span>
+          </div>
+          <div class="preset-desc">Uzay Gemisi Warp Core</div>
+        </button>
+
+        <button class="preset-chip" data-preset="v8hybrid" aria-label="Quantum V8 Pulse Sesi">
+          <div class="preset-name">
+            <span>🔥 Quantum V8</span>
+            <span style="color: #ef4444;">Deep</span>
+          </div>
+          <div class="preset-desc">Elektro-Mekanik Homurtu</div>
+        </button>
+
+        <button class="preset-chip" data-preset="turbo" aria-label="Twin-Turbo Boxer Sesi">
+          <div class="preset-name">
+            <span>💨 Turbo Boxer</span>
+            <span style="color: #f59e0b;">Spool</span>
+          </div>
+          <div class="preset-desc">Kompresör &amp; Wastegate</div>
+        </button>
+
+        <button class="preset-chip" data-preset="formulae" aria-label="Formula E Apex Sesi">
+          <div class="preset-name">
+            <span>🏁 Formula E</span>
+            <span style="color: #06b6d4;">Race</span>
+          </div>
+          <div class="preset-desc">Düz Dişli Şanzıman Çığlığı</div>
+        </button>
+
+        <button class="preset-chip" data-preset="spinner" aria-label="Blade Runner 2049 Sesi">
+          <div class="preset-name">
+            <span>🌃 2049 Spinner</span>
+            <span style="color: #ec4899;">Analog</span>
+          </div>
+          <div class="preset-desc">Karanlık Sinematik Synth</div>
+        </button>
+      </div>
+
+      <!-- Stüdyo Sahnesi: Görselleştirici & Kokpit Kadranı -->
+      <div class="studio-stage">
+        <!-- Gerçek Zamanlı Spektrum Görselleştiricisi -->
+        <div class="visualizer-card">
+          <div class="visualizer-top">
+            <span class="label">Harmonik Spektrum &amp; Osiloskop</span>
+            <span class="freq-val">20 Hz — 20 kHz Canlı Analiz</span>
+          </div>
+          <canvas id="audioSpectrumCanvas" width="540" height="160"></canvas>
+        </div>
+
+        <!-- Gaz Pedalı & Hız Göstergesi Kadranı -->
+        <div class="cockpit-gauge-card">
+          <div class="gauge-display">
+            <div class="gauge-speed-val" id="gaugeSpeedVal">0</div>
+            <div class="gauge-unit">KM / SAAT HIZ</div>
+            <div class="gauge-secondary-metrics">
+              <div class="metric-item">DEVİR: <strong id="rpmMetricVal">800 RPM</strong></div>
+              <div class="metric-item">GÜÇ: <strong id="powerMetricVal">0 kW</strong></div>
+            </div>
+          </div>
+
+          <div class="throttle-control-area">
+            <div class="slider-group">
+              <label for="studioSpeedSlider">
+                <span>Hız Simülatörü</span>
+                <span>0 — 260 km/h</span>
+              </label>
+              <input type="range" class="motion-slider" id="studioSpeedSlider" min="0" max="260" value="0" step="1" />
+            </div>
+
+            <button class="virtual-pedal-btn" id="studioPedalBtn" type="button">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <path d="M12 19V5M5 12l7-7 7 7"></path>
+              </svg>
+              <span>Gaz Pedalına Bas &amp; Hızlan (Basılı Tut)</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Akustik İnce Ayar Düğmeleri (evsoundfx style) -->
+      <div class="studio-tuning-panel">
+        <div class="tune-knob">
+          <div class="tune-knob-header">
+            <span>Harmonik Perde (Pitch Multiplier)</span>
+            <span class="val" id="tunePitchVal">1.00x</span>
+          </div>
+          <input type="range" class="motion-slider" id="tunePitch" min="0.6" max="1.8" step="0.05" value="1.0" />
+        </div>
+
+        <div class="tune-knob">
+          <div class="tune-knob-header">
+            <span>Sub-Bass Gövde Rezonansı</span>
+            <span class="val" id="tuneSubVal">100%</span>
+          </div>
+          <input type="range" class="motion-slider" id="tuneSub" min="0" max="2.0" step="0.1" value="1.0" />
+        </div>
+
+        <div class="tune-knob">
+          <div class="tune-knob-header">
+            <span>Elektrik Inverter Islığı</span>
+            <span class="val" id="tuneWhineVal">100%</span>
+          </div>
+          <input type="range" class="motion-slider" id="tuneWhine" min="0" max="2.5" step="0.1" value="1.0" />
+        </div>
+      </div>
+
+      <!-- Alt Aksiyonlar & Ses Dışa Aktarma -->
+      <div class="studio-footer-actions">
+        <div class="studio-playback-btns">
+          <button class="btn-motion btn-motion--ghost" id="studioStartBtn" type="button">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+            <span>Sesi Başlat</span>
+          </button>
+          <a class="btn-motion btn-motion--primary js-start-app" href="/app.html">
+            <span>Aracında Canlı Kullan</span>
+          </a>
+        </div>
+
+        <div class="export-group">
+          <button class="btn-motion btn-motion--ghost" id="studioExportBtn" type="button" title="Seçili ses profilini WAV olarak dışa aktar">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            <span>WAV İndir (evsoundfx)</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==========================================================================
+         MOTION.SO TARZI 3D ÖZELLİK KARTLARI
+         ========================================================================== -->
+    <section class="motion-section" id="ozellikler">
+      <div class="section-title-wrap">
+        <span class="section-tag">YENİLİKÇİ TEKNOLOJİ</span>
+        <h2 class="section-title">Sıradan Bir Sürüş Değil, <br />Duyusal Bir Başyapıt</h2>
+        <p class="section-subtitle">Tüm elektrikli araç mimarileriyle mükemmel uyum. Donanımsız, anında erişilebilir dijital ses deneyimi.</p>
+      </div>
+
+      <div class="cards-grid-3d">
+        <article class="card-3d">
+          <div class="card-3d-icon">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+            </svg>
+          </div>
+          <h3>Gerçek Zamanlı GPS Senkronizasyonu</h3>
+          <p>Cihazınızın GPS yongasından gelen hız ve ivme verisi mikrosaniye hassasiyetinde okunur. Gaz pedalına bastığınız an motor devri yükselir.</p>
+          <span class="card-metric-badge">&lt; 15ms Gecikme Süresi</span>
+        </article>
+
+        <article class="card-3d">
+          <div class="card-3d-icon">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
+            </svg>
+          </div>
+          <h3>Akıllı Kokpit &amp; Radar Farkındalığı</h3>
+          <p>Yoldaki hız koridorları, radar noktaları ve kritik noktalar sesli olarak haber verilir. Güvenliğinizi ödün vermeden sürüş keyfini zirveye taşır.</p>
+          <span class="card-metric-badge">Trafik Güvenliği Asistanı</span>
+        </article>
+
+        <article class="card-3d">
+          <div class="card-3d-icon">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+              <line x1="8" y1="21" x2="16" y2="21"></line>
+              <line x1="12" y1="17" x2="12" y2="21"></line>
+            </svg>
+          </div>
+          <h3>Tarayıcı &amp; Mobil Tam Uyum</h3>
+          <p>Model 3 / Y / S / X ekranlarında doğrudan tam ekran çalışır. iOS ve Android cihazlarınızda Bluetooth üzerinden araç hoparlörlerine bağlanır.</p>
+          <span class="card-metric-badge">Smart EV Ekran Desteği</span>
+        </article>
+      </div>
+
+      <!-- ==========================================================================
+           İNTERAKTİF TELEMETRİ HUD VE GRAFİKLER (MOTION.SO STYLE)
+           ========================================================================== -->
+      <div class="telemetry-showcase" id="telemetry">
+        <div class="telemetry-header">
+          <div>
+            <h3 style="font-family: var(--font-brand); font-size: 1.4rem; color: #fff; margin-bottom: 4px;">Canlı Telemetri &amp; Akustik Eğrisi</h3>
+            <p style="color: var(--text-muted); font-size: 0.88rem;">Anlık motor yükü, tork üretimi, rejeneratif enerji ve akustik dalga dinamikleri</p>
+          </div>
+
+          <div class="telemetry-tabs">
+            <button class="telemetry-tab is-active" data-mode="power" type="button">Güç (kW)</button>
+            <button class="telemetry-tab" data-mode="rpm" type="button">Motor Devri (RPM)</button>
+            <button class="telemetry-tab" data-mode="regen" type="button">Rejenerasyon (kW)</button>
+            <button class="telemetry-tab" data-mode="efficiency" type="button">Tüketim (Wh/km)</button>
+          </div>
+        </div>
+
+        <div class="telemetry-canvas-container">
+          <canvas id="telemetryGraphCanvas"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==========================================================================
+         FİYATLANDIRMA & GÜVENLİ ALIŞVERİŞ (PAYTR / TROY / PCI-DSS UYUMLU)
+         ========================================================================== -->
+    <section class="motion-section" id="fiyatlandirma">
+      <div class="section-title-wrap">
+        <span class="section-tag">ŞEFFAF FİYATLAR</span>
+        <h2 class="section-title">Tek Tıkla Sahip Olun, <br />Sınırsız Keyif Alın</h2>
+        <p class="section-subtitle">Tüm paketler anında dijital teslim edilir. İstediğiniz zaman iptal edebilirsiniz.</p>
+      </div>
+
+      <div class="pricing-grid-motion">
+        <!-- Ücretsiz Paket -->
+        <article class="price-card-motion">
+          <h3>Ücretsiz Başlangıç</h3>
+          <div class="price-number">0 ₺</div>
+          <div class="price-period">Süresiz Temel Deneyim</div>
+          <ul class="price-features-list">
+            <li>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              <span>GPS senkron temel EV sesleri</span>
+            </li>
+            <li>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              <span>Dijital hız göstergesi ve HUD</span>
+            </li>
+            <li>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              <span>Radar &amp; hız koridoru uyarıları</span>
+            </li>
+          </ul>
+          <a class="btn-motion btn-motion--ghost js-start-app" href="/app.html">Hemen Başlat</a>
+        </article>
+
+        <!-- Aylık Premium Paket (Featured) -->
+        <article class="price-card-motion price-card-motion--featured">
+          <span class="price-badge-top">EN ÇOK TERCİH EDİLEN</span>
+          <h3>Aylık Premium</h3>
+          <div class="price-number">149 ₺ <small>/ ay</small></div>
+          <div class="price-period">~ $3 / ay · İstediğin Zaman İptal</div>
+          <ul class="price-features-list">
+            <li>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              <span>Tüm EV ses motorları (Taycan, Plaid, V8, F1)</span>
+            </li>
+            <li>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              <span>Kişiselleştirilebilir ses parametreleri &amp; tuning</span>
+            </li>
+            <li>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              <span>Tüm fütüristik kokpit görsel temaları</span>
+            </li>
+            <li>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              <span>Sıfır reklam ve öncelikli güncellemeler</span>
+            </li>
+          </ul>
+          <a class="btn-motion btn-motion--primary js-start-app" href="/app.html">Premium'a Geç</a>
+        </article>
+
+        <!-- Ömür Boyu Lisans -->
+        <article class="price-card-motion">
+          <h3>Ömür Boyu Lisans</h3>
+          <div class="price-number">1.499 ₺</div>
+          <div class="price-period">Tek Seferlik · Sınırsız Gelecek Sürümler</div>
+          <ul class="price-features-list">
+            <li>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              <span>Tüm ses kütüphanesine ömür boyu erişim</span>
+            </li>
+            <li>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              <span>Gelecekte eklenecek tüm motor sesleri dahil</span>
+            </li>
+            <li>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              <span>VIP Destek &amp; özel ses tasarım talepleri</span>
+            </li>
+          </ul>
+          <a class="btn-motion btn-motion--ghost js-start-app" href="/app.html">Ömür Boyu Sahip Ol</a>
+        </article>
+      </div>
+
+      <!-- Güvenlik & Ödeme Rozetleri -->
+      <div class="trust-badges-panel">
+        <div class="trust-badges-left">
+          <img src="assets/payment/ssl-secure.svg" alt="256-bit SSL Güvenli Ödeme" width="130" height="34" />
+          <img src="assets/payment/visa.svg" alt="Visa" width="75" height="25" />
+          <img src="assets/payment/mastercard.svg" alt="Mastercard" width="75" height="25" />
+          <img src="assets/payment/troy.svg" alt="Troy" width="75" height="30" />
+        </div>
+        <div class="trust-seals-text">
+          <span>🔒 256-Bit SSL Sertifikalı · PayTR Altyapısı · PCI-DSS Seviye 1 Güvenlik Standardı</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==========================================================================
+         KURUMSAL & YASAL FOOTER (PAYTR & TÜRK TİCARET KANUNU GEREKSİNİMLERİ)
+         ========================================================================== -->
+    <footer class="motion-footer">
+      <div class="footer-grid-motion">
+        <div class="footer-col company-details">
+          <h4>ETUBU — EV Audio Technologies</h4>
+          <p>Elektrikli araçlar için yeni nesil GPS senkron dijital ses ve kokpit yazılımı platformu.</p>
+          <p style="margin-top: 12px;"><strong>Yetkili:</strong> Sinan Nergiz</p>
+          <p><strong>Adres:</strong> İstasyon Mah. TOKİ Göl Konutları B1-3 Blok No: 28, Küçükçekmece / İstanbul</p>
+          <p><strong>E-Posta:</strong> <a href="mailto:destek@etubu.com">destek@etubu.com</a></p>
+          <p><strong>Telefon:</strong> <a href="tel:+905305115800">+90 530 511 58 00</a></p>
+        </div>
+
+        <div class="footer-col">
+          <h4>Navigasyon</h4>
+          <p><a href="/">Ana Sayfa</a></p>
+          <p><a href="#sound-studio">Ses Stüdyosu</a></p>
+          <p><a href="/app.html">Kokpit Uygulaması</a></p>
+          <p><a href="pricing.html">Fiyatlandırma</a></p>
+          <p><a href="about.html">Hakkımızda</a></p>
+          <p><a href="contact.html">İletişim</a></p>
+        </div>
+
+        <div class="footer-col">
+          <h4>Yasal &amp; Güvenlik</h4>
           <p><a href="distance-sales.html">Mesafeli Satış Sözleşmesi</a></p>
           <p><a href="returns.html">İptal ve İade Koşulları</a></p>
           <p><a href="privacy.html">Gizlilik Politikası ve KVKK</a></p>
           <p><a href="shipping-delivery.html">Teslimat Koşulları</a></p>
           <p><a href="terms.html">Kullanım Şartları</a></p>
-          <p><a href="pricing.html">Fiyatlandırma</a></p>
         </div>
-        <div>
-          <strong>Güvenli ödeme</strong>
-          <p>256-bit SSL Güvenli Ödeme</p>
-          <div class="payment-badges payment-badges--compact">
-            <img src="assets/payment/ssl-secure.svg" alt="256-bit SSL" width="120" height="32" />
-            <img src="assets/payment/visa.svg" alt="Visa" width="72" height="24" />
-            <img src="assets/payment/mastercard.svg" alt="Mastercard" width="72" height="24" />
-            <img src="assets/payment/troy.svg" alt="Troy" width="72" height="28" />
+
+        <div class="footer-col">
+          <h4>Güvenli Dijital Hizmet</h4>
+          <p>ETUBU bir dijital yazılım hizmetidir. Ödeme sonrası hizmet hesabınıza anında tanımlanır, fiziksel kargo bulunmamaktadır.</p>
+          <div style="margin-top: 16px;">
+            <img src="assets/payment/ssl-secure.svg" alt="SSL Güvenlik" width="110" height="28" />
           </div>
         </div>
       </div>
-      <p class="muted">© 2026 ETUBU · etubu.com · Dijital hizmet · Fiziksel kargo yoktur</p>
+
+      <div class="footer-bottom-motion">
+        <span>© 2026 ETUBU (etubu.com) — Tüm hakları saklıdır.</span>
+        <span>Dijital Yazılım &amp; Akustik Teknolojileri</span>
+      </div>
     </footer>
   </div>
+
+  <!-- Scripts -->
+  <script src="js/evsoundfx-studio.js?v=20261011"></script>
+  <script src="js/motion-experience.js?v=20261011"></script>
   <script src="js/consent.js?v=20260919a"></script>
 </body>
 </html>

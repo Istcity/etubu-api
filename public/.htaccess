@@ -32,6 +32,14 @@ DirectoryIndex index.html index.htm app.html
 # Dizin listeleme kapalı; index yoksa 403 yerine güvenli fallback
 Options -Indexes
 
+<IfModule mod_headers.c>
+  Header set X-Content-Type-Options "nosniff"
+  Header set X-Frame-Options "SAMEORIGIN"
+  Header set Referrer-Policy "strict-origin-when-cross-origin"
+  Header set X-XSS-Protection "1; mode=block"
+  Header set Permissions-Policy "geolocation=(self), microphone=(), camera=(), payment=(self)"
+</IfModule>
+
 # php -- BEGIN cPanel-generated handler, do not edit
 # “ea-php73” paketini varsayılan “PHP” programlama dili olarak ayarlayın.
 <IfModule mime_module>
