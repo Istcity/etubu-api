@@ -1840,6 +1840,7 @@ body.audio-muted .mode-chip {
 }
 
 .speed-gauge-wrap[data-gauge="digital"] .gauge-screen--digital,
+.speed-gauge-wrap[data-gauge="dual"] .gauge-screen--dual,
 .speed-gauge-wrap[data-gauge="analog"] .gauge-screen--analog,
 .speed-gauge-wrap[data-gauge="minimal"] .gauge-screen--minimal,
 .speed-gauge-wrap[data-gauge="bars"] .gauge-screen--bars {

@@ -421,7 +421,7 @@
   }
 
   function setGaugeScreen(name, persist = true) {
-    if (!GAUGE_SCREENS.includes(name)) name = "digital";
+    if (!GAUGE_SCREENS.includes(name)) name = "dual";
     const prev = gaugeScreen;
     gaugeScreen = name;
     speedGaugeWrap?.setAttribute("data-gauge", name);
@@ -514,7 +514,7 @@
       const speedAngle = -135 + speedRatio * 270;
       if (dualSpeedNeedle) dualSpeedNeedle.style.transform = `rotate(${speedAngle}deg)`;
       if (dualSpeedProgress) {
-        const speedDashOffset = 415 - speedRatio * 310;
+        const speedDashOffset = 415 - speedRatio * 311;
         dualSpeedProgress.style.strokeDashoffset = String(speedDashOffset);
       }
     }
@@ -532,7 +532,7 @@
       const powerAngle = -135 + powerRatio * 270;
       if (dualPowerNeedle) dualPowerNeedle.style.transform = `rotate(${powerAngle}deg)`;
       if (dualPowerProgress) {
-        const powerDashOffset = 415 - powerRatio * 310;
+        const powerDashOffset = 415 - powerRatio * 311;
         dualPowerProgress.style.strokeDashoffset = String(powerDashOffset);
       }
       if (gBarPower) gBarPower.style.opacity = String(0.2 + powerRatio * 0.8);

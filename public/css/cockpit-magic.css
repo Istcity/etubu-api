@@ -141,7 +141,31 @@
 }
 
 /* 4. DUAL-GAUGE CLUSTER SCREEN STYLING */
+.speed-gauge-wrap[data-gauge="dual"] {
+  width: min(96vw, 560px) !important;
+  max-width: 560px !important;
+  aspect-ratio: auto !important;
+  height: clamp(170px, 24vw, 220px) !important;
+  border-radius: 20px !important;
+}
+
+.speed-gauge-wrap[data-gauge="dual"] .gauge-screen--dual {
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  position: relative !important;
+  inset: auto !important;
+  width: 100% !important;
+  height: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
 .gauge-screen--dual {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.28s ease, visibility 0.28s ease;
   width: 100%;
   max-width: 580px;
   display: flex;
@@ -185,14 +209,17 @@
   left: 0;
   width: 100%;
   height: 100%;
-  transform: rotate(-90deg);
+  transform: rotate(135deg);
+  transform-origin: 50% 50%;
 }
 
 .dial-track {
   fill: none;
-  stroke: rgba(255, 255, 255, 0.08);
+  stroke: rgba(255, 255, 255, 0.12);
   stroke-width: 7;
   stroke-linecap: round;
+  stroke-dasharray: 311 104;
+  stroke-dashoffset: 0;
 }
 
 .dial-progress {
@@ -218,7 +245,8 @@
   width: 100%;
   height: 100%;
   pointer-events: none;
-  transition: transform 0.12s cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: 50% 50% !important;
+  transition: transform 0.1s cubic-bezier(0.16, 1, 0.3, 1);
   transform: rotate(-135deg);
 }
 
@@ -226,7 +254,7 @@
   position: absolute;
   top: 14px;
   left: 50%;
-  width: 3px;
+  width: 3.5px;
   height: clamp(48px, 7vw, 64px);
   background: linear-gradient(to top, transparent 0%, var(--cyan, #00f0ff) 100%);
   transform: translateX(-50%);
@@ -241,10 +269,13 @@
 
 .dial-center-cap {
   position: absolute;
-  width: 16px;
-  height: 16px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
-  background: #030712;
+  background: radial-gradient(circle, #1a2233 0%, #060911 100%);
   border: 2px solid var(--cyan, #00f0ff);
   box-shadow: 0 0 8px var(--cyan, #00f0ff);
   z-index: 3;
@@ -256,40 +287,45 @@
 }
 
 .dial-inner-text {
-  position: relative;
-  z-index: 4;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 5;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   pointer-events: none;
-  margin-top: -4px;
+  width: 100%;
 }
 
 .dial-main-val {
   font-family: var(--theme-num-font, "Orbitron", monospace);
-  font-size: clamp(1.6rem, 3.4vw, 2.3rem);
-  font-weight: 900;
-  line-height: 1;
-  color: #ffffff;
-  text-shadow: 0 0 15px rgba(0, 240, 255, 0.45);
+  font-size: clamp(1.9rem, 3.8vw, 2.6rem) !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+  color: #ffffff !important;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.9), 0 0 18px currentColor;
+  letter-spacing: -0.02em;
 }
 
 .dial-main-unit {
   font-family: "Orbitron", monospace;
-  font-size: 0.65rem;
+  font-size: 0.68rem !important;
   color: var(--cyan, #00f0ff);
-  letter-spacing: 0.12em;
-  margin-top: 4px;
-  font-weight: 700;
+  letter-spacing: 0.16em !important;
+  margin-top: 3px !important;
+  font-weight: 700 !important;
 }
 
 .dial-sub-label {
-  font-size: 0.58rem;
-  color: #64748b;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  margin-top: 2px;
-  font-weight: 600;
+  font-size: 0.58rem !important;
+  color: rgba(255, 255, 255, 0.5) !important;
+  letter-spacing: 0.12em !important;
+  text-transform: uppercase !important;
+  margin-top: 2px !important;
+  font-weight: 600 !important;
 }
 
 /* 5. INTER-GAUGE BRIDGE (Center HUD Status) */
