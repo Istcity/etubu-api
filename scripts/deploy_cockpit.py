@@ -13,6 +13,8 @@ files_to_upload = [
     ("public/js/scene.js", "public_html/js/scene.js"),
     ("public/js/i18n.js", "public_html/js/i18n.js"),
     ("public/js/ads.js", "public_html/js/ads.js"),
+    ("public/js/picker.js", "public_html/js/picker.js"),
+    ("public/js/car-browser.js", "public_html/js/car-browser.js"),
     ("public/js/intro.js", "public_html/js/intro.js"),
     ("public/index.html", "public_html/index.html"),
     ("public/css/motion-storefront.css", "public_html/css/motion-storefront.css"),

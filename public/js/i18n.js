@@ -2091,13 +2091,15 @@ const I18n = (() => {
   }
 
   function fillLangSelect() {
-    const sel = document.getElementById("langSelect");
-    if (!sel) return;
-    const current = sel.value || currentLang;
-    sel.innerHTML = SUPPORTED.map(
-      (c) => `<option value="${c}" ${c === current ? "selected" : ""}>${LANG_NAMES[c] || c}</option>`
-    ).join("");
-    sel.value = SUPPORTED.includes(current) ? current : currentLang;
+    ["langSelect", "dockLangSelect"].forEach((id) => {
+      const sel = document.getElementById(id);
+      if (!sel) return;
+      const current = sel.value || currentLang;
+      sel.innerHTML = SUPPORTED.map(
+        (c) => `<option value="${c}" ${c === current ? "selected" : ""}>${LANG_NAMES[c] || c}</option>`
+      ).join("");
+      sel.value = SUPPORTED.includes(current) ? current : currentLang;
+    });
   }
 
   function speechLocale() {

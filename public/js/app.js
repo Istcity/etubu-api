@@ -1887,6 +1887,9 @@
 
   function refreshAfterLang() {
     if (typeof I18n !== "undefined") I18n.applyDom();
+    const curLang = typeof I18n !== "undefined" ? I18n.getLang?.() : "tr";
+    if ($("dockLangSelect") && curLang) $("dockLangSelect").value = curLang;
+    if ($("langSelect") && curLang) $("langSelect").value = curLang;
     refreshCatalogUi();
     Picker.refreshAll?.();
     syncMuteBtnUi?.();
@@ -2626,10 +2629,15 @@
       document.body.classList.add("audio-muted");
     }
 
-    // Gauge — loadGaugeScreen ayrıca çağrılır; burada URL/cookie üstün gelsin
+    // Gauge — temaya ait özel kadran (örn. OEM çift kadran) varsa onu koru
+    const metaTheme = Scene.getModeMeta?.(initialKey);
     const gaugeRaw = prefGet("gauge");
-    if (gaugeRaw && GAUGE_SCREENS.includes(gaugeRaw)) {
+    if (metaTheme?.gauge && GAUGE_SCREENS.includes(metaTheme.gauge)) {
+      setGaugeScreen(metaTheme.gauge, false);
+    } else if (gaugeRaw && GAUGE_SCREENS.includes(gaugeRaw)) {
       setGaugeScreen(gaugeRaw, false);
+    } else {
+      setGaugeScreen("dual", false);
     }
 
     // Speed Unit (kmh / mph / auto)
@@ -2694,6 +2702,15 @@
       $("langSelect")?.addEventListener("change", (e) => {
         const val = e.target.value;
         if (val) I18n.setLang(val);
+        const dockSel = $("dockLangSelect");
+        if (dockSel) dockSel.value = val;
+        setTimeout(refreshAfterLang, 0);
+      });
+      $("dockLangSelect")?.addEventListener("change", (e) => {
+        const val = e.target.value;
+        if (val) I18n.setLang(val);
+        const topSel = $("langSelect");
+        if (topSel) topSel.value = val;
         setTimeout(refreshAfterLang, 0);
       });
       document.addEventListener("etubu:lang-change", () => {

@@ -5486,14 +5486,40 @@ body.ephemeral-browser[data-tesla-layout="half"] {
 
 body.tesla-browser .site-editorial,
 body.ephemeral-browser .site-editorial,
-body.tesla-browser .top-bar,
-body.ephemeral-browser .top-bar,
 body.tesla-browser .mode-chip,
 body.ephemeral-browser .mode-chip,
 body.tesla-browser .orient-btn,
 body.ephemeral-browser .orient-btn,
 body.tesla-browser .btn-adfree-inline,
 body.ephemeral-browser .btn-adfree-inline {
+  display: none !important;
+}
+
+/* Tesla ekranında kompakt yüzen Dil & Birim kontrol kapsülü */
+body.tesla-browser .top-bar,
+body.ephemeral-browser .top-bar {
+  display: flex !important;
+  position: fixed !important;
+  top: max(var(--tesla-pad), 12px) !important;
+  right: max(var(--tesla-pad), 14px) !important;
+  left: auto !important;
+  height: 42px !important;
+  width: auto !important;
+  padding: 4px 12px !important;
+  border-radius: 999px !important;
+  background: rgba(10, 16, 28, 0.92) !important;
+  border: 1.5px solid rgba(0, 240, 255, 0.45) !important;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.7), 0 0 16px rgba(0, 240, 255, 0.2) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  z-index: 60 !important;
+  gap: 10px !important;
+  align-items: center !important;
+}
+body.tesla-browser .top-bar .brand-logo,
+body.ephemeral-browser .top-bar .brand-logo,
+body.tesla-browser .trial-pill,
+body.ephemeral-browser .trial-pill {
   display: none !important;
 }
 
@@ -5678,6 +5704,42 @@ body.tesla-browser .speed-gauge-wrap,
 body.ephemeral-browser .speed-gauge-wrap {
   width: var(--tesla-gauge);
   max-width: 100%;
+}
+
+/* Tesla ekranında Çift Kadran (Dual Gauge Cluster: Taycan, Plaid, BMW M, AMG, Nevera) */
+body.tesla-browser .speed-gauge-wrap[data-gauge="dual"],
+body.ephemeral-browser .speed-gauge-wrap[data-gauge="dual"] {
+  width: min(580px, calc(var(--vvw) * 0.62)) !important;
+  max-width: calc(var(--vvw) - 240px) !important;
+}
+
+body.tesla-browser .speed-gauge-stack,
+body.ephemeral-browser .speed-gauge-stack {
+  overflow: visible !important;
+  max-width: 100% !important;
+}
+
+body.tesla-browser .gauge-screen--dual,
+body.ephemeral-browser .gauge-screen--dual {
+  width: 100% !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+}
+
+body.tesla-browser .dual-gauge-cluster,
+body.ephemeral-browser .dual-gauge-cluster {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: clamp(10px, 1.8vw, 24px) !important;
+  width: 100% !important;
+}
+
+body.tesla-browser .gauge-dial,
+body.ephemeral-browser .gauge-dial {
+  width: clamp(135px, 16vw, 180px) !important;
+  height: clamp(135px, 16vw, 180px) !important;
 }
 
 body.tesla-browser .speed-number,

@@ -274,6 +274,7 @@ const Picker = (() => {
       ["#voiceSelect", "voiceTheme"],
       ["#visualSelect", "visualTheme"],
       ["#langSelect", "langLabel"],
+      ["#dockLangSelect", "langLabel"],
     ];
     (selectors || map.map((x) => x[0])).forEach((sel, i) => {
       const el = typeof sel === "string" ? document.querySelector(sel) : sel;
