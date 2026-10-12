@@ -4,16 +4,19 @@
  * Tam ekran (drive-focus): üst + sağ + sol, ~2 dk’da bir en fazla 10 sn pulse
  */
 const Ads = (() => {
-  const PULSE_INTERVAL_MS = 2 * 60 * 1000; // 2 dk
-  const PULSE_SHOW_MS = 10 * 1000; // 10 sn
+  const PULSE_INTERVAL_MS = 2.5 * 60 * 1000; // 2.5 dk periyodik aralık
+  const PULSE_SHOW_MS = 7 * 1000; // 7 sn görünme süresi (güvenli, dikkati dağıtmayan süre)
   const PULSE_RAILS = [".ad-rail--top", ".ad-rail--middle", ".ad-rail--right"];
-  const REFRESH_INTERVAL_PULSES = 2; // Her 2 darbede bir (ortalama 4 dakikada bir) yenileme
+  const REFRESH_INTERVAL_PULSES = 2; // Her 2 darbede bir (~5 dakikada bir) yenileme
+  const NORMAL_REFRESH_INTERVAL_MS = 60 * 1000; // Normal modda 60 sn periyodik yenileme
 
   let pulseTimer = null;
   let pulseHideTimer = null;
+  let normalRefreshTimer = null;
   let driveFocus = false;
   let rendered = false;
   let pulseCount = 0;
+  let lastPulseAt = 0;
 
   function loadAdSenseScript(client) {
     return new Promise((resolve, reject) => {
@@ -159,6 +162,7 @@ const Ads = (() => {
 
   function hideAll() {
     stopPulse();
+    stopNormalRefresh();
     document.body.classList.remove("ads-ready", "ads-pulse");
     setRailsVisible(false);
     document.querySelectorAll(".intro-ad").forEach((el) => {
@@ -235,10 +239,32 @@ const Ads = (() => {
     }
   }
 
+  function stopNormalRefresh() {
+    if (normalRefreshTimer) {
+      clearInterval(normalRefreshTimer);
+      normalRefreshTimer = null;
+    }
+  }
+
+  function startNormalRefresh() {
+    stopNormalRefresh();
+    if (!canShowAds() || driveFocus) return;
+    normalRefreshTimer = setInterval(() => {
+      if (canShowAds() && !driveFocus && rendered) {
+        try {
+          renderMainSlots(true);
+        } catch (e) {
+          console.warn("Ad normal refresh", e);
+        }
+      }
+    }, NORMAL_REFRESH_INTERVAL_MS);
+  }
+
   function runPulseShow() {
     if (!canShowAds() || !driveFocus) return;
 
     pulseCount++;
+    lastPulseAt = Date.now();
 
     document.body.classList.add("ads-pulse", "ads-ready");
     PULSE_RAILS.forEach((sel) => {
@@ -257,7 +283,7 @@ const Ads = (() => {
         console.warn("Ad pulse render", e);
       }
     } else if (pulseCount > 1 && (pulseCount - 1) % REFRESH_INTERVAL_PULSES === 0) {
-      // Her 2 darbede bir (~4 dakikada bir) reklamları güvenli şekilde tazele (Ad Refresh)
+      // Periyodik olarak reklamları tazeleyerek geçerli envanter sun
       try {
         renderMainSlots(true);
       } catch (e) {
@@ -273,6 +299,7 @@ const Ads = (() => {
 
   function stopPulse() {
     if (pulseTimer) {
+      clearTimeout(pulseTimer);
       clearInterval(pulseTimer);
       pulseTimer = null;
     }
@@ -282,7 +309,6 @@ const Ads = (() => {
   function startPulse() {
     stopPulse();
     if (!canShowAds() || !driveFocus) return;
-    // Önceden DOM'a yüklenmemişse hemen render et
     if (!rendered) {
       rendered = true;
       try {
@@ -291,16 +317,20 @@ const Ads = (() => {
         console.warn("Ad pulse pre-render", e);
       }
     }
-    // Panel kapandığında sürücünün reklamı teyit edebilmesi için ilk 10 sn pulse'u hemen göster
-    runPulseShow();
-    // Ardından her 2 dakikada bir 10 saniye göster
-    pulseTimer = setInterval(runPulseShow, PULSE_INTERVAL_MS);
+    // Sürüş başlangıcında göstergelerin engellenmemesi için ilk gösterim nazik gecikmeyle gelir
+    const elapsed = Date.now() - lastPulseAt;
+    const initialDelay = lastPulseAt === 0 ? 75 * 1000 : Math.max(15 * 1000, PULSE_INTERVAL_MS - elapsed);
+    pulseTimer = setTimeout(() => {
+      runPulseShow();
+      pulseTimer = setInterval(runPulseShow, PULSE_INTERVAL_MS);
+    }, initialDelay);
   }
 
   /** Panel kapalı / tam ekran — pulse döngüsünü aç/kapat */
   function setDriveFocus(on) {
     driveFocus = !!on;
     if (driveFocus) {
+      stopNormalRefresh();
       if (canShowAds()) startPulse();
       else stopPulse();
     } else {
@@ -311,6 +341,7 @@ const Ads = (() => {
           rendered = true;
           renderMainSlots();
         }
+        startNormalRefresh();
       }
     }
   }
@@ -359,6 +390,7 @@ const Ads = (() => {
       startPulse();
     } else {
       showRails();
+      startNormalRefresh();
     }
   }
 

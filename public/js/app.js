@@ -1889,6 +1889,8 @@
     if (typeof I18n !== "undefined") I18n.applyDom();
     refreshCatalogUi();
     Picker.refreshAll?.();
+    syncMuteBtnUi?.();
+    syncUnitLabels?.();
     if (!running) startBtn.textContent = t("start");
     else startBtn.textContent = t("stop");
     syncStartStopUi?.();
@@ -2487,6 +2489,8 @@
     document.querySelectorAll(".speed-unit, .analog-unit, .minimal-unit, .bars-unit").forEach((el) => {
       el.textContent = uLabel;
     });
+    const dualSpeedU = document.getElementById("dualSpeedUnit");
+    if (dualSpeedU) dualSpeedU.textContent = isMph ? "MPH" : "KM/H";
     const avgSmall = document.querySelector("#avgSpeedValue + small, .avg-speed-value small");
     if (avgSmall) avgSmall.textContent = uLabel;
     if (unitToggleBtn) unitToggleBtn.textContent = isMph ? "MPH" : "KM/H";

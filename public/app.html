@@ -120,8 +120,8 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:ital,wght@0,600;0,700;1,700&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=Michroma&family=Orbitron:wght@600;700;800;900&family=Rajdhani:wght@600;700&family=Press+Start+2P&family=Share+Tech+Mono&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css?v=20261011_oem_v5" />
-  <link rel="stylesheet" href="css/cockpit-magic.css?v=20261011_oem_v5" />
+  <link rel="stylesheet" href="css/style.css?v=20261012_i18n_v1" />
+  <link rel="stylesheet" href="css/cockpit-magic.css?v=20261012_i18n_v1" />
   <script>
     (function () {
       try {
@@ -496,7 +496,7 @@
                   <div class="dial-inner-text">
                     <span class="dial-main-val" id="dualPowerVal">0</span>
                     <span class="dial-main-unit">kW</span>
-                    <span class="dial-sub-label" id="dualPowerSubLabel">GÜÇ</span>
+                    <span class="dial-sub-label" id="dualPowerSubLabel" data-i18n="powerLabel">GÜÇ</span>
                   </div>
                 </div>
               </div>
@@ -623,12 +623,12 @@
     </div>
   </div>
 
-  <button type="button" class="panel-toggle" id="panelToggle" aria-label="Ayarlar" title="Ayarlar">
+  <button type="button" class="panel-toggle" id="panelToggle" aria-label="Ayarlar" title="Ayarlar" data-i18n-title="panelSettings" data-i18n-aria="panelSettings">
     <svg class="panel-toggle-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="12" cy="12" r="3"></circle>
       <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
     </svg>
-    <span class="panel-toggle-text">Ayarlar</span>
+    <span class="panel-toggle-text" data-i18n="panelSettings">Ayarlar</span>
   </button>
 
   <button type="button" class="mute-toggle is-muted" id="muteToggle" aria-label="Sesi Aç / Kapat" title="Sesi Aç / Kapat">
@@ -650,12 +650,12 @@
       <label for="voiceSelect" data-i18n="voiceTheme">Ses Motoru</label>
       <select id="voiceSelect"></select>
       <div class="dock-chips dock-chips--voice" id="dockVoiceChips">
-        <button type="button" class="sound-chip is-active" data-voice-goto="tesla" title="Hyper EV Plaid">⚡ Hyper EV</button>
-        <button type="button" class="sound-chip" data-voice-goto="sport-ev" title="Taycan Sport">🔋 Taycan</button>
-        <button type="button" class="sound-chip" data-voice-goto="exhaust-v8" title="American V8 Muscle">🔥 V8 Muscle</button>
-        <button type="button" class="sound-chip" data-voice-goto="exhaust-turbo" title="Twin-Turbo Boxer">💨 Twin-Turbo</button>
-        <button type="button" class="sound-chip" data-voice-goto="formula-scream" title="Formula V10">🏁 Formula V10</button>
-        <button type="button" class="sound-chip" data-voice-goto="silent-mode" title="Sessiz Mod">🔇 Sessiz</button>
+        <button type="button" class="sound-chip is-active" data-voice-goto="tesla" data-i18n="chipVoiceHyperEv" title="Hyper EV Plaid">⚡ Hyper EV</button>
+        <button type="button" class="sound-chip" data-voice-goto="sport-ev" data-i18n="chipVoiceTaycan" title="Taycan Sport">🔋 Taycan</button>
+        <button type="button" class="sound-chip" data-voice-goto="exhaust-v8" data-i18n="chipVoiceV8" title="American V8 Muscle">🔥 V8 Muscle</button>
+        <button type="button" class="sound-chip" data-voice-goto="exhaust-turbo" data-i18n="chipVoiceTurbo" title="Twin-Turbo Boxer">💨 Twin-Turbo</button>
+        <button type="button" class="sound-chip" data-voice-goto="formula-scream" data-i18n="chipVoiceFormula" title="Formula V10">🏁 Formula V10</button>
+        <button type="button" class="sound-chip" data-voice-goto="silent-mode" data-i18n="chipVoiceSilent" title="Sessiz Mod">🔇 Sessiz</button>
       </div>
       <span class="field-hint lock-hint" id="voiceLockHint" hidden data-i18n="catalogLocked">Kilitli — Sürüş yaparak veya davetle açın</span>
     </div>
@@ -664,20 +664,20 @@
       <label for="visualSelect" data-i18n="visualTheme">Görsel Tema</label>
       <select id="visualSelect"></select>
       <div class="dock-chips dock-chips--themes">
-        <span class="dock-group-tag">Lüks Çift Kadran (OEM)</span>
+        <span class="dock-group-tag" data-i18n="visualGroupDualTag">Lüks Çift Kadran (OEM)</span>
         <div class="dock-chip-row">
-          <button type="button" class="theme-chip is-on" data-theme-goto="taycan" data-gauge-mode="dual">⏱️ Taycan Chrono</button>
-          <button type="button" class="theme-chip" data-theme-goto="plaid" data-gauge-mode="dual">⚡ Plaid Cyber</button>
-          <button type="button" class="theme-chip" data-theme-goto="bmw-m" data-gauge-mode="dual">🏎️ BMW M Track</button>
-          <button type="button" class="theme-chip" data-theme-goto="amg" data-gauge-mode="dual">🌌 Mercedes-AMG</button>
-          <button type="button" class="theme-chip" data-theme-goto="nevera" data-gauge-mode="dual">⚡ Rimac Nevera</button>
+          <button type="button" class="theme-chip is-on" data-theme-goto="taycan" data-gauge-mode="dual" data-i18n="chipTaycan">⏱️ Taycan Chrono</button>
+          <button type="button" class="theme-chip" data-theme-goto="plaid" data-gauge-mode="dual" data-i18n="chipPlaid">⚡ Plaid Cyber</button>
+          <button type="button" class="theme-chip" data-theme-goto="bmw-m" data-gauge-mode="dual" data-i18n="chipBmwM">🏎️ BMW M Track</button>
+          <button type="button" class="theme-chip" data-theme-goto="amg" data-gauge-mode="dual" data-i18n="chipAmg">🌌 Mercedes-AMG</button>
+          <button type="button" class="theme-chip" data-theme-goto="nevera" data-gauge-mode="dual" data-i18n="chipNevera">⚡ Rimac Nevera</button>
         </div>
-        <span class="dock-group-tag">Hassas Tek Kadran</span>
+        <span class="dock-group-tag" data-i18n="visualGroupSingleTag">Hassas Tek Kadran</span>
         <div class="dock-chip-row">
-          <button type="button" class="theme-chip" data-theme-goto="stealth" data-gauge-mode="single">🌑 Stealth OLED</button>
-          <button type="button" class="theme-chip" data-theme-goto="telemetry-pro" data-gauge-mode="single">🏁 Apex Pist</button>
-          <button type="button" class="theme-chip" data-theme-goto="cyber-storm" data-gauge-mode="single">⚡ Siber Fırtına</button>
-          <button type="button" class="theme-chip" data-theme-goto="deep-ocean" data-gauge-mode="single">🌊 Okyanus</button>
+          <button type="button" class="theme-chip" data-theme-goto="stealth" data-gauge-mode="single" data-i18n="chipStealth">🌑 Stealth OLED</button>
+          <button type="button" class="theme-chip" data-theme-goto="telemetry-pro" data-gauge-mode="single" data-i18n="chipTelemetryPro">🏁 Apex Pist</button>
+          <button type="button" class="theme-chip" data-theme-goto="cyber-storm" data-gauge-mode="single" data-i18n="chipCyberStorm">⚡ Siber Fırtına</button>
+          <button type="button" class="theme-chip" data-theme-goto="deep-ocean" data-gauge-mode="single" data-i18n="chipDeepOcean">🌊 Okyanus</button>
         </div>
       </div>
     </div>
@@ -726,8 +726,8 @@
       <span class="field-label" data-i18n="speedUnit">Hız Birimi</span>
       <select id="unitSelect" class="select-field">
         <option value="auto" data-i18n="unitAuto">Otomatik (Bölgeye Göre)</option>
-        <option value="kmh">KM/H (km)</option>
-        <option value="mph">MPH (mil / miles)</option>
+        <option value="kmh" data-i18n="unitSelectKmh">KM/H (Metrik)</option>
+        <option value="mph" data-i18n="unitSelectMph">MPH (İmperyal)</option>
       </select>
     </label>
 
@@ -870,23 +870,23 @@
     </div>
   </section>
 
-  <script src="js/car-browser.js?v=20261011_oem_v5"></script>
-  <script src="js/i18n.js?v=20261011_oem_v5"></script>
-  <script src="js/gps-tracker.js?v=20261011_oem_v5"></script>
-  <script src="js/identity.js?v=20261011_oem_v5"></script>
-  <script src="js/audio-engine.js?v=20261011_oem_v5"></script>
-  <script src="js/warn-voice.js?v=20261011_oem_v5"></script>
-  <script src="js/obd.js?v=20261011_oem_v5"></script>
-  <script src="js/music-hub.js?v=20261011_oem_v5"></script>
-  <script src="js/scene.js?v=20261011_oem_v5"></script>
-  <script src="js/mini-map.js?v=20261011_oem_v5"></script>
-  <script src="js/radar-alert.js?v=20261011_oem_v5"></script>
-  <script src="js/osm-hazards.js?v=20261011_oem_v5"></script>
-  <script src="js/route-guard.js?v=20261011_oem_v5"></script>
-  <script src="js/ads.js?v=20261011_oem_v5"></script>
-  <script src="js/paddle-checkout.js?v=20261011_oem_v5"></script>
-  <script src="js/paywall.js?v=20261011_oem_v5"></script>
-  <script src="js/picker.js?v=20261011_oem_v5"></script>
-  <script src="js/app.js?v=20261011_oem_v5"></script>
+  <script src="js/car-browser.js?v=20261012_i18n_v1"></script>
+  <script src="js/i18n.js?v=20261012_i18n_v1"></script>
+  <script src="js/gps-tracker.js?v=20261012_i18n_v1"></script>
+  <script src="js/identity.js?v=20261012_i18n_v1"></script>
+  <script src="js/audio-engine.js?v=20261012_i18n_v1"></script>
+  <script src="js/warn-voice.js?v=20261012_i18n_v1"></script>
+  <script src="js/obd.js?v=20261012_i18n_v1"></script>
+  <script src="js/music-hub.js?v=20261012_i18n_v1"></script>
+  <script src="js/scene.js?v=20261012_i18n_v1"></script>
+  <script src="js/mini-map.js?v=20261012_i18n_v1"></script>
+  <script src="js/radar-alert.js?v=20261012_i18n_v1"></script>
+  <script src="js/osm-hazards.js?v=20261012_i18n_v1"></script>
+  <script src="js/route-guard.js?v=20261012_i18n_v1"></script>
+  <script src="js/ads.js?v=20261012_i18n_v1"></script>
+  <script src="js/paddle-checkout.js?v=20261012_i18n_v1"></script>
+  <script src="js/paywall.js?v=20261012_i18n_v1"></script>
+  <script src="js/picker.js?v=20261012_i18n_v1"></script>
+  <script src="js/app.js?v=20261012_i18n_v1"></script>
 </body>
 </html>
